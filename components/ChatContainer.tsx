@@ -7,6 +7,8 @@ import MessageBubble from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
 import InputArea, { type InputAreaHandle } from "./InputArea";
 import WelcomeCard from "./WelcomeCard";
+import dynamic from "next/dynamic";
+const VoiceMode = dynamic(() => import("./VoiceMode"), { ssr: false });
 
 const StarIcon = () => (
   <svg
@@ -29,6 +31,7 @@ export default function ChatContainer() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [selectedModel, setSelectedModel] = useState<ModelId>(DEFAULT_MODEL);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<InputAreaHandle>(null);
 
@@ -177,7 +180,9 @@ export default function ChatContainer() {
       </div>
 
       {/* Input */}
-      <InputArea ref={inputRef} onSend={handleSend} disabled={isTyping} />
+      <InputArea ref={inputRef} onSend={handleSend} disabled={isTyping} onVoiceClick={() => setVoiceOpen(true)} />
+
+      {voiceOpen && <VoiceMode onClose={() => setVoiceOpen(false)} model={selectedModel} />}
     </div>
   );
 }

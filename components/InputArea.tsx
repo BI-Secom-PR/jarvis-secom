@@ -5,13 +5,14 @@ import { useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 
 interface Props {
   onSend: (text: string) => void;
   disabled: boolean;
+  onVoiceClick?: () => void;
 }
 
 export interface InputAreaHandle {
   focus: () => void;
 }
 
-const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend, disabled }, ref) {
+const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend, disabled, onVoiceClick }, ref) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useImperativeHandle(ref, () => ({
@@ -60,6 +61,19 @@ const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend
           className="flex-1 bg-transparent border-none outline-none text-white/[0.92] text-[15px] font-[inherit] resize-none min-h-[22px] max-h-[120px] leading-[1.5] tracking-[-0.1px] py-0.5 placeholder:text-white/20"
           style={{ height: 22 }}
         />
+        <button
+          onClick={onVoiceClick}
+          title="Modo de voz"
+          type="button"
+          className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white/35 hover:text-white/70 hover:bg-white/[0.07] active:scale-95 transition-all duration-150"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-[17px] h-[17px]">
+            <rect x="9" y="2" width="6" height="12" rx="3" />
+            <path d="M5 10a7 7 0 0 0 14 0" />
+            <line x1="12" y1="19" x2="12" y2="22" />
+            <line x1="9" y1="22" x2="15" y2="22" />
+          </svg>
+        </button>
         <button
           onClick={handleSend}
           disabled={disabled}

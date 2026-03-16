@@ -5,9 +5,10 @@ export const MODELS = [
   { id: 'llama-3.1-8b-instant',    label: 'Llama 3.1 · 8B (rápido)', provider: 'groq'   },
   { id: 'mixtral-8x7b-32768',      label: 'Mixtral 8×7B',            provider: 'groq'   },
   { id: 'gemma2-9b-it',            label: 'Gemma 2 · 9B',            provider: 'groq'   },
-  { id: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash',      provider: 'google' },
-  { id: 'gemini-2.0-flash',      label: 'Gemini 2.0 Flash',      provider: 'google' },
-  { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite', provider: 'google' },
+  { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite', provider: 'google' },
+  { id: 'gemini-3-flash-preview',        label: 'Gemini 3 Flash',         provider: 'google' },
+  { id: 'gemini-2.5-flash',              label: 'Gemini 2.5 Flash',       provider: 'google' },
+  { id: 'gemini-2.5-flash-lite',         label: 'Gemini 2.5 Flash Lite',  provider: 'google' },
 ] as const;
 
 export type ModelId = (typeof MODELS)[number]['id'];
@@ -32,6 +33,17 @@ PROCESSO:
 1. Consulte o SCHEMA abaixo para identificar tabela e colunas corretas.
 2. Execute um SELECT com nomes qualificados: airbyte_secom.gold_nome_tabela.
 3. Responda com os dados retornados. Use tabelas markdown para resultados tabulares.
+   - Os cabeçalhos da tabela DEVEM ser EXATAMENTE os nomes das colunas retornados pelo SQL (sem renomear, sem traduzir, sem omitir colunas).
+
+FORMATAÇÃO NUMÉRICA (padrão brasileiro — OBRIGATÓRIO):
+- Números inteiros: separador de milhar com ponto. Ex: 1.000, 50.000, 1.234.567
+- Decimais: vírgula como separador decimal. Ex: 1.234,56
+- Moeda (cost, investimento, CPM, CPC, CPE, CPA, qualquer valor monetário): R$ 10.000,00
+  - Custos unitários (CPC, CPE, CPA): R$ 1,54
+  - Para USD: US$ 1,234.56
+- Taxas/percentuais (CTR, VCR, taxas): 12,5% ou 0,56%
+- Reach, impressions, clicks, views: números inteiros formatados. Ex: 1.500.000
+- NUNCA exiba números brutos sem formatação (ex: 650597.568100 ❌ → R$ 650.597,57 ✅)
 
 ═══════════════════════════════════════════════
 SCHEMA — airbyte_secom (gold layer)
