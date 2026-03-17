@@ -1,0 +1,5 @@
+FROM arm64v8/postgres:18.3
+ENV POSTGRES_USER=ADMIN_CG
+ENV POSTGRES_PASSWORD=D3fc0n&*9
+ENV POSTGRES_DB=jarvis_db
+CMD ["postgres"]

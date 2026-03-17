@@ -1,19 +1,31 @@
-import type { ChartData } from '@/types/chat';
+import type { ChartData } from "@/types/chat";
 
 export const MODELS = [
-  { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 · 70B',         provider: 'groq'   },
-  { id: 'llama-3.1-8b-instant',    label: 'Llama 3.1 · 8B (rápido)', provider: 'groq'   },
-  { id: 'mixtral-8x7b-32768',      label: 'Mixtral 8×7B',            provider: 'groq'   },
-  { id: 'gemma2-9b-it',            label: 'Gemma 2 · 9B',            provider: 'groq'   },
-  { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite', provider: 'google' },
-  { id: 'gemini-3-flash-preview',        label: 'Gemini 3 Flash',         provider: 'google' },
-  { id: 'gemini-2.5-flash',              label: 'Gemini 2.5 Flash',       provider: 'google' },
-  { id: 'gemini-2.5-flash-lite',         label: 'Gemini 2.5 Flash Lite',  provider: 'google' },
+  { id: "llama-3.3-70b-versatile", label: "Llama 3.3 · 70B", provider: "groq" },
+  {
+    id: "llama-3.1-8b-instant",
+    label: "Llama 3.1 · 8B (rápido)",
+    provider: "groq",
+  },
+  { id: "mixtral-8x7b-32768", label: "Mixtral 8×7B", provider: "groq" },
+  { id: "gemma2-9b-it", label: "Gemma 2 · 9B", provider: "groq" },
+  {
+    id: "gemini-3.1-flash-lite-preview",
+    label: "Gemini 3.1 Flash Lite",
+    provider: "google",
+  },
+  { id: "gemini-3-flash-preview", label: "Gemini 3 Flash", provider: "google" },
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", provider: "google" },
+  {
+    id: "gemini-2.5-flash-lite",
+    label: "Gemini 2.5 Flash Lite",
+    provider: "google",
+  },
 ] as const;
 
-export type ModelId = (typeof MODELS)[number]['id'];
-export type ModelProvider = (typeof MODELS)[number]['provider'];
-export const DEFAULT_MODEL: ModelId = 'gemini-2.5-flash';
+export type ModelId = (typeof MODELS)[number]["id"];
+export type ModelProvider = (typeof MODELS)[number]["provider"];
+export const DEFAULT_MODEL: ModelId = "gemini-2.5-flash";
 
 export function getModelProvider(id: ModelId): ModelProvider {
   return MODELS.find((m) => m.id === id)!.provider;
@@ -144,21 +156,24 @@ export function parseChartRequest(text: string): {
   cleanText: string;
   chartData: ChartData | null;
 } {
-  const prefix = 'CHART_REQUEST:';
+  const prefix = "CHART_REQUEST:";
   const idx = text.indexOf(prefix);
   if (idx === -1) return { cleanText: text.trim(), chartData: null };
 
-  const jsonStart = text.indexOf('{', idx + prefix.length);
+  const jsonStart = text.indexOf("{", idx + prefix.length);
   if (jsonStart === -1) return { cleanText: text.trim(), chartData: null };
 
   // Walk braces to find the matching closing brace (handles nested objects/arrays)
   let depth = 0;
   let jsonEnd = -1;
   for (let i = jsonStart; i < text.length; i++) {
-    if (text[i] === '{') depth++;
-    else if (text[i] === '}') {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}") {
       depth--;
-      if (depth === 0) { jsonEnd = i; break; }
+      if (depth === 0) {
+        jsonEnd = i;
+        break;
+      }
     }
   }
   if (jsonEnd === -1) return { cleanText: text.trim(), chartData: null };

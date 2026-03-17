@@ -5,20 +5,29 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "db:push": "drizzle-kit push --config drizzle.config.ts",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "tsx --env-file=.env.local lib/db/migrate.ts",
+    "db:seed": "tsx --env-file=.env.local lib/db/seed.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.43",
     "@ai-sdk/groq": "^3.0.29",
     "@google/genai": "^1.45.0",
+    "@types/bcryptjs": "^2.4.6",
     "@types/dompurify": "^3.0.5",
     "ai": "^6.0.116",
+    "bcryptjs": "^3.0.3",
     "dompurify": "^3.3.3",
+    "drizzle-orm": "^0.45.1",
     "mysql2": "^3.19.1",
     "next": "16.1.6",
+    "postgres": "^3.4.8",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.8.0",
+    "resend": "^6.9.4",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -28,7 +37,9 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

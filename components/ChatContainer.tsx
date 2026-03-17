@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Message } from "@/types/chat";
 import { MODELS, DEFAULT_MODEL, type ModelId } from "@/lib/agent";
+import type { SessionUser } from "@/lib/auth";
 import MessageBubble from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
 import InputArea, { type InputAreaHandle } from "./InputArea";
 import WelcomeCard from "./WelcomeCard";
+import UserMenu from "./UserMenu";
 import dynamic from "next/dynamic";
 const VoiceMode = dynamic(() => import("./VoiceMode"), { ssr: false });
 
@@ -27,13 +30,16 @@ const StarIcon = () => (
   </svg>
 );
 
-export default function ChatContainer() {
+export default function ChatContainer({ user }: { user: SessionUser }) {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [selectedModel, setSelectedModel] = useState<ModelId>(DEFAULT_MODEL);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<InputAreaHandle>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  const isFirstMsgRef = useRef(true);
 
   const scrollBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -43,19 +49,59 @@ export default function ChatContainer() {
     scrollBottom();
   }, [messages, isTyping]);
 
-  // Cmd+N (Mac) / Ctrl+N (Win/Linux) → new session
+  const createChatSession = useCallback(async () => {
+    try {
+      const res = await fetch("/api/chat-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "Nova conversa" }),
+      });
+      if (res.ok) {
+        const s = await res.json();
+        sessionIdRef.current = s.id;
+        isFirstMsgRef.current = true;
+      }
+    } catch {
+      // non-fatal — messages still work in memory
+    }
+  }, []);
+
+  // Create initial chat session on mount
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    createChatSession();
+  }, [createChatSession]);
+
+  // Cmd+N (Mac) / Ctrl+N (Win/Linux) → new chat session
+  useEffect(() => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
       if (e.key === "n" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setMessages([]);
         setIsTyping(false);
+        await createChatSession();
         inputRef.current?.focus();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [createChatSession]);
+
+  const saveMessage = useCallback(
+    async (role: "USER" | "AI", content: string, chartData?: unknown) => {
+      const sid = sessionIdRef.current;
+      if (!sid) return;
+      try {
+        await fetch(`/api/chat-sessions/${sid}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role, content, chartData: chartData ?? null }),
+        });
+      } catch {
+        // non-fatal
+      }
+    },
+    [],
+  );
 
   const handleSend = useCallback(
     async (text: string) => {
@@ -66,6 +112,20 @@ export default function ChatContainer() {
       };
       setMessages((prev) => [...prev, userMsg]);
       setIsTyping(true);
+
+      // Save user message (fire-and-forget)
+      saveMessage("USER", text);
+
+      // Update session title from first message
+      if (isFirstMsgRef.current && sessionIdRef.current) {
+        isFirstMsgRef.current = false;
+        const title = text.slice(0, 60);
+        fetch(`/api/chat-sessions/${sessionIdRef.current}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        }).catch(() => {});
+      }
 
       try {
         const conversationHistory = messages.map((m) => ({
@@ -83,6 +143,11 @@ export default function ChatContainer() {
           }),
         });
 
+        if (res.status === 401) {
+          router.push("/login");
+          return;
+        }
+
         const data = await res.json();
 
         if (!res.ok) {
@@ -96,6 +161,9 @@ export default function ChatContainer() {
           chartData: data.chartData ?? undefined,
         };
         setMessages((prev) => [...prev, aiMsg]);
+
+        // Save AI message (fire-and-forget)
+        saveMessage("AI", aiMsg.text, aiMsg.chartData);
       } catch (err) {
         const errMsg: Message = {
           id: (Date.now() + 1).toString(),
@@ -107,7 +175,7 @@ export default function ChatContainer() {
         setIsTyping(false);
       }
     },
-    [messages, selectedModel],
+    [messages, selectedModel, saveMessage, router],
   );
 
   return (
@@ -166,6 +234,7 @@ export default function ChatContainer() {
             title="Online"
             className="w-2 h-2 bg-[#34c759] rounded-full shadow-[0_0_6px_rgba(52,199,89,0.55)] animate-pulse-green"
           />
+          <UserMenu user={user} />
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import { z } from 'zod/v3';
 import { NextRequest, NextResponse } from 'next/server';
 import { getPool } from '@/lib/mysql';
 import { SYSTEM_PROMPT, parseChartRequest, DEFAULT_MODEL, MODELS, getModelProvider, type ModelId } from '@/lib/agent';
+import { getSession } from '@/lib/auth';
 
 const VALID_MODEL_IDS = new Set(MODELS.map((m) => m.id));
 
@@ -16,6 +17,9 @@ function resolveModel(id: ModelId) {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const { chatInput, messages: history = [], model: requestedModel } = await req.json();
   const modelId: ModelId = VALID_MODEL_IDS.has(requestedModel) ? requestedModel : DEFAULT_MODEL;
   const pool = getPool();
