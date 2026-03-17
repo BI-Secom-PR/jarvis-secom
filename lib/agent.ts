@@ -64,7 +64,7 @@ COLUNAS COMPARTILHADAS (todas as tabelas):
   Custo:         cost DECIMAL(18,6), cost_currency
   Performance:   impressions BIGINT, clicks BIGINT, reach BIGINT,
                  engagements BIGINT, conversions BIGINT
-  Social:        likes, comments, shares, reactions (Facebook only), saves
+  Social:        likes, comments, shares, reactions (Meta only), saves
   Vídeo:         video_views, video_plays, video_2s, video_30s,
                  video_p25, video_p50, video_p75, video_p95, video_p100, video_completions
 
@@ -77,31 +77,35 @@ COLUNAS EXCLUSIVAS DE gold_platforms_regions:
 
 COLUNA EXCLUSIVA DE gold_platforms_age:
   age VARCHAR(50) — valores por plataforma:
-    facebook/kwai: '13-17','18-24','25-34','35-44','45-54','55-64','65+'
-    google:        'AGE_18_24','AGE_25_34','AGE_35_44','AGE_45_54','AGE_55_64','AGE_65_UP','UNDETERMINED'
-    tiktok:        'AGE_13_17','AGE_18_24','AGE_25_34','AGE_35_44','AGE_45_54','AGE_55_100'
+    meta/kwai: '13-17','18-24','25-34','35-44','45-54','55-64','65+'
+    google:    'AGE_18_24','AGE_25_34','AGE_35_44','AGE_45_54','AGE_55_64','AGE_65_UP','UNDETERMINED'
+    tiktok:    'AGE_13_17','AGE_18_24','AGE_25_34','AGE_35_44','AGE_45_54','AGE_55_100'
 
 COLUNA EXCLUSIVA DE gold_platforms_gender:
   gender VARCHAR(20) — valores por plataforma:
-    facebook/kwai: 'male','female','unknown'
-    google:        'MALE','FEMALE','UNDETERMINED'
-    tiktok:        'MALE','FEMALE','OTHER'
+    meta/kwai: 'male','female','unknown'
+    google:    'MALE','FEMALE','UNDETERMINED'
+    tiktok:    'MALE','FEMALE','OTHER'
 
 VALORES EXATOS DA COLUNA platform:
-  'facebook' | 'google' | 'tiktok' | 'kwai' | 'linkedin' | 'pinterest' | 'amazon_dsp'
+  'meta' | 'google' | 'tiktok' | 'kwai' | 'linkedin' | 'pinterest' | 'amazon_dsp'
+
+ALIASES DE PLATAFORMA (o usuário pode usar qualquer um — sempre converta para o valor exato do banco):
+  "facebook", "fb", "meta", "instagram" → 'meta'
+  "google ads", "google adwords"        → 'google'
 
 DISPONIBILIDADE DE MÉTRICAS (✓=dados reais, 0=sempre zero):
-  link_clicks:  facebook✓, pinterest✓, demais=0  [apenas campaigns]
-  reach:        facebook✓, tiktok✓, linkedin✓, pinterest✓ | google=0, kwai=0, amazon=0
-  conversions:  google✓, tiktok✓, linkedin✓ | facebook=0, kwai=0, pinterest=0, amazon=0
-  reactions:    facebook✓ | demais=0
-  video_views:  facebook✓(15s), google✓, tiktok✓, linkedin✓ | kwai=0, pinterest=0, amazon=0
+  link_clicks:  meta✓, pinterest✓, demais=0  [apenas campaigns]
+  reach:        meta✓, tiktok✓, linkedin✓, pinterest✓ | google=0, kwai=0, amazon=0
+  conversions:  google✓, tiktok✓, linkedin✓ | meta=0, kwai=0, pinterest=0, amazon=0
+  reactions:    meta✓ | demais=0
+  video_views:  meta✓(15s), google✓, tiktok✓, linkedin✓ | kwai=0, pinterest=0, amazon=0
   video_completions: kwai✓(thruplays), linkedin✓ | demais=0
-  video_p25/50/75/100: facebook✓, tiktok✓, pinterest✓, amazon✓ | kwai=0, linkedin=0
+  video_p25/50/75/100: meta✓, tiktok✓, pinterest✓, amazon✓ | kwai=0, linkedin=0
   google(age/gender tables): video_p25/50/75/100 aproximados (~)
 
 MOEDA (cost):
-  facebook, google, tiktok: BRL (account native, cost_currency=NULL)
+  meta, google, tiktok: BRL (account native, cost_currency=NULL)
   kwai: BRL (cost_currency='BRL')
   linkedin: varia por conta
   pinterest: USD (cost_currency='USD')

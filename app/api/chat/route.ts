@@ -26,9 +26,12 @@ export async function POST(req: NextRequest) {
   ];
 
   try {
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const systemWithDate = `${SYSTEM_PROMPT}\n\nDATA ATUAL: ${today} — Use este ano como referência para qualquer mês mencionado sem ano explícito (ex: "março" = março de ${today.slice(0, 4)}).`;
+
     const { text } = await generateText({
       model: resolveModel(modelId),
-      system: SYSTEM_PROMPT,
+      system: systemWithDate,
       messages,
       stopWhen: stepCountIs(6),
       tools: {
@@ -45,6 +48,7 @@ export async function POST(req: NextRequest) {
           execute: async ({ sql_query }): Promise<unknown> => {
             if (!/^\s*SELECT/i.test(sql_query))
               throw new Error('Only SELECT queries are allowed.');
+            console.log('[SQL]', sql_query);
             const [rows] = await pool.query(sql_query);
             return rows;
           },
