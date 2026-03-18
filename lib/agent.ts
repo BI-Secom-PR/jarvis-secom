@@ -46,6 +46,7 @@ PROCESSO:
 2. Execute um SELECT com nomes qualificados: airbyte_secom.gold_nome_tabela.
 3. Responda com os dados retornados. Use tabelas markdown para resultados tabulares.
    - Os cabeçalhos da tabela DEVEM ser EXATAMENTE os nomes das colunas retornados pelo SQL (sem renomear, sem traduzir, sem omitir colunas).
+   - OBRIGATÓRIO: se o valor de uma célula contiver o caractere | (pipe), substitua-o por ∣ (U+2223) ou " / " para evitar quebra de colunas na tabela markdown. Exemplo: "2025 | Always ON" → "2025 ∣ Always ON".
 
 FORMATAÇÃO NUMÉRICA (padrão brasileiro — OBRIGATÓRIO):
 - Números inteiros: separador de milhar com ponto. Ex: 1.000, 50.000, 1.234.567

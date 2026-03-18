@@ -34,12 +34,15 @@ export function renderMarkdown(text: string): string {
     const rows = block.trim().split('\n');
     if (rows.length < 2) return block;
     const isSeparator = (r: string) => /^\|[\s\-|:]+\|$/.test(r.trim());
+    const parseCells = (row: string) =>
+      row.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+
     let html = '<div class="table-wrapper"><table>';
     rows.forEach((row, i) => {
       if (isSeparator(row)) return;
-      const cells = row.trim().replace(/^\||\|$/g, '').split('|');
+      const cells = parseCells(row);
       const tag = i === 0 ? 'th' : 'td';
-      html += '<tr>' + cells.map((c) => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
+      html += '<tr>' + cells.map((c) => `<${tag}>${c}</${tag}>`).join('') + '</tr>';
     });
     html += '</table></div>';
     return html;

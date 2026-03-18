@@ -54,7 +54,16 @@ export async function POST(req: NextRequest) {
               throw new Error('Only SELECT queries are allowed.');
             console.log('[SQL]', sql_query);
             const [rows] = await pool.query(sql_query);
-            return rows;
+            // Replace pipe characters in string values so they don't break
+            // markdown table formatting when the AI builds the response.
+            const sanitized = (rows as Record<string, unknown>[]).map((row) => {
+              const clean: Record<string, unknown> = {};
+              for (const [key, val] of Object.entries(row)) {
+                clean[key] = typeof val === 'string' ? val.replace(/\|/g, '∣') : val;
+              }
+              return clean;
+            });
+            return sanitized;
           },
         }),
       },
