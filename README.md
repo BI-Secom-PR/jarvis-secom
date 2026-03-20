@@ -41,7 +41,11 @@ MYSQL_USER=
 MYSQL_PASSWORD=
 
 # PostgreSQL — auth & chat sessions
-DATABASE_URL=postgresql://user:password@host:5432/jarvis_db
+PG_HOST=
+PG_PORT=5432
+PG_DATABASE=jarvis_db
+PG_USER=
+PG_PASSWORD=    # quote the value if it contains special chars: PG_PASSWORD="p@ss&word"
 
 # First admin (used once by db:seed)
 ADMIN_EMAIL=admin@secom.gov.br
@@ -72,33 +76,33 @@ npm run dev   # http://localhost:3000
 
 ---
 
-## Local PostgreSQL (Apple Container)
+## PostgreSQL via Docker
 
-The project ships with a `Dockerfile` for a local PostgreSQL 18 container:
+Run PostgreSQL in a Docker container on any server:
 
 ```bash
-# Build image
-container build -t postgresql18 .
-
-# Run
-container run --name postgresql18 postgresql18
+docker run -d \
+  --name jarvis_db \
+  --restart unless-stopped \
+  -e POSTGRES_DB=jarvis_db \
+  -e POSTGRES_USER=<user> \
+  -e POSTGRES_PASSWORD=<password> \
+  -p 5432:5432 \
+  -v postgres_data:/var/lib/postgresql/data \
+  postgres:16-alpine
 ```
 
-Default credentials (set via `ENV` in `Dockerfile`):
+Then create the schema and seed the admin:
 
-| | |
-|---|---|
-| User | `ADMIN_CG` |
-| Password | `D3fc0n&*9` |
-| Database | `jarvis_db` |
-| Host | `192.168.64.3` (Apple container network) |
-
-`DATABASE_URL` for `.env.local`:
-```
-DATABASE_URL=postgresql://ADMIN_CG:D3fc0n%26*9@192.168.64.3:5432/jarvis_db
+```bash
+npm run db:push
+npm run db:seed
 ```
 
-> Note: `&` must be URL-encoded as `%26` in the connection string.
+> **Note:** If the password contains special characters (`&`, `(`, `*`, etc.), quote it in `.env.local`:
+> ```
+> PG_PASSWORD="your&special*password"
+> ```
 
 ---
 
@@ -162,7 +166,7 @@ npm run db:seed       # Create first admin user from ADMIN_* env vars
 
 1. Connect the GitHub repo to Vercel
 2. Add all env vars in the Vercel dashboard
-3. Provision a Vercel Postgres database — `DATABASE_URL` is injected automatically
+3. Provision a Vercel Postgres database and set `PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USER`, `PG_PASSWORD` from the connection details
 4. Run migrations on first deploy:
    ```bash
    npm run db:generate

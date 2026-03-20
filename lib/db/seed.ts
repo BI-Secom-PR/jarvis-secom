@@ -13,7 +13,13 @@ async function main() {
     process.exit(1)
   }
 
-  const client = postgres(process.env.DATABASE_URL!)
+  const client = postgres({
+    host:     process.env.PG_HOST!,
+    port:     parseInt(process.env.PG_PORT ?? '5432'),
+    database: process.env.PG_DATABASE!,
+    username: process.env.PG_USER!,
+    password: process.env.PG_PASSWORD!,
+  })
   const db = drizzle(client)
 
   const passwordHash = await bcrypt.hash(password, 12)
