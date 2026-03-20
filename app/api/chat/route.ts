@@ -4,7 +4,7 @@ import { generateText, tool, stepCountIs } from 'ai';
 import { z } from 'zod/v3';
 import { NextRequest, NextResponse } from 'next/server';
 import { getPool } from '@/lib/mysql';
-import { SYSTEM_PROMPT, parseChartRequest, DEFAULT_MODEL, MODELS, getModelProvider, type ModelId } from '@/lib/agent';
+import { getSystemPrompt, parseChartRequest, DEFAULT_MODEL, MODELS, getModelProvider, type ModelId } from '@/lib/agent';
 import { getSession } from '@/lib/auth';
 
 const VALID_MODEL_IDS = new Set(MODELS.map((m) => m.id));
@@ -30,12 +30,9 @@ export async function POST(req: NextRequest) {
   ];
 
   try {
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-    const systemWithDate = `${SYSTEM_PROMPT}\n\nDATA ATUAL: ${today} — Use este ano como referência para qualquer mês mencionado sem ano explícito (ex: "março" = março de ${today.slice(0, 4)}).`;
-
     const { text } = await generateText({
       model: resolveModel(modelId),
-      system: systemWithDate,
+      system: getSystemPrompt(),
       messages,
       stopWhen: stepCountIs(6),
       tools: {
@@ -50,8 +47,10 @@ export async function POST(req: NextRequest) {
               ),
           }),
           execute: async ({ sql_query }): Promise<unknown> => {
-            if (!/^\s*SELECT/i.test(sql_query))
-              throw new Error('Only SELECT queries are allowed.');
+            // Guard against SELECT INTO OUTFILE/DUMPFILE and other injection bypasses
+            const SAFE_QUERY = /^\s*SELECT\b(?![\s\S]*\b(?:INTO\s+(?:OUTFILE|DUMPFILE)|LOAD_FILE)\b)[\s\S]+\bFROM\b/i;
+            if (!SAFE_QUERY.test(sql_query))
+              throw new Error('Only SELECT queries on airbyte_secom are allowed.');
             console.log('[SQL]', sql_query);
             const [rows] = await pool.query(sql_query);
             // Replace pipe characters in string values so they don't break

@@ -7,6 +7,9 @@ export async function sendApprovalEmail(to: string, name: string): Promise<void>
     return
   }
 
+  const escHtml = (s: string) =>
+    s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c))
+
   const resend = new Resend(apiKey)
   const FROM   = process.env.RESEND_FROM ?? 'noreply@example.com'
   const BASE   = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
@@ -16,9 +19,9 @@ export async function sendApprovalEmail(to: string, name: string): Promise<void>
     to,
     subject: 'Seu acesso ao Jarvis SECOM foi aprovado!',
     html: `
-      <p>Olá, <strong>${name}</strong>!</p>
+      <p>Olá, <strong>${escHtml(name)}</strong>!</p>
       <p>Seu acesso ao <strong>Jarvis SECOM</strong> foi aprovado por um administrador.</p>
-      <p><a href="${BASE}/login">Clique aqui para entrar</a></p>
+      <p><a href="${escHtml(BASE)}/login">Clique aqui para entrar</a></p>
     `,
   })
 }

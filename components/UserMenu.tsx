@@ -3,6 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { SessionUser } from "@/lib/auth";
+import { logout } from "@/lib/authClient";
+import { postJson } from "@/lib/fetchUtils";
 
 export default function UserMenu({ user }: { user: SessionUser }) {
   const router = useRouter();
@@ -15,8 +17,7 @@ export default function UserMenu({ user }: { user: SessionUser }) {
   const [loading, setLoading] = useState(false);
 
   async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
+    await logout(router);
   }
 
   function openModal() {
@@ -38,11 +39,7 @@ export default function UserMenu({ user }: { user: SessionUser }) {
     }
 
     setLoading(true);
-    const res = await fetch("/api/auth/change-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ currentPassword: current, newPassword: next }),
-    });
+    const res = await postJson("/api/auth/change-password", { currentPassword: current, newPassword: next });
     const data = await res.json();
     setLoading(false);
 

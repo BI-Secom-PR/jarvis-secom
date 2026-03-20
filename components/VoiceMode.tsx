@@ -20,6 +20,30 @@ const SpeechRecognitionCtor: (new () => SpeechRecognition) | null =
     : null;
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
+function setupAudio(stream: MediaStream): { ctx: AudioContext; analyser: AnalyserNode } {
+  const ctx = new AudioContext();
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 256;
+  const source = ctx.createMediaStreamSource(stream);
+  source.connect(analyser);
+  return { ctx, analyser };
+}
+
+function setupRecognition(
+  onResult: (e: SpeechRecognitionEvent) => void,
+  onError: (e: SpeechRecognitionErrorEvent) => void,
+  onEnd: () => void,
+): SpeechRecognition {
+  const recognition = new SpeechRecognitionCtor!();
+  recognition.lang = 'pt-BR';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.onresult = onResult;
+  recognition.onerror = onError;
+  recognition.onend = onEnd;
+  return recognition;
+}
+
 interface Props {
   onClose: () => void;
   model: ModelId;
@@ -179,48 +203,29 @@ export default function VoiceMode({ onClose, model }: Props) {
         streamRef.current = stream;
 
         // 2. Set up AudioContext + AnalyserNode for orb animation
-        const ctx = new AudioContext();
+        const { ctx, analyser } = setupAudio(stream);
         audioCtxRef.current = ctx;
-
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 256;
         micAnalyserRef.current = analyser;
 
-        const source = ctx.createMediaStreamSource(stream);
-        source.connect(analyser);
-
         // 3. Set up SpeechRecognition
-        const recognition = new SpeechRecognitionCtor();
-        recognitionRef.current = recognition;
-        recognition.lang = 'pt-BR';
-        recognition.continuous = true;
-        recognition.interimResults = true;
-
-        recognition.onresult = (e: SpeechRecognitionEvent) => {
-          const last = e.results[e.results.length - 1];
-          const text = last[0].transcript;
-          setTranscript(text);
-          if (last.isFinal && text.trim()) {
-            handleVoiceQuery(text.trim());
-          }
-        };
-
-        recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
-          // 'no-speech' and 'aborted' are expected — just restart
-          if (e.error === 'no-speech' || e.error === 'aborted') return;
-          setError(`Erro de reconhecimento: ${e.error}`);
-        };
-
-        recognition.onend = () => {
-          // Auto-restart if we're still in listening mode
-          if (!cancelled && !busyRef.current) {
-            try {
-              recognition.start();
-            } catch {
-              /* already started */
+        const recognition = setupRecognition(
+          (e: SpeechRecognitionEvent) => {
+            const last = e.results[e.results.length - 1];
+            const text = last[0].transcript;
+            setTranscript(text);
+            if (last.isFinal && text.trim()) handleVoiceQuery(text.trim());
+          },
+          (e: SpeechRecognitionErrorEvent) => {
+            if (e.error === 'no-speech' || e.error === 'aborted') return;
+            setError(`Erro de reconhecimento: ${e.error}`);
+          },
+          () => {
+            if (!cancelled && !busyRef.current) {
+              try { recognition.start(); } catch { /* already started */ }
             }
-          }
-        };
+          },
+        );
+        recognitionRef.current = recognition;
 
         recognition.start();
         setOrbState('idle');

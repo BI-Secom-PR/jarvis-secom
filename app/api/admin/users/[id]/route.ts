@@ -20,6 +20,9 @@ export async function PATCH(
   const admin = await requireAdmin()
   const { id } = await params
 
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
+
   // Admin cannot modify themselves (to prevent self-lockout)
   if (id === admin.id) {
     return NextResponse.json({ error: 'Você não pode alterar sua própria conta.' }, { status: 400 })
@@ -32,7 +35,7 @@ export async function PATCH(
   }
 
   const { enabled, name, email, role } = parsed.data
-  const wasEnabled = enabled !== undefined
+  const enabledChanged = enabled !== undefined
 
   // Check email uniqueness if changing email
   if (email) {
@@ -47,7 +50,7 @@ export async function PATCH(
   }
 
   const patch: Record<string, unknown> = { updatedAt: new Date() }
-  if (wasEnabled)        patch.enabled = enabled
+  if (enabledChanged)        patch.enabled = enabled
   if (name !== undefined) patch.name   = name
   if (email !== undefined) patch.email = email.toLowerCase()
   if (role !== undefined)  patch.role  = role
@@ -63,12 +66,12 @@ export async function PATCH(
   }
 
   // Disabling: kill all active sessions immediately
-  if (wasEnabled && !enabled) {
+  if (enabledChanged && !enabled) {
     await db.delete(sessions).where(eq(sessions.userId, id))
   }
 
   // Enabling: send approval email (non-blocking)
-  if (wasEnabled && enabled) {
+  if (enabledChanged && enabled) {
     sendApprovalEmail(updated[0].email, updated[0].name).catch(console.error)
   }
 

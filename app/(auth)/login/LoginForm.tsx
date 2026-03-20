@@ -28,7 +28,8 @@ export default function LoginForm() {
       return
     }
 
-    if (data.redirect) {
+    const ALLOWED_REDIRECTS = ['/', '/waiting']
+    if (data.redirect && ALLOWED_REDIRECTS.includes(data.redirect)) {
       router.push(data.redirect)
       return
     }

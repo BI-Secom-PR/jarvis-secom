@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
-import { getSession } from '@/lib/auth'
+import { getSession, BCRYPT_ROUNDS } from '@/lib/auth'
 
 const schema = z.object({
   currentPassword: z.string().min(1),
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Senha atual incorreta.' }, { status: 401 })
   }
 
-  const newHash = await bcrypt.hash(newPassword, 12)
+  const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS)
   await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, session.id))
 
   return NextResponse.json({ ok: true })

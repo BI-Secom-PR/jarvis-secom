@@ -153,6 +153,11 @@ Para múltiplas métricas no mesmo gráfico, adicione múltiplos objetos em "dat
 
 Não mostre o SQL ao usuário, exceto se pedido explicitamente.`;
 
+export function getSystemPrompt(): string {
+  const today = new Date().toISOString().slice(0, 10);
+  return `${SYSTEM_PROMPT}\n\nDATA ATUAL: ${today} — Use este ano como referência para qualquer mês mencionado sem ano explícito (ex: "março" = março de ${today.slice(0, 4)}).`;
+}
+
 export function parseChartRequest(text: string): {
   cleanText: string;
   chartData: ChartData | null;

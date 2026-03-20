@@ -88,6 +88,7 @@ const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend
             strokeLinecap="round"
             strokeLinejoin="round"
             className="w-[15px] h-[15px]"
+            style={{ transform: 'translate(-1px, 1px)' }}
           >
             <line x1="22" y1="2" x2="11" y2="13" />
             <polygon points="22 2 15 22 11 13 2 9 22 2" />

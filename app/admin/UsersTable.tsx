@@ -3,6 +3,8 @@
 import { Fragment, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { User } from '@/lib/db/schema'
+import { logout } from '@/lib/authClient'
+import { patchJson } from '@/lib/fetchUtils'
 
 type UserRow = Pick<User, 'id' | 'email' | 'name' | 'role' | 'enabled' | 'createdAt'>
 
@@ -29,11 +31,7 @@ export default function UsersTable({
 
   async function toggleEnabled(id: string, enable: boolean) {
     setToggling(id)
-    const res = await fetch(`/api/admin/users/${id}`, {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ enabled: enable }),
-    })
+    const res = await patchJson(`/api/admin/users/${id}`, { enabled: enable })
     if (res.ok) {
       const updated = await res.json()
       setUsers(prev => prev.map(u => u.id === id ? { ...u, enabled: updated.enabled } : u))
@@ -58,11 +56,7 @@ export default function UsersTable({
     setSaving(true)
     setEditError('')
 
-    const res = await fetch(`/api/admin/users/${id}`, {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(editState),
-    })
+    const res = await patchJson(`/api/admin/users/${id}`, editState)
     const data = await res.json()
 
     if (!res.ok) {
@@ -77,9 +71,8 @@ export default function UsersTable({
     setSaving(false)
   }
 
-  async function logout() {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    router.push('/login')
+  async function handleLogout() {
+    await logout(router)
   }
 
   return (
@@ -91,7 +84,7 @@ export default function UsersTable({
             ← Voltar ao chat
           </a>
           <button
-            onClick={logout}
+            onClick={handleLogout}
             className="text-sm text-red-400/70 hover:text-red-400 transition-colors cursor-pointer"
           >
             Sair

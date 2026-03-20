@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Message } from "@/types/chat";
 import { MODELS, DEFAULT_MODEL, type ModelId } from "@/lib/agent";
+import * as chatApi from "@/lib/chatApi";
 import type { SessionUser } from "@/lib/auth";
 import MessageBubble from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
@@ -12,6 +13,26 @@ import WelcomeCard from "./WelcomeCard";
 import UserMenu from "./UserMenu";
 import dynamic from "next/dynamic";
 const VoiceMode = dynamic(() => import("./VoiceMode"), { ssr: false });
+
+async function callChatApi(
+  text: string,
+  history: Message[],
+  model: ModelId,
+): Promise<{ output: string; chartData: unknown }> {
+  const conversationHistory = history.map((m) => ({
+    role: m.role === "user" ? "user" : "assistant",
+    content: m.text,
+  }));
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chatInput: text, messages: conversationHistory, model }),
+  });
+  if (res.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+  return { output: data.output ?? "", chartData: data.chartData ?? undefined };
+}
 
 const StarIcon = () => (
   <svg
@@ -50,19 +71,10 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
   }, [messages, isTyping]);
 
   const createChatSession = useCallback(async () => {
-    try {
-      const res = await fetch("/api/chat-sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "Nova conversa" }),
-      });
-      if (res.ok) {
-        const s = await res.json();
-        sessionIdRef.current = s.id;
-        isFirstMsgRef.current = true;
-      }
-    } catch {
-      // non-fatal — messages still work in memory
+    const id = await chatApi.createSession("Nova conversa");
+    if (id) {
+      sessionIdRef.current = id;
+      isFirstMsgRef.current = true;
     }
   }, []);
 
@@ -90,92 +102,50 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
     async (role: "USER" | "AI", content: string, chartData?: unknown) => {
       const sid = sessionIdRef.current;
       if (!sid) return;
-      try {
-        await fetch(`/api/chat-sessions/${sid}/messages`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role, content, chartData: chartData ?? null }),
-        });
-      } catch {
-        // non-fatal
-      }
+      await chatApi.saveMessage(sid, role, content, chartData).catch(() => {});
     },
     [],
   );
 
+  const updateTitle = useCallback(async (text: string) => {
+    const sid = sessionIdRef.current;
+    if (!sid || !isFirstMsgRef.current) return;
+    isFirstMsgRef.current = false;
+    await chatApi.updateSessionTitle(sid, text.slice(0, 60)).catch(() => {});
+  }, []);
+
   const handleSend = useCallback(
     async (text: string) => {
-      const userMsg: Message = {
-        id: Date.now().toString(),
-        role: "user",
-        text,
-      };
-      setMessages((prev) => [...prev, userMsg]);
+      setMessages((prev) => [...prev, { id: Date.now().toString(), role: "user", text }]);
       setIsTyping(true);
-
-      // Save user message (fire-and-forget)
       saveMessage("USER", text);
-
-      // Update session title from first message
-      if (isFirstMsgRef.current && sessionIdRef.current) {
-        isFirstMsgRef.current = false;
-        const title = text.slice(0, 60);
-        fetch(`/api/chat-sessions/${sessionIdRef.current}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title }),
-        }).catch(() => {});
-      }
+      updateTitle(text);
 
       try {
-        const conversationHistory = messages.map((m) => ({
-          role: m.role === "user" ? "user" : "assistant",
-          content: m.text,
-        }));
-
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chatInput: text,
-            messages: conversationHistory,
-            model: selectedModel,
-          }),
-        });
-
-        if (res.status === 401) {
-          router.push("/login");
-          return;
-        }
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error ?? `HTTP ${res.status}`);
-        }
-
+        const { output, chartData } = await callChatApi(text, messages, selectedModel);
         const aiMsg: Message = {
           id: (Date.now() + 1).toString(),
           role: "ai",
-          text: data.output ?? "",
-          chartData: data.chartData ?? undefined,
+          text: output,
+          chartData: chartData as Message["chartData"],
         };
         setMessages((prev) => [...prev, aiMsg]);
-
-        // Save AI message (fire-and-forget)
         saveMessage("AI", aiMsg.text, aiMsg.chartData);
       } catch (err) {
-        const errMsg: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "ai",
-          text: `⚠️ Erro ao conectar com o servidor:\n\`${(err as Error).message}\`\n\nTente novamente em alguns instantes.`,
-        };
-        setMessages((prev) => [...prev, errMsg]);
+        if ((err as { status?: number }).status === 401) { router.push("/login"); return; }
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: "ai",
+            text: `⚠️ Erro ao conectar com o servidor:\n\`${(err as Error).message}\`\n\nTente novamente em alguns instantes.`,
+          },
+        ]);
       } finally {
         setIsTyping(false);
       }
     },
-    [messages, selectedModel, saveMessage, router],
+    [messages, selectedModel, saveMessage, updateTitle, router],
   );
 
   return (

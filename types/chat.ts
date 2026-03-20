@@ -19,9 +19,3 @@ export interface Message {
   chartData?: ChartData;
 }
 
-export interface N8nResponse {
-  output?: string;
-  text?: string;
-  message?: string;
-  chartData?: ChartData;
-}

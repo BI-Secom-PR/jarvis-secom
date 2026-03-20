@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
+import { BCRYPT_ROUNDS } from '@/lib/auth'
 
 const schema = z.object({
   email:    z.string().email(),
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'E-mail já cadastrado.' }, { status: 409 })
   }
 
-  const passwordHash = await bcrypt.hash(password, 12)
+  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
 
   await db.insert(users).values({
     email: normalizedEmail,
