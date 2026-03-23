@@ -113,14 +113,17 @@ npm run db:seed
 | `/login` | Email + password login |
 | `/register` | Request access (requires admin approval) |
 | `/waiting` | Shown after registration or when account is pending |
+| `/` | Home menu — links to available tools |
+| `/chat` | AI chat assistant |
+| `/verification` | Verification dashboard (in progress) |
 | `/admin` | User management (admin only) |
 
 ### Roles
 
 | Role | Can access |
 |---|---|
-| `USER` | Chat (`/`) |
-| `ADMIN` | Chat + Admin panel (`/admin`) |
+| `USER` | Home (`/`), Chat (`/chat`), Verification (`/verification`) |
+| `ADMIN` | Home + Chat + Verification + Admin panel (`/admin`) |
 
 ### Session behaviour
 
@@ -183,14 +186,18 @@ npm run db:seed       # Create first admin user from ADMIN_* env vars
 app/
   (auth)/           # Login, register, waiting pages (no URL prefix)
   admin/            # Admin user management panel
+  chat/             # AI chat page (/chat)
+  verification/     # Verification dashboard (/verification — in progress)
   api/
     auth/           # register, login, logout, me
     admin/users/    # User list + enable/disable/edit
     chat/           # Main AI chat endpoint
     chat-sessions/  # Chat session CRUD + message persistence
     tts/            # Text-to-speech (Google Gemini)
+  page.tsx          # Home menu — cards linking to available tools
 components/
   ChatContainer     # Main chat UI + session management
+  MenuCard          # Reusable card for home menu navigation
   UserMenu          # Name display + logout button
   MessageBubble     # Renders markdown + charts
   VoiceMode         # Speech recognition + TTS playback

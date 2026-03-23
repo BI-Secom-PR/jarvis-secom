@@ -152,6 +152,15 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
     <div className="w-full max-w-9/12 h-[92vh] max-h-225 flex flex-col bg-[rgba(10,10,20,0.82)] backdrop-blur-[60px] backdrop-saturate-180 border-[0.5px] border-white/[0.14] rounded-[28px] overflow-hidden shadow-[0_0_0_0.5px_rgba(255,255,255,0.07),0_40px_100px_rgba(0,0,0,0.85),0_0_60px_rgba(100,40,200,0.12),inset_0_1px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(255,255,255,0.04)] relative z-10 mx-5">
       {/* Header */}
       <div className="flex items-center gap-3 px-6 py-4.5 bg-white/3 border-b-[0.5px] border-white/10 shrink-0">
+        <a
+          href="/"
+          title="Voltar ao início"
+          className="w-8 h-8 rounded-xl flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/[0.07] transition-all duration-150 shrink-0 -ml-1 mr-0.5"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </a>
         <div className="w-10 h-10 rounded-full bg-white/[0.07] border-[0.5px] border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] flex items-center justify-center shrink-0">
           <StarIcon />
         </div>
