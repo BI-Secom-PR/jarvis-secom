@@ -1,31 +1,20 @@
 import type { ChartData } from "@/types/chat";
 
 export const MODELS = [
-  { id: "llama-3.3-70b-versatile", label: "Llama 3.3 · 70B", provider: "groq" },
-  {
-    id: "llama-3.1-8b-instant",
-    label: "Llama 3.1 · 8B (rápido)",
-    provider: "groq",
-  },
-  { id: "mixtral-8x7b-32768", label: "Mixtral 8×7B", provider: "groq" },
-  { id: "gemma2-9b-it", label: "Gemma 2 · 9B", provider: "groq" },
-  {
-    id: "gemini-3.1-flash-lite-preview",
-    label: "Gemini 3.1 Flash Lite",
-    provider: "google",
-  },
-  { id: "gemini-3-flash-preview", label: "Gemini 3 Flash", provider: "google" },
-  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", provider: "google" },
-  {
-    id: "gemini-2.5-flash-lite",
-    label: "Gemini 2.5 Flash Lite",
-    provider: "google",
-  },
+  { id: "llama-3.3-70b-versatile",              label: "Llama 3.3 · 70B",        provider: "groq"   },
+  { id: "llama-3.1-8b-instant",                 label: "Llama 3.1 · 8B (rápido)", provider: "groq"   },
+  { id: "meta-llama/llama-4-scout-17b-16e-instruct", label: "Llama 4 Scout · 17B", provider: "groq"  },
+  { id: "moonshotai/kimi-k2-instruct",          label: "Kimi K2",                provider: "groq"   },
+  { id: "qwen/qwen3-32b",                       label: "Qwen 3 · 32B",           provider: "groq"   },
+  { id: "gemini-2.5-flash",                     label: "Gemini 2.5 Flash",        provider: "google" },
+  { id: "gemini-2.5-flash-lite",                label: "Gemini 2.5 Flash Lite",   provider: "google" },
+  { id: "gemini-3.0-flash",                     label: "Gemini 3 Flash",          provider: "google" },
+  { id: "gemini-3.1-flash-lite",                label: "Gemini 3.1 Flash Lite",   provider: "google" },
 ] as const;
 
 export type ModelId = (typeof MODELS)[number]["id"];
 export type ModelProvider = (typeof MODELS)[number]["provider"];
-export const DEFAULT_MODEL: ModelId = "gemini-2.5-flash";
+export const DEFAULT_MODEL: ModelId = "llama-3.3-70b-versatile";
 
 export function getModelProvider(id: ModelId): ModelProvider {
   return MODELS.find((m) => m.id === id)!.provider;
