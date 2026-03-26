@@ -23,17 +23,10 @@ from pathlib import Path
 import openpyxl
 
 from category_map import INDEVIDAS_ZERO, normaliza_categoria
-from parser_utils import col_index, parse_date, to_float, to_int, cli_date
+from parser_utils import col_index, parse_date, to_int, cli_date
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
-
-def _normalize_va(v) -> float | None:
-    f = to_float(v)
-    if f is None:
-        return None
-    return round(f * 100, 2) if f <= 1.0 else round(f, 2)
-
 
 def _find_header(ws):
     veiculo_variants  = {"veículo", "veiculo", "vehicle"}
@@ -47,11 +40,16 @@ def _find_header(ws):
     return None, []
 
 
+_VEICULO_VARIANTS = {"veículo", "veiculo", "vehicle", "veículos", "veiculos"}
+
 def _find_verif_header(ws):
+    """Detecta linha de cabeçalho do arquivo de verification.
+    Requer 'categoria' + algum variant de 'veículo'. URL é opcional.
+    """
     for i, row in enumerate(ws.iter_rows(max_row=25, values_only=True), start=1):
         vals = [str(v).strip() if v is not None else "" for v in row]
-        lows = [v.lower() for v in vals]
-        if "categoria" in lows and any("url" in v for v in lows):
+        lows = {v.lower() for v in vals}
+        if "categoria" in lows and lows & _VEICULO_VARIANTS:
             return i, vals
     return None, []
 
@@ -83,7 +81,6 @@ def parse_comprovante(
                               "Entregues", "Entregue")
     i_cliques    = col_index(header, "Cliques", "Clicks")
     i_viewable   = col_index(header, "Viewable", "Viewables")
-    i_viewability= col_index(header, "VA%", "Viewability", "VA %", "View%")
     i_contratado = col_index(header, "Contratado", "Contracted")
     i_data       = col_index(header, "Data", "Date")
 
@@ -95,9 +92,6 @@ def parse_comprovante(
     cliques:    dict[str, int]   = defaultdict(int)
     viewables:  dict[str, int]   = defaultdict(int)
     contratado: dict[str, int]   = {}
-    viewability:dict[str, float] = {}
-    va_wsum:    dict[str, float] = defaultdict(float)
-    va_weight:  dict[str, int]   = defaultdict(int)
     last_vehicle: str | None     = None
 
     for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
@@ -111,17 +105,13 @@ def parse_comprovante(
         if not vname:
             continue
 
-        # Linha #TOTAL → contratado e VA% do veículo anterior
+        # Linha #TOTAL → apenas contratado (viewability calculado de viewables/entregue)
         if "#TOTAL" in vname.upper():
             if last_vehicle is not None:
                 if i_contratado is not None and i_contratado < len(row):
                     c = to_int(row[i_contratado])
                     if c > 0:
                         contratado[last_vehicle] = c
-                if i_viewability is not None and i_viewability < len(row):
-                    va = _normalize_va(row[i_viewability])
-                    if va is not None:
-                        viewability[last_vehicle] = va
             continue
 
         if (data_ini or data_fim) and i_data is not None and i_data < len(row):
@@ -141,11 +131,6 @@ def parse_comprovante(
             cliques[vname] += to_int(row[i_cliques])
         if i_viewable is not None and i_viewable < len(row):
             viewables[vname] += to_int(row[i_viewable])
-        if i_viewability is not None and i_viewability < len(row):
-            va = _normalize_va(row[i_viewability])
-            if va is not None and imp > 0:
-                va_wsum[vname]   += va * imp
-                va_weight[vname] += imp
 
         last_vehicle = vname
 
@@ -154,9 +139,11 @@ def parse_comprovante(
     if not entregue:
         return []
 
+    # Viewability = soma(viewables) / soma(impressões) * 100
+    viewability: dict[str, float] = {}
     for vname in entregue:
-        if vname not in viewability and va_weight[vname] > 0:
-            viewability[vname] = round(va_wsum[vname] / va_weight[vname], 2)
+        if viewables[vname] > 0 and entregue[vname] > 0:
+            viewability[vname] = round(viewables[vname] / entregue[vname] * 100, 2)
 
     return [
         {
@@ -194,7 +181,7 @@ def parse_verif(
     if header_row_idx is None:
         wb.close()
         raise ValueError(
-            f"Header com 'Categoria' e 'Url' não encontrado nas primeiras 25 linhas: {path.name}"
+            f"Header com 'Categoria' e 'Veículo' não encontrado nas primeiras 25 linhas: {path.name}"
         )
 
     i_veiculo    = col_index(header, "Veículo", "Veiculo", "Vehicle",
@@ -255,9 +242,6 @@ def parse_verif(
 
     wb.close()
 
-    sample_size = max(1, len(url_pool) // 20) if url_pool else 0
-    url_sample  = random.sample(url_pool, min(sample_size, len(url_pool))) if url_pool else []
-
     results: list[dict] = []
     for veiculo in veiculos_entregue:
         results.append({
@@ -269,7 +253,7 @@ def parse_verif(
             "viewables":         None,
             "viewability":       None,
             "indevidas":         dict(veiculos_indevidas[veiculo]),
-            "url_sample":        url_sample if not results else [],
+            "url_sample":        url_pool if not results else [],
             "formato_detectado": "metrike_verif",
         })
 

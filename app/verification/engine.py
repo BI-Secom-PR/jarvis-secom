@@ -160,6 +160,13 @@ def _read_consolidado(ws) -> list[dict]:
             for cat, col in COL_INDEVIDAS.items()
         }
 
+        # Normaliza viewability do consolidado: Excel armazena como decimal (0.7166 = 71.66%)
+        va_raw = _to_float_safe(_cell_value(ws, row_idx, COL_VIEWABILITY))
+        if va_raw is not None:
+            viewability_val = round(va_raw * 100, 2) if va_raw <= 1.0 else round(va_raw, 2)
+        else:
+            viewability_val = None
+
         rows.append({
             "row_idx":    row_idx,
             "veiculo":    str(veiculo).strip(),
@@ -168,7 +175,7 @@ def _read_consolidado(ws) -> list[dict]:
             "entregue":   entregue,
             "cliques":    _to_int_safe(_cell_value(ws, row_idx, COL_CLIQUES)),
             "viewables":  _to_int_safe(_cell_value(ws, row_idx, COL_VIEWABLES)),
-            "viewability": _to_float_safe(_cell_value(ws, row_idx, COL_VIEWABILITY)),
+            "viewability": viewability_val,
             "indevidas":  indevidas,
         })
 
@@ -229,54 +236,79 @@ def _compare(
 ) -> tuple[str, list[str]]:
     """
     Compara métricas de uma linha do consolidado com comprovante e verification.
-
-    comp_result  — dict do comprovante (entregue/cliques/views); None se ausente
-    verif_result — dict do verification (indevidas); None se ausente
+    Retorna todas as linhas de devolutiva (OK e DIV) para rastreabilidade completa.
 
     Retorna: (status, linhas_devolutiva)
     status: "OK" | "DIVERGENCIA"
     """
-    divergencias: list[str] = []
+    tem_divergencia = False
+    linhas: list[str] = []
 
-    # ── Campos do comprovante (igualdade exata) ────────────────────────────────
-    # comp_val > 0 garante que a ausência de dado no comprovante não gera falso DIV
+    # ── Campos do comprovante ─────────────────────────────────────────────────
     if comp_result is not None:
         for campo in ("entregue", "cliques", "viewables"):
             comp_val   = comp_result.get(campo) or 0
             consol_val = consol_row.get(campo)  or 0
-            if comp_val > 0 and comp_val != consol_val:
-                divergencias.append(
+            if comp_val == 0:
+                continue  # sem dado no comprovante — não gera falso DIV
+            if comp_val != consol_val:
+                linhas.append(
                     f"DIV {campo}: comprovante {_fmt_num(comp_val)} / "
                     f"consolidado {_fmt_num(consol_val)}"
                 )
+                tem_divergencia = True
+            else:
+                linhas.append(f"OK {campo}: {_fmt_num(comp_val)}")
+
         comp_va   = comp_result.get("viewability")
         consol_va = consol_row.get("viewability")
-        if comp_va is not None and consol_va is not None:
-            if round(comp_va, 2) != round(consol_va, 2):
-                divergencias.append(
+        if comp_va is not None:
+            if consol_va is not None and round(comp_va, 2) != round(consol_va, 2):
+                linhas.append(
                     f"DIV viewability: comprovante {comp_va:.2f}% / "
                     f"consolidado {consol_va:.2f}%"
                 )
+                tem_divergencia = True
+            else:
+                ref = f"{consol_va:.2f}%" if consol_va is not None else "—"
+                linhas.append(f"OK viewability: {comp_va:.2f}% (consolidado {ref})")
 
-    # ── Indevidas (apenas se temos verification) ──────────────────────────────
+    # ── Indevidas ──────────────────────────────────────────────────────────────
+    consol_indev = consol_row.get("indevidas", {})
+
     if verif_result is not None:
-        verif_indev  = verif_result.get("indevidas", {})
-        consol_indev = consol_row.get("indevidas", {})
+        verif_indev = verif_result.get("indevidas", {})
+        indev_linhas: list[str] = []
+        alguma_indevida_com_dado = False
+
         for cat, consol_val in consol_indev.items():
             comp_val = verif_indev.get(cat, 0)
+            if comp_val == 0 and consol_val == 0:
+                continue
+            alguma_indevida_com_dado = True
             if comp_val != consol_val:
-                divergencias.append(
+                indev_linhas.append(
                     f"DIV {cat}: verif. {_fmt_num(comp_val)} / "
                     f"consolidado {_fmt_num(consol_val)}"
                 )
+                tem_divergencia = True
+            else:
+                indev_linhas.append(f"OK {cat}: {_fmt_num(consol_val)}")
 
-    if divergencias:
-        return "DIVERGENCIA", divergencias
+        if not alguma_indevida_com_dado:
+            indev_linhas.append("OK indevidas: todas zeradas")
 
-    entregue = (comp_result or {}).get("entregue") or 0
-    if entregue > 0:
-        return "OK", [f"OK — entregue {_fmt_num(entregue)}"]
-    return "OK", ["OK — indevidas conferem"]
+        linhas.extend(indev_linhas)
+    else:
+        linhas.append("? indevidas: sem arquivo de verification")
+
+    if not linhas:
+        entregue = (comp_result or {}).get("entregue") or 0
+        if entregue > 0:
+            return "OK", [f"OK — entregue {_fmt_num(entregue)}"]
+        return "OK", ["OK — sem dados para comparar"]
+
+    return ("DIVERGENCIA" if tem_divergencia else "OK"), linhas
 
 
 # ── Engine principal ────────────────────────────────────────────────────────────
@@ -328,10 +360,18 @@ def verificar(
     for vp in verif_paths:
         try:
             results = parse_verif(vp, data_ini=data_ini, data_fim=data_fim)
+            veiculos_encontrados = [r["veiculo"] for r in results]
+            print(
+                f"[verif] {Path(vp).name}: {len(results)} veículos"
+                f" → {veiculos_encontrados}"
+                f" | filtro: {data_ini}–{data_fim}",
+                file=sys.stderr,
+            )
             verif_raw.extend(results)
             for r in results:
                 url_pool.extend(r.pop("url_sample", []))
         except Exception as e:
+            print(f"[verif] ERRO {Path(vp).name}: {e}", file=sys.stderr)
             parse_errors.append({"arquivo": Path(vp).name, "erro": str(e)})
 
     # ── Parsear comprovante files ──────────────────────────────────────────────
@@ -343,7 +383,8 @@ def verificar(
         except Exception as e:
             parse_errors.append({"arquivo": Path(cp).name, "erro": str(e)})
 
-    # ── Amostra de URLs: 5% por categoria, cap global de 200 ──────────────────
+    # ── Amostra de URLs: 5% por categoria indevida, cap global de 200 ───────
+    # Parsers devolvem o pool completo (reservoir ≤ 500); amostragem feita aqui.
     if url_pool:
         by_cat: dict[str, list] = defaultdict(list)
         for item in url_pool:

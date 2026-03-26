@@ -214,8 +214,8 @@ def parse_verif(
     header_row_idx, header = None, []
     for i, row in enumerate(ws.iter_rows(max_row=25, values_only=True), start=1):
         vals = [str(v).strip() if v is not None else "" for v in row]
-        lows = [v.lower() for v in vals]
-        if "categoria" in lows and any("url" in v for v in lows):
+        lows = {v.lower() for v in vals}
+        if "categoria" in lows and lows & {"veículo", "veiculo", "vehicle", "veículos", "veiculos"}:
             header_row_idx, header = i, vals
             break
 
@@ -286,9 +286,6 @@ def parse_verif(
 
     wb.close()
 
-    sample_size = max(1, len(url_pool) // 20) if url_pool else 0
-    url_sample  = random.sample(url_pool, min(sample_size, len(url_pool))) if url_pool else []
-
     results: list[dict] = []
     for veiculo in veiculos_entregue:
         results.append({
@@ -300,7 +297,7 @@ def parse_verif(
             "viewables":         None,
             "viewability":       None,
             "indevidas":         dict(veiculos_indevidas[veiculo]),
-            "url_sample":        url_sample if not results else [],
+            "url_sample":        url_pool if not results else [],
             "formato_detectado": "00px_verif",
         })
 

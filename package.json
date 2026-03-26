@@ -9,7 +9,10 @@
     "db:push": "bun --env-file=.env.local node_modules/.bin/drizzle-kit push --config drizzle.config.ts",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "bun --env-file=.env.local lib/db/migrate.ts",
-    "db:seed": "bun --env-file=.env.local lib/db/seed.ts"
+    "db:seed": "bun --env-file=.env.local lib/db/seed.ts",
+    "tunnel": "bash scripts/tunnel-pg.sh",
+    "tunnel:close": "bash scripts/tunnel-pg.sh close",
+    "tunnel:status": "bash scripts/tunnel-pg.sh status"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.43",

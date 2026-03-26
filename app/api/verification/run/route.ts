@@ -56,6 +56,7 @@ function runEngine(args: string[]): Promise<string> {
     proc.on('close', (code) => {
       const stdout = Buffer.concat(stdoutChunks).toString('utf-8');
       const stderr = Buffer.concat(stderrChunks).toString('utf-8');
+      if (stderr) console.log('[engine.py stderr]\n' + stderr);
       if (code !== 0) {
         reject(new Error(stderr || `engine.py exited with code ${code}`));
       } else {
@@ -119,8 +120,8 @@ export async function POST(req: NextRequest) {
     const fim = form.get('fim') as string | null;
 
     const args = [consolidadoPath, '--adserver', adserver];
-    for (const p of compPaths)  args.push('--comp',  p);
-    for (const p of verifPaths) args.push('--verif', p);
+    if (compPaths.length > 0)  args.push('--comp',  ...compPaths);
+    if (verifPaths.length > 0) args.push('--verif', ...verifPaths);
     if (ini) args.push('--ini', ini);
     if (fim) args.push('--fim', fim);
 

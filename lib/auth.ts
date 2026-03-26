@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { and, eq, gte } from 'drizzle-orm'
@@ -12,7 +13,7 @@ const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
 export type SessionUser = Pick<User, 'id' | 'email' | 'name' | 'role' | 'enabled'>
 
-export async function getSession(): Promise<SessionUser | null> {
+export const getSession = cache(async function getSession(): Promise<SessionUser | null> {
   const cookieStore = await cookies()
   const token = cookieStore.get(SESSION_COOKIE)?.value
   if (!token) return null
@@ -34,7 +35,8 @@ export async function getSession(): Promise<SessionUser | null> {
       .where(and(eq(sessions.token, token), gte(sessions.createdAt, thirtyDaysAgo)))
       .limit(1)
   } catch (err) {
-    console.error('[auth] getSession query failed:', err)
+    const cause = (err as { cause?: { code?: string } })?.cause
+    console.warn('[auth] getSession failed:', cause?.code ?? (err instanceof Error ? err.message : err))
     return null
   }
 
@@ -45,7 +47,7 @@ export async function getSession(): Promise<SessionUser | null> {
   db.update(sessions).set({ lastSeen: new Date() }).where(eq(sessions.token, token)).catch(() => {})
 
   return user
-}
+})
 
 export async function requireAuth(): Promise<SessionUser> {
   const user = await getSession()

@@ -124,6 +124,49 @@ function FileDrop({
   );
 }
 
+// Regex: captura (prefixo) (campo) (resto) de linhas da devolutiva
+const DEVOLUTIVA_LINE_RE = /^(OK|DIV|\?)\s+([^:]+):(.*)$/;
+
+function DevolutivaLines({ text }: { text: string }) {
+  const lines = text.split("\n").filter(Boolean);
+  return (
+    <div className="space-y-0.5">
+      {lines.map((line, i) => {
+        const m = line.match(DEVOLUTIVA_LINE_RE);
+        if (m) {
+          const [, prefix, campo, rest] = m;
+          const isOk  = prefix === "OK";
+          const isDiv = prefix === "DIV";
+          const color = isOk
+            ? "text-emerald-400"
+            : isDiv
+            ? "text-rose-400"
+            : "text-amber-400/70";
+          return (
+            <div key={i} className="text-xs leading-relaxed">
+              <span className={`font-bold ${color}`}>{prefix}</span>{" "}
+              <span className={`font-semibold ${color}`}>{campo.trim()}:</span>
+              <span className="text-white/50">{rest}</span>
+            </div>
+          );
+        }
+        // Linhas sem prefixo (PENDENTE, OK —, etc.)
+        const isPendente = line.startsWith("PENDENTE");
+        return (
+          <div
+            key={i}
+            className={`text-xs leading-relaxed ${
+              isPendente ? "text-amber-400 font-medium" : "text-white/40 italic"
+            }`}
+          >
+            {line}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const ADSERVERS: { id: string; label: string; disabled?: boolean }[] = [
   { id: "00px",     label: "00px" },
   { id: "adforce",  label: "ADFORCE" },
@@ -153,12 +196,14 @@ function lastDayOfMonth(year: number, month: number): number {
 }
 
 export default function VerificationContainer() {
+  const currentYear = new Date().getFullYear();
   const [adserver, setAdserver] = useState<string | null>(null);
   const [consolidado, setConsolidado] = useState<File[]>([]);
   const [comprovantes, setComprovantes] = useState<File[]>([]);
   const [verifs, setVerifs] = useState<File[]>([]);
   const [ini, setIni] = useState("");
   const [fim, setFim] = useState("");
+  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [anomaliesOpen, setAnomaliesOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -166,20 +211,28 @@ export default function VerificationContainer() {
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  function selectYear(year: number) {
+    setSelectedYear(year);
+    if (selectedMonth !== null) {
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const last = lastDayOfMonth(year, selectedMonth);
+      setIni(`${pad(1)}/${pad(selectedMonth)}/${year}`);
+      setFim(`${pad(last)}/${pad(selectedMonth)}/${year}`);
+    }
+  }
+
   function selectMonth(num: number) {
     if (selectedMonth === num) {
-      // deselect
       setSelectedMonth(null);
       setIni("");
       setFim("");
       return;
     }
-    const year = new Date().getFullYear();
     const pad = (n: number) => String(n).padStart(2, "0");
-    const last = lastDayOfMonth(year, num);
+    const last = lastDayOfMonth(selectedYear, num);
     setSelectedMonth(num);
-    setIni(`${pad(1)}/${pad(num)}/${year}`);
-    setFim(`${pad(last)}/${pad(num)}/${year}`);
+    setIni(`${pad(1)}/${pad(num)}/${selectedYear}`);
+    setFim(`${pad(last)}/${pad(num)}/${selectedYear}`);
   }
 
   function handleManualDate(field: "ini" | "fim", value: string) {
@@ -249,6 +302,7 @@ export default function VerificationContainer() {
     setVerifs([]);
     setIni("");
     setFim("");
+    setSelectedYear(currentYear);
     setSelectedMonth(null);
     setResult(null);
     setError(null);
@@ -329,6 +383,25 @@ export default function VerificationContainer() {
 
           {/* Filtro de período (opcional) */}
           <div className="space-y-3">
+            {/* Chips de ano */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-white/40 font-medium uppercase tracking-wider shrink-0 mr-1">
+                Ano
+              </span>
+              {[currentYear - 1, currentYear].map((y) => (
+                <button
+                  key={y}
+                  onClick={() => selectYear(y)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors border ${
+                    selectedYear === y
+                      ? "bg-[rgba(120,180,255,0.18)] border-[rgba(120,180,255,0.4)] text-[rgba(120,180,255,0.95)]"
+                      : "bg-white/4 border-white/10 text-white/40 hover:text-white/70 hover:border-white/25"
+                  }`}
+                >
+                  {y}
+                </button>
+              ))}
+            </div>
             {/* Chips de mês */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-white/40 font-medium uppercase tracking-wider shrink-0 mr-1">
@@ -506,9 +579,13 @@ export default function VerificationContainer() {
                     {result.veiculos.map((v, i) => (
                       <tr
                         key={i}
-                        className="border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors"
+                        className={`border-b last:border-0 transition-colors ${
+                          v.status === "DIVERGENCIA"
+                            ? "border-rose-500/15 bg-rose-500/8 hover:bg-rose-500/12"
+                            : "border-white/5 hover:bg-white/2"
+                        }`}
                       >
-                        <td className="px-4 py-3 text-white/80 font-medium">
+                        <td className={`px-4 py-3 font-medium ${v.status === "DIVERGENCIA" ? "text-rose-300/90" : "text-white/80"}`}>
                           {v.veiculo}
                         </td>
                         <td className="px-4 py-3">
@@ -518,8 +595,8 @@ export default function VerificationContainer() {
                             {v.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-white/50 text-xs whitespace-pre-wrap">
-                          {v.devolutiva}
+                        <td className="px-4 py-3">
+                          <DevolutivaLines text={v.devolutiva} />
                         </td>
                       </tr>
                     ))}

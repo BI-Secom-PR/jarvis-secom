@@ -146,15 +146,7 @@ def parse(
 
     wb.close()
 
-    # Amostra de 5% do pool de URLs (calculada uma vez, só no primeiro resultado)
-    sample_size = max(1, len(url_pool) // 20) if url_pool else 0
-    url_sample = (
-        random.sample(url_pool, min(sample_size, len(url_pool)))
-        if url_pool
-        else []
-    )
-
-    # Montar resultados (um dict por veículo)
+    # Pool completo enviado ao engine para amostragem 5% por categoria
     results: list[dict] = []
     for veiculo in veiculos_entregue:
         results.append({
@@ -166,7 +158,7 @@ def parse(
             "viewables":        None,
             "viewability":      None,
             "indevidas":        dict(veiculos_indevidas[veiculo]),
-            "url_sample":       url_sample if not results else [],  # só no primeiro
+            "url_sample":       url_pool if not results else [],  # só no primeiro
             "formato_detectado": "adserver_verif",
         })
 
