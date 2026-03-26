@@ -4,6 +4,12 @@ const isDev = process.env.NODE_ENV === 'development';
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '50mb',
+    },
+    proxyClientMaxBodySize: '50mb',
+  },
   async redirects() {
     return [
       {

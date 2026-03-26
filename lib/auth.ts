@@ -19,18 +19,24 @@ export async function getSession(): Promise<SessionUser | null> {
 
   const thirtyDaysAgo = new Date(Date.now() - SESSION_MAX_AGE_MS)
 
-  const rows = await db
-    .select({
-      id:      users.id,
-      email:   users.email,
-      name:    users.name,
-      role:    users.role,
-      enabled: users.enabled,
-    })
-    .from(sessions)
-    .innerJoin(users, eq(sessions.userId, users.id))
-    .where(and(eq(sessions.token, token), gte(sessions.createdAt, thirtyDaysAgo)))
-    .limit(1)
+  let rows: { id: string; email: string; name: string; role: 'ADMIN' | 'USER'; enabled: boolean }[]
+  try {
+    rows = await db
+      .select({
+        id:      users.id,
+        email:   users.email,
+        name:    users.name,
+        role:    users.role,
+        enabled: users.enabled,
+      })
+      .from(sessions)
+      .innerJoin(users, eq(sessions.userId, users.id))
+      .where(and(eq(sessions.token, token), gte(sessions.createdAt, thirtyDaysAgo)))
+      .limit(1)
+  } catch (err) {
+    console.error('[auth] getSession query failed:', err)
+    return null
+  }
 
   const user = rows[0]
   if (!user || !user.enabled) return null
