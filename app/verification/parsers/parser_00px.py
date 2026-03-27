@@ -139,9 +139,14 @@ def parse_comprovante(
                 continue
 
             # Filtro de data
-            if (data_ini or data_fim) and i_data is not None and i_data < len(row):
-                d = parse_date(row[i_data])
-                if d:
+            if i_data is not None and i_data < len(row):
+                raw_date = row[i_data]
+                if raw_date is not None:
+                    d = parse_date(raw_date)
+                    if d is None:
+                        # Unparseable value in date column (e.g. "#TOTAL POR VEÍCULO",
+                        # "#TOTAL POR CANAL") → subtotal row, skip to avoid double-count
+                        continue
                     if data_ini and d < data_ini:
                         continue
                     if data_fim and d > data_fim:

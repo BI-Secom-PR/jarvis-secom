@@ -149,11 +149,8 @@ def _read_consolidado(ws) -> list[dict]:
 
         tipo = str(_cell_value(ws, row_idx, COL_TIPO_COMPRA) or "").strip().upper()
 
-        # Entregue: CPM = Impressões, CPV = Views
-        if tipo == "CPV":
-            entregue = _to_int_safe(_cell_value(ws, row_idx, COL_VIEWS))
-        else:
-            entregue = _to_int_safe(_cell_value(ws, row_idx, COL_IMPRESSOES))
+        # Entregue: sempre col 5 (Impressões) — col 9 (Views) é numerador do VTR, não entrega
+        entregue = _to_int_safe(_cell_value(ws, row_idx, COL_IMPRESSOES))
 
         indevidas = {
             cat: _to_int_safe(_cell_value(ws, row_idx, col))
