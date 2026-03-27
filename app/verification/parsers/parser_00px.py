@@ -234,15 +234,17 @@ def parse_verif(
                               "Veículos", "Veiculos")
     i_impressoes = col_index(header, "Impressões", "Impressoes", "Impressions",
                               "Impressões Totais", "Impressoes Totais")
+    # CPV rows store delivery count in "Views" — CPM rows leave it blank (and vice-versa)
+    i_views      = col_index(header, "Views", "Visualizações", "Visualizacoes")
     i_categoria  = col_index(header, "Categoria", "Category")
     i_url        = col_index(header, "Url", "URL", "url", "URL Veiculada",
                               "Url Veiculada")
     i_data       = col_index(header, "Data", "Date")
 
-    if i_veiculo is None or i_impressoes is None or i_categoria is None:
+    if i_veiculo is None or (i_impressoes is None and i_views is None) or i_categoria is None:
         wb.close()
         raise ValueError(
-            f"Colunas obrigatórias ausentes (Veículo/Impressões/Categoria): {path.name}"
+            f"Colunas obrigatórias ausentes (Veículo/Impressões ou Views/Categoria): {path.name}"
         )
 
     veiculos_indevidas: dict[str, dict] = defaultdict(lambda: dict(INDEVIDAS_ZERO))
@@ -266,7 +268,11 @@ def parse_verif(
         veiculo   = str(row[i_veiculo]).strip()   if i_veiculo   < len(row) and row[i_veiculo]   else None
         categoria = str(row[i_categoria]).strip()  if i_categoria < len(row) and row[i_categoria] else None
         url       = str(row[i_url]).strip()        if i_url is not None and i_url < len(row) and row[i_url] else None
-        impressoes = to_int(row[i_impressoes] if i_impressoes < len(row) else None)
+        # CPM rows fill Impressões; CPV rows fill Views — use whichever is non-zero
+        impressoes = (
+            to_int(row[i_impressoes] if i_impressoes is not None and i_impressoes < len(row) else None)
+            or to_int(row[i_views]      if i_views      is not None and i_views      < len(row) else None)
+        )
 
         if not veiculo or not categoria:
             continue
