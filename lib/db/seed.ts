@@ -19,6 +19,7 @@ async function main() {
     database: process.env.PG_DATABASE!,
     username: process.env.PG_USER!,
     password: process.env.PG_PASSWORD!,
+    ssl:      process.env.PG_HOST?.includes('neon.tech') ? 'require' : false,
   })
   const db = drizzle(client)
 
