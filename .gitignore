@@ -42,3 +42,15 @@ next-env.d.ts
 
 # data files
 /verification/
+
+# obsidian vault
+Jarvis_mem/
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+
+# internal docs
+CLAUDE.md
+GOLD_LAYER_DATA_DICTIONARY.md
