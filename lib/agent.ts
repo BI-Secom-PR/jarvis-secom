@@ -10,6 +10,7 @@ export const MODELS = [
   { id: "qwen/qwen3-32b",                       label: "Qwen 3 · 32B",           provider: "groq"   },
   { id: "gemini-2.5-flash",                     label: "Gemini 2.5 Flash",        provider: "google" },
   { id: "gemini-2.5-flash-lite-preview-06-17",  label: "Gemini 2.5 Flash Lite",   provider: "google" },
+  { id: "gemma4:31b-cloud",                      label: "Gemma 4 · 31B",           provider: "ollama" },
 ] as const;
 
 export type ModelId = (typeof MODELS)[number]["id"];
@@ -203,6 +204,150 @@ NOTAS DE GRAIN:
   Google em age/gender/regions/age_gender: ad_id='' (reporta no nível ad_group)
   Amazon em regions: ad_id='' (nível line-item)
   age, gender, age_gender tables: métricas já agregadas por dimensão (sem dupla contagem)
+
+═══════════════════════════════════════════════
+SKILL DE RELATÓRIO — STATUS / PAPER DE CAMPANHA
+═══════════════════════════════════════════════
+
+ACIONAMENTO: Quando o usuário pedir "relatório", "paper", "status geral", "status diário",
+"análise de campanha", "análise mídia digital", "gere um paper", "crie um relatório", ou similar.
+
+PROCESSO OBRIGATÓRIO — execute os 4 passos sequencialmente via execute_sql_query:
+
+PASSO 1 — IDENTIFICAR CAMPANHA E PERÍODO
+  SELECT DISTINCT platform, campaign_name, objective,
+         MIN(date) AS data_ini, MAX(date) AS data_fim
+  FROM gold_platforms_campaigns
+  WHERE campaign_name LIKE '%<termo>%'
+    AND date BETWEEN '<ini>' AND '<fim>'
+  GROUP BY platform, campaign_name, objective
+  ORDER BY platform;
+  → Use os filtros fornecidos. Se o usuário não informar o período, pergunte antes de prosseguir.
+  → Se não informar o nome da campanha, pergunte também.
+
+PASSO 2 — NÚMEROS GERAIS (agregado de todas as plataformas)
+  SELECT
+    SUM(impressions)                                     AS impressoes,
+    SUM(video_views)                                     AS visualizacoes,
+    SUM(engagements)                                     AS engajamentos,
+    SUM(cost)/NULLIF(SUM(video_views),0)                 AS cpv,
+    SUM(video_views)/NULLIF(SUM(impressions),0)*100      AS vtr,
+    SUM(cost)                                            AS investimento
+  FROM gold_platforms_campaigns
+  WHERE campaign_name LIKE '%<termo>%'
+    AND date BETWEEN '<ini>' AND '<fim>';
+
+PASSO 3 — DETALHAMENTO POR PLATAFORMA
+  SELECT
+    platform,
+    SUM(impressions)                                     AS impressoes,
+    SUM(reach)                                           AS alcance,
+    SUM(video_views)                                     AS views,
+    SUM(CASE WHEN platform IN ('kwai','linkedin')
+             THEN video_completions
+             ELSE video_views END)                       AS thruplays,
+    SUM(clicks)                                          AS cliques,
+    SUM(engagements)                                     AS engajamentos,
+    SUM(cost)/NULLIF(
+      SUM(CASE WHEN platform IN ('kwai','linkedin')
+               THEN video_completions ELSE video_views END),0) AS cpv,
+    SUM(CASE WHEN platform IN ('kwai','linkedin')
+             THEN video_completions ELSE video_views END)
+      /NULLIF(SUM(impressions),0)*100                    AS vtr,
+    SUM(cost)                                            AS investimento
+  FROM gold_platforms_campaigns
+  WHERE campaign_name LIKE '%<termo>%'
+    AND date BETWEEN '<ini>' AND '<fim>'
+  GROUP BY platform
+  ORDER BY impressoes DESC;
+
+PASSO 4 — CRIATIVO DESTAQUE (top ad por views)
+  SELECT ad_name,
+         SUM(impressions)                                AS impressoes,
+         SUM(video_views)                                AS views,
+         SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr,
+         SUM(cost)/NULLIF(SUM(video_views),0)            AS cpv
+  FROM gold_platforms_campaigns
+  WHERE campaign_name LIKE '%<termo>%'
+    AND date BETWEEN '<ini>' AND '<fim>'
+  GROUP BY ad_name
+  ORDER BY views DESC
+  LIMIT 1;
+
+PASSO 5 — GERAR O RELATÓRIO em markdown, exatamente neste formato:
+
+---
+**Núcleo de BI | NM Secom | SPP**
+\`ANÁLISE MÍDIA DIGITAL\`
+
+# [NOME DA CAMPANHA]
+**Análise: [data_ini] a [data_fim] | [Agência/Praça informada pelo usuário]**
+
+---
+
+## Números Gerais
+
+| Impressões | Visualizações | Engajamentos | CPV | VTR |
+|---|---|---|---|---|
+| [X Mi/Mil] | [X Mi/Mil] | [X Mi/Mil] | R$ X,XX | XX,XX% |
+
+---
+
+## Em Veiculação
+**Plataformas:** [lista das plataformas com dados, em português: Meta, Google, TikTok, Kwai, LinkedIn, Pinterest, Amazon DSP]
+
+---
+
+## Resumo Geral
+
+[Narrativa analítica — siga as REGRAS DE NARRATIVA abaixo]
+
+---
+
+## Criativo Destaque
+**[ad_name]**
+[X Mi de impressões || X Mi de views]
+CPV: R$ X,XX | VTR: XX,XX%
+
+---
+
+## Detalhamento por Plataforma
+
+[Tabela markdown com os dados do PASSO 3, uma linha por plataforma]
+| Plataforma | Impressões | Alcance | Views | Thruplays | Cliques | VTR | CPV | Investimento |
+|---|---|---|---|---|---|---|---|---|
+
+---
+**CPV:** Custo por Visualização | **VTR:** Taxa de Visualização | **CTR:** Taxa de Cliques no Link
+
+---
+
+REGRAS DE NARRATIVA (Resumo Geral):
+1. Abra com: "Com [N] dias de veiculação, a campanha [segue ativa / encerrou em DD/MM]..."
+   → Calcule os dias entre data_ini e data_fim
+   → Liste as plataformas ativas na abertura
+2. Para cada plataforma (ordem: Google > Meta > TikTok > Kwai > LinkedIn > demais):
+   - Volume: "X milhões de impressões e Y milhões de visualizações"
+   - Eficiência: compare CPV e VTR com as médias SECOM da SKILL DE PERFORMANCE (seção acima)
+   - Linguagem de avaliação:
+     • VTR acima do benchmark → "alto interesse", "forte retenção", "qualidade de consumo"
+     • CPV abaixo do benchmark → "entrega eficiente", "excelente custo-benefício"
+     • CPV acima → "esperado para objetivo de [X]" (engajamento) OU "com desafios de eficiência"
+     • VTR muito abaixo → "baixa qualidade em retenção", "passará por ajustes estratégicos"
+3. Para Meta: sempre mencionar separação Facebook vs Instagram se os dados permitirem
+   (use query adicional com GROUP BY network se necessário)
+4. Destaque diferenças entre praças/regiões quando o relatório cobrir múltiplas
+5. Encerre o Resumo mencionando o criativo destaque (nome + impressões + views)
+6. Tom: profissional, objetivo, em português, sem jargão desnecessário
+
+FORMATAÇÃO DOS NÚMEROS:
+- Milhões: "X,X Mi" (ex: 10,7 Mi) | Milhares: "X Mil" (ex: 150 Mil)
+- CPV/CPM: R$ X,XX com vírgula decimal (R$ 0,05)
+- Percentuais: XX,XX% com vírgula decimal (21,6%)
+- Datas: "DD de [mês por extenso]" (ex: "06 de abril")
+- NUNCA exibir SQL ao usuário
+
+═══════════════════════════════════════════════
 
 GERAÇÃO DE GRÁFICOS:
 SOMENTE inclua CHART_REQUEST quando o usuário pedir explicitamente um gráfico NA MENSAGEM ATUAL ("gere um gráfico", "mostre em gráfico", "quero ver em gráfico", etc.).
