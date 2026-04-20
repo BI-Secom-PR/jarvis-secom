@@ -1,13 +1,6 @@
 import type { ChartData } from "@/types/chat";
 
 export const MODELS = [
-  { id: "groq/compound",                         label: "Compound (sem limite)",   provider: "groq"   },
-  { id: "groq/compound-mini",                   label: "Compound Mini (sem limite)", provider: "groq" },
-  { id: "llama-3.3-70b-versatile",              label: "Llama 3.3 · 70B",        provider: "groq"   },
-  { id: "llama-3.1-8b-instant",                 label: "Llama 3.1 · 8B (rápido)", provider: "groq"   },
-  { id: "meta-llama/llama-4-scout-17b-16e-instruct", label: "Llama 4 Scout · 17B", provider: "groq"  },
-  { id: "moonshotai/kimi-k2-instruct",          label: "Kimi K2",                provider: "groq"   },
-  { id: "qwen/qwen3-32b",                       label: "Qwen 3 · 32B",           provider: "groq"   },
   { id: "gemini-2.5-flash",                     label: "Gemini 2.5 Flash",        provider: "google" },
   { id: "gemini-2.5-flash-lite-preview-06-17",  label: "Gemini 2.5 Flash Lite",   provider: "google" },
   { id: "gemma4:31b-cloud",                      label: "Gemma 4 · 31B",           provider: "ollama" },
@@ -15,7 +8,7 @@ export const MODELS = [
 
 export type ModelId = (typeof MODELS)[number]["id"];
 export type ModelProvider = (typeof MODELS)[number]["provider"];
-export const DEFAULT_MODEL: ModelId = "llama-3.3-70b-versatile";
+export const DEFAULT_MODEL: ModelId = "gemini-2.5-flash";
 
 export function getModelProvider(id: ModelId): ModelProvider {
   return MODELS.find((m) => m.id === id)!.provider;
@@ -200,6 +193,15 @@ Quando o usuário pedir análise de performance, avaliação ou comparação de 
 4. ENTREGUE uma tabela: KPI | Valor da campanha | Média SECOM | Avaliação
 Para CPV/CPC/CPM/CPE: menor = melhor | Para CTR/TPR/VTRc/VTR/Taxa Eng.: maior = melhor
 
+FORMATO DE RESPOSTA (SKILL DE PERFORMANCE):
+- Abra com 1–2 frases diretas respondendo à pergunta: "A campanha X está [bem/abaixo/acima] da média SECOM em [KPI principal]."
+- Em seguida, entregue a tabela: KPI | Valor | Média SECOM | Avaliação
+- Sem seções extras, sem cabeçalhos de relatório, sem passos adicionais.
+- Total máximo: ~10 linhas de texto + tabela.
+
+PRIORIDADE: SKILL DE PERFORMANCE tem prioridade sobre SKILL DE RELATÓRIO para qualquer pergunta
+que não contenha pedido explícito de "relatório", "paper" ou "status geral".
+
 NOTAS DE GRAIN:
   Google em age/gender/regions/age_gender: ad_id='' (reporta no nível ad_group)
   Amazon em regions: ad_id='' (nível line-item)
@@ -209,8 +211,10 @@ NOTAS DE GRAIN:
 SKILL DE RELATÓRIO — STATUS / PAPER DE CAMPANHA
 ═══════════════════════════════════════════════
 
-ACIONAMENTO: Quando o usuário pedir "relatório", "paper", "status geral", "status diário",
-"análise de campanha", "análise mídia digital", "gere um paper", "crie um relatório", ou similar.
+ACIONAMENTO: Somente quando o usuário pedir EXPLICITAMENTE "relatório", "paper", "status geral",
+"status diário", "análise mídia digital", "gere um paper", "crie um relatório".
+NÃO acionar para perguntas de performance como "como está a campanha", "como está a performance",
+"qual o CPV", "como estão os KPIs", "performance da campanha" — essas usam SKILL DE PERFORMANCE.
 
 PROCESSO OBRIGATÓRIO — execute os 4 passos sequencialmente via execute_sql_query:
 

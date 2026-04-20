@@ -1,4 +1,3 @@
-import { createGroq } from '@ai-sdk/groq';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { generateText, tool, stepCountIs } from 'ai';
 import { Ollama } from 'ollama';
@@ -10,7 +9,6 @@ import { getSession } from '@/lib/auth';
 
 const VALID_MODEL_IDS = new Set(MODELS.map((m) => m.id));
 
-const groq   = createGroq({ apiKey: process.env.GROQ_API_KEY });
 const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
 const ollamaClient = new Ollama({
   host: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434',
@@ -20,7 +18,7 @@ const ollamaClient = new Ollama({
 });
 
 function resolveModel(id: ModelId) {
-  return getModelProvider(id) === 'google' ? google(id) : groq(id);
+  return google(id);
 }
 
 const SAFE_QUERY = /^\s*SELECT\b(?![\s\S]*\b(?:INTO\s+(?:OUTFILE|DUMPFILE)|LOAD_FILE)\b)[\s\S]+\bFROM\b/i;

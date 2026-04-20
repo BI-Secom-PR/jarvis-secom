@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.43",
-    "@ai-sdk/groq": "^3.0.29",
     "@ai-sdk/openai-compatible": "^2.0.41",
     "@google/genai": "^1.45.0",
     "@types/bcryptjs": "^2.4.6",

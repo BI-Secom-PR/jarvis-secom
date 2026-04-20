@@ -2,6 +2,7 @@ import postgres from 'postgres'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { users } from './schema'
 import bcrypt from 'bcryptjs'
+import { isNeonHost, pgEnv } from './env'
 
 async function main() {
   const email    = process.env.ADMIN_EMAIL!
@@ -14,12 +15,12 @@ async function main() {
   }
 
   const client = postgres({
-    host:     process.env.PG_HOST!,
-    port:     parseInt(process.env.PG_PORT ?? '5432'),
-    database: process.env.PG_DATABASE!,
-    username: process.env.PG_USER!,
-    password: process.env.PG_PASSWORD!,
-    ssl:      process.env.PG_HOST?.includes('neon.tech') ? 'require' : false,
+    host:     pgEnv.host,
+    port:     pgEnv.port,
+    database: pgEnv.database,
+    username: pgEnv.user,
+    password: pgEnv.password,
+    ssl:      isNeonHost ? 'require' : false,
   })
   const db = drizzle(client)
 

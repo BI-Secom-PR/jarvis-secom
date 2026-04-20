@@ -5,10 +5,10 @@ import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { createGroq } from '@ai-sdk/groq';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { generateText } from 'ai';
 
-const groq = createGroq({ apiKey: process.env.GROQ_API_KEY });
+const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
 
 type UrlSampleItem  = { url: string; categoria: string; veiculo: string };
 type UrlAnomalyItem = { url: string; categoria: string; veiculo: string; reason: string };
@@ -16,7 +16,7 @@ type UrlAnomalyItem = { url: string; categoria: string; veiculo: string; reason:
 async function checkUrlCategory(item: UrlSampleItem): Promise<UrlAnomalyItem | null> {
   try {
     const { text } = await generateText({
-      model: groq('llama-3.1-8b-instant'),
+      model: google('gemini-2.5-flash-lite-preview-06-17'),
       prompt: `Você é um classificador de brand safety. Dado uma URL e a categoria de conteúdo indevido atribuída a ela pelo adserver, determine se essa classificação é CORRETA ou INCORRETA.
 
 URL: ${item.url}
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
     // ── AI URL check (5%, máx 50 URLs, 10 por vez para evitar rate limit) ────
     let urlCheckAnomalies: UrlAnomalyItem[] = [];
     const urlSample: UrlSampleItem[] = engineResult.url_sample ?? [];
-    if (urlSample.length > 0 && process.env.GROQ_API_KEY) {
+    if (urlSample.length > 0 && process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       const capped = urlSample.slice(0, 50);
       const BATCH = 10;
       for (let i = 0; i < capped.length; i += BATCH) {

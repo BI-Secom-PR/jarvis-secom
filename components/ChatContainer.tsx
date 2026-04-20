@@ -185,10 +185,10 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
               paddingRight: "28px",
             }}
           >
-            {(["groq", "google", "ollama"] as const).map((provider) => (
+            {(["google", "ollama"] as const).map((provider) => (
               <optgroup
                 key={provider}
-                label={provider === "groq" ? "⚡ Groq" : provider === "google" ? "✦ Google" : "🦙 Ollama"}
+                label={provider === "google" ? "✦ Google" : "🦙 Ollama"}
                 style={{
                   background: "#0d0d1a",
                   color: "rgba(255,255,255,0.45)",

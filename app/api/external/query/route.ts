@@ -1,4 +1,3 @@
-import { createGroq } from '@ai-sdk/groq';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { generateText, tool, stepCountIs } from 'ai';
 import { z } from 'zod/v3';
@@ -8,11 +7,10 @@ import { getSystemPrompt, parseChartRequest, DEFAULT_MODEL, MODELS, getModelProv
 
 const VALID_MODEL_IDS = new Set(MODELS.map((m) => m.id));
 
-const groq   = createGroq({ apiKey: process.env.GROQ_API_KEY });
 const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
 
 function resolveModel(id: ModelId) {
-  return getModelProvider(id) === 'google' ? google(id) : groq(id);
+  return google(id);
 }
 
 export async function POST(req: NextRequest) {
