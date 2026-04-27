@@ -58,10 +58,13 @@ CATEGORY_MAP: dict[str, str] = {
     # ADFORCE compound safety strings
     "acidentes, violência, crime":      "violencia",
     "acidentes, violencia, crime":      "violencia",
+    "acidentes,violência,crime":        "violencia",   # no-space variant (verif file)
+    "acidentes,violencia,crime":        "violencia",   # no-space variant (verif file)
     "violência, crime":                 "violencia",
     "violencia, crime":                 "violencia",
     "sexo e sexualidade, pornografia":  "pornografia",
     "sexo, sexualidade e pornografia":  "pornografia",
+    "pornografia, sexo, sexualidade":   "pornografia", # ADFORCE verif order
     "sexo e sexualidade":               "pornografia",
     # Safeframe (col 19)
     "safeframe":                        "safeframe",

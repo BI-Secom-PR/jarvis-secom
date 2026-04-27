@@ -40,6 +40,7 @@ import openpyxl
 from rapidfuzz import fuzz, process
 
 sys.path.insert(0, str(Path(__file__).parent / "parsers"))
+from category_map import normaliza_categoria  # noqa: E402
 
 # ── Registro de parsers por adserver ───────────────────────────────────────────
 PARSER_MAP: dict[str, str] = {
@@ -81,6 +82,41 @@ COL_INDEVIDAS = {
 COL_DEVOLUTIVA_BI      = 28   # era 27
 COL_DEVOLUTIVA_AGENCIA = 29   # era 28
 COL_URL_INFO           = 30   # novo — levantamento IA de URLs indevidas
+
+
+# ── Detecção dinâmica de colunas por header ────────────────────────────────────
+
+def _detect_consolidado_cols(ws) -> dict:
+    """
+    Lê o header (HEADER_ROW=8) e retorna posições reais das colunas,
+    permitindo que cada adserver use seu próprio layout de consolidado.
+    Fallback para os valores hardcoded quando uma coluna não é encontrada.
+    """
+    indevidas: dict[str, int] = {}
+    devolutiva_bi = COL_DEVOLUTIVA_BI
+    url_info = COL_URL_INFO
+
+    for c in range(1, 36):
+        raw = _cell_value(ws, HEADER_ROW, c)
+        if raw is None:
+            continue
+        text = str(raw).strip()
+        tl = text.lower()
+
+        key = normaliza_categoria(text)
+        if key:
+            indevidas[key] = c
+
+        if "devolutiva bi" in tl or ("devolutiva" in tl and "secom" in tl):
+            devolutiva_bi = c
+        elif "url info" in tl:
+            url_info = c
+
+    return {
+        "indevidas":    indevidas if indevidas else dict(COL_INDEVIDAS),
+        "devolutiva_bi": devolutiva_bi,
+        "url_info":      url_info,
+    }
 
 
 # ── Normalização de nomes ───────────────────────────────────────────────────────
@@ -136,11 +172,17 @@ def _to_float_safe(v) -> float | None:
         return None
 
 
-def _read_consolidado(ws) -> list[dict]:
+def _read_consolidado(ws) -> tuple[list[dict], int]:
     """
     Lê todas as linhas de dados do consolidado.
-    Retorna lista de dicts com métricas por veículo.
+    Retorna (lista de dicts com métricas por veículo, coluna da devolutiva BI).
+    Detecta posições de colunas dinamicamente pelo header — suporta layouts
+    adserver-específicos sem branches por adserver.
     """
+    detected = _detect_consolidado_cols(ws)
+    col_indevidas  = detected["indevidas"]
+    col_dev_bi     = detected["devolutiva_bi"]
+
     rows = []
     for row_idx in range(DATA_START_ROW, ws.max_row + 1):
         veiculo = _cell_value(ws, row_idx, COL_VEICULO)
@@ -154,7 +196,7 @@ def _read_consolidado(ws) -> list[dict]:
 
         indevidas = {
             cat: _to_int_safe(_cell_value(ws, row_idx, col))
-            for cat, col in COL_INDEVIDAS.items()
+            for cat, col in col_indevidas.items()
         }
 
         # Normaliza viewability do consolidado: Excel armazena como decimal (0.7166 = 71.66%)
@@ -176,7 +218,7 @@ def _read_consolidado(ws) -> list[dict]:
             "indevidas":  indevidas,
         })
 
-    return rows
+    return rows, col_dev_bi
 
 
 def _add_optional(a: int | None, b: int | None) -> int | None:
@@ -405,7 +447,7 @@ def verificar(
     wb = openpyxl.load_workbook(consolidado_path)
     ws = wb.active
     try:
-        consol_rows = _read_consolidado(ws)
+        consol_rows, col_devolutiva_bi = _read_consolidado(ws)
 
         # ── Match fuzzy veículo-a-veículo ─────────────────────────────────────
         resultado_veiculos: list[dict] = []
@@ -443,7 +485,7 @@ def verificar(
                 "formato":    (verif_match or {}).get("formato_detectado"),
             })
 
-            ws.cell(row=crow["row_idx"], column=COL_DEVOLUTIVA_BI).value = devolutiva
+            ws.cell(row=crow["row_idx"], column=col_devolutiva_bi).value = devolutiva
 
         # ── Veículos sem entrada no consolidado ──────────────────────────────
         sem_consolidado: list[str] = []

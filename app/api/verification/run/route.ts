@@ -5,37 +5,41 @@ import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { generateText } from 'ai';
+import { Ollama } from 'ollama';
 
-const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
+const ollamaClient = new Ollama({
+  host: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434',
+  headers: process.env.OLLAMA_API_KEY
+    ? { Authorization: `Bearer ${process.env.OLLAMA_API_KEY}` }
+    : undefined,
+});
 
 type UrlSampleItem  = { url: string; categoria: string; veiculo: string };
 type UrlAnomalyItem = { url: string; categoria: string; veiculo: string; reason: string };
 
 async function checkUrlCategory(item: UrlSampleItem): Promise<UrlAnomalyItem | null> {
   try {
-    const { text } = await generateText({
-      model: google('gemini-2.5-flash-lite-preview-06-17'),
-      prompt: `Você é um classificador de brand safety. Dado uma URL e a categoria de conteúdo indevido atribuída a ela pelo adserver, determine se essa classificação é CORRETA ou INCORRETA.
+    const response = await ollamaClient.chat({
+      model: 'gemma4:31b-cloud',
+      options: { num_predict: 80 },
+      messages: [{ role: 'user', content: `Você é um classificador de brand safety. Dado uma URL e a categoria de conteúdo indevido atribuída a ela pelo adserver, determine se essa classificação é CORRETA ou INCORRETA.
 
 URL: ${item.url}
 Categoria atribuída: ${item.categoria}
 
 Responda com exatamente uma das opções:
 - "SIM" (a URL realmente contém esse tipo de conteúdo indevido)
-- "NÃO: <uma frase explicando por que a classificação parece incorreta>"`,
-      maxOutputTokens: 80,
+- "NÃO: <uma frase explicando por que a classificação parece incorreta>"` }],
     });
 
-    const trimmed = text.trim();
+    const trimmed = response.message.content.trim();
     if (/^NÃO|^NAO/i.test(trimmed)) {
       const reason = trimmed.replace(/^N[ÃA]O[:\s]*/i, '').trim() || 'Classificação suspeita';
       return { url: item.url, categoria: item.categoria, veiculo: item.veiculo, reason };
     }
     return null;
   } catch {
-    return null; // falha silenciosa por timeout ou rate limit
+    return null;
   }
 }
 
@@ -136,7 +140,7 @@ export async function POST(req: NextRequest) {
     // ── AI URL check (5%, máx 50 URLs, 10 por vez para evitar rate limit) ────
     let urlCheckAnomalies: UrlAnomalyItem[] = [];
     const urlSample: UrlSampleItem[] = engineResult.url_sample ?? [];
-    if (urlSample.length > 0 && process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    if (urlSample.length > 0 && process.env.OLLAMA_BASE_URL) {
       const capped = urlSample.slice(0, 50);
       const BATCH = 10;
       for (let i = 0; i < capped.length; i += BATCH) {
