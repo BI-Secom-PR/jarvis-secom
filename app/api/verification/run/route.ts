@@ -73,6 +73,12 @@ function runEngine(args: string[]): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  if (process.env.VERCEL)
+    return NextResponse.json(
+      { error: 'Verificação não disponível neste ambiente. Use o servidor on-prem.' },
+      { status: 501 }
+    );
+
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
