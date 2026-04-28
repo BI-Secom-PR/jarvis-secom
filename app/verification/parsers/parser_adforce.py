@@ -252,7 +252,7 @@ def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int]:
 
         if url and cat_key:
             pool_count += 1
-            entry = {"url": url, "categoria": categoria, "veiculo": veiculo}
+            entry = {"url": url, "categoria": categoria, "veiculo": veiculo, "impressoes": impressoes}
             if len(url_pool) < MAX_POOL:
                 url_pool.append(entry)
             else:
