@@ -135,7 +135,7 @@ def parse(
         # Apenas URLs de categorias indevidas vão para a amostra de IA
         if url and cat_key:
             pool_count += 1
-            entry = {"url": url, "categoria": categoria, "veiculo": veiculo}
+            entry = {"url": url, "categoria": categoria, "veiculo": veiculo, "impressoes": impressoes}
             if len(url_pool) < MAX_POOL:
                 url_pool.append(entry)
             else:

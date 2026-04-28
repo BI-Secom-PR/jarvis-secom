@@ -14,8 +14,8 @@ const ollamaClient = new Ollama({
     : undefined,
 });
 
-type UrlSampleItem  = { url: string; categoria: string; veiculo: string };
-type UrlAnomalyItem = { url: string; categoria: string; veiculo: string; reason: string };
+type UrlSampleItem  = { url: string; categoria: string; veiculo: string; impressoes: number };
+type UrlAnomalyItem = { url: string; categoria: string; veiculo: string; reason: string; impressoes: number; pct: number };
 
 async function checkUrlCategory(item: UrlSampleItem): Promise<UrlAnomalyItem | null> {
   try {
@@ -35,7 +35,7 @@ Responda com exatamente uma das opções:
     const trimmed = response.message.content.trim();
     if (/^NÃO|^NAO/i.test(trimmed)) {
       const reason = trimmed.replace(/^N[ÃA]O[:\s]*/i, '').trim() || 'Classificação suspeita';
-      return { url: item.url, categoria: item.categoria, veiculo: item.veiculo, reason };
+      return { url: item.url, categoria: item.categoria, veiculo: item.veiculo, reason, impressoes: item.impressoes, pct: 0 };
     }
     return null;
   } catch {
@@ -194,6 +194,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── Calcular pct de impressões por veículo ────────────────────────────────────
+  if (urlCheckAnomalies.length > 0) {
+    // Build map: match_name (parser) → entregue_consol (consolidado total)
+    const entregueByMatch = new Map<string, number>();
+    for (const v of (engineResult.veiculos ?? []) as { veiculo: string; match: string | null; entregue_consol: number }[]) {
+      if (v.match && v.entregue_consol) entregueByMatch.set(v.match, v.entregue_consol);
+    }
+    urlCheckAnomalies = urlCheckAnomalies.map((a) => {
+      const total = entregueByMatch.get(a.veiculo) ?? 0;
+      return { ...a, pct: total > 0 ? Math.round((a.impressoes / total) * 10000) / 100 : 0 };
+    });
+  }
+
   // ── Escrever URL info (col 30) no arquivo verificado ────────────────────────
   if (urlCheckAnomalies.length > 0) {
     const matchToConsol = new Map<string, string>();
@@ -204,7 +217,7 @@ export async function POST(req: NextRequest) {
     for (const a of urlCheckAnomalies) {
       const consolName = matchToConsol.get(a.veiculo) ?? a.veiculo;
       if (!urlInfoByVeiculo[consolName]) urlInfoByVeiculo[consolName] = [];
-      urlInfoByVeiculo[consolName].push(`${a.url} → ${a.reason}`);
+      urlInfoByVeiculo[consolName].push(`${a.url} [${a.impressoes} imp, ${a.pct}%] → ${a.reason}`);
     }
     const urlInfoFlat = Object.fromEntries(
       Object.entries(urlInfoByVeiculo).map(([k, v]) => [k, v.join('\n')])

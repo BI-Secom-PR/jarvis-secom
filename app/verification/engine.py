@@ -477,12 +477,13 @@ def verificar(
                 score = verif_score or comp_score
 
             resultado_veiculos.append({
-                "veiculo":    crow["veiculo"],
-                "status":     status,
-                "devolutiva": devolutiva,
-                "match":      match_name,
-                "score":      score,
-                "formato":    (verif_match or {}).get("formato_detectado"),
+                "veiculo":        crow["veiculo"],
+                "status":         status,
+                "devolutiva":     devolutiva,
+                "match":          match_name,
+                "score":          score,
+                "formato":        (verif_match or {}).get("formato_detectado"),
+                "entregue_consol": crow["entregue"],
             })
 
             ws.cell(row=crow["row_idx"], column=col_devolutiva_bi).value = devolutiva
