@@ -248,7 +248,8 @@ def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int]:
         veiculo   = str(row[i_vehicle]).strip()    if i_vehicle    < len(row) and row[i_vehicle]    else None
         categoria = str(row[i_categories]).strip() if i_categories < len(row) and row[i_categories] else None
         url       = str(row[i_url]).strip()        if i_url is not None and i_url < len(row) and row[i_url] else None
-        impressoes = to_int(row[i_cpm] if i_cpm is not None and i_cpm < len(row) else None)
+        # cpm = impression count per row in flat ADFORCE export; fallback to 1 if column absent
+        impressoes = to_int(row[i_cpm] if i_cpm is not None and i_cpm < len(row) else None) or 1
 
         if not veiculo or not categoria:
             continue
@@ -302,7 +303,7 @@ def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int
                                   "Url Veiculada")
         i_data       = col_index(header, "Data", "Date")
 
-        if i_veiculo is None or i_impressoes is None or i_categoria is None:
+        if i_veiculo is None or i_categoria is None:
             continue
 
         for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
@@ -319,7 +320,8 @@ def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int
             veiculo   = str(row[i_veiculo]).strip()   if i_veiculo   < len(row) and row[i_veiculo]   else None
             categoria = str(row[i_categoria]).strip()  if i_categoria < len(row) and row[i_categoria] else None
             url       = str(row[i_url]).strip()        if i_url is not None and i_url < len(row) and row[i_url] else None
-            impressoes = to_int(row[i_impressoes] if i_impressoes < len(row) else None)
+            # Fallback: se coluna ausente cada linha conta como 1 impressão (1 ad serving)
+            impressoes = to_int(row[i_impressoes] if i_impressoes is not None and i_impressoes < len(row) else None) or 1
 
             if not veiculo or not categoria:
                 continue

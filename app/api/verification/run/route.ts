@@ -126,8 +126,15 @@ export async function POST(req: NextRequest) {
     });
 
     if (!pyResp.ok) {
-      const err = await pyResp.text();
-      return NextResponse.json({ error: `Python engine error: ${err}` }, { status: 500 });
+      let errText = await pyResp.text();
+      try {
+        const errJson = JSON.parse(errText) as { error?: string; trace?: string };
+        const trace = errJson.trace ? `\n${errJson.trace}` : '';
+        errText = `${errJson.error ?? errText}${trace}`;
+      } catch {
+        // Keep raw body if response is not valid JSON.
+      }
+      return NextResponse.json({ error: `Python engine error: ${errText}` }, { status: 500 });
     }
 
     engineResult = await pyResp.json() as Record<string, unknown>;
@@ -162,6 +169,16 @@ export async function POST(req: NextRequest) {
 
       const stdout = await runEngine(args);
       engineResult = JSON.parse(stdout.trim()) as Record<string, unknown>;
+
+      // Read generated file before tmpDir cleanup so UI can show download button.
+      const generatedOutputPath = (engineResult.output as string) ?? '';
+      if (generatedOutputPath) {
+        try {
+          engineResult.output_b64 = (await fs.readFile(generatedOutputPath)).toString('base64');
+        } catch {
+          // Non-critical: fallback attempts below may still provide file_base64.
+        }
+      }
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
     }
@@ -174,7 +191,7 @@ export async function POST(req: NextRequest) {
     ? (engineResult.output_name as string)
     : outputPath ? path.basename(outputPath) : 'verificado.xlsx';
 
-  // ── AI URL check (5%, máx 50 URLs, 10 por vez para evitar rate limit) ──────
+  // ── AI URL check (10%, máx 50 URLs, 10 por vez para evitar rate limit) ─────
   let urlCheckAnomalies: UrlAnomalyItem[] = [];
   const urlSample: UrlSampleItem[] = (engineResult.url_sample as UrlSampleItem[]) ?? [];
   if (urlSample.length > 0 && process.env.OLLAMA_BASE_URL) {
@@ -196,10 +213,13 @@ export async function POST(req: NextRequest) {
 
   // ── Calcular pct de impressões por veículo ────────────────────────────────────
   if (urlCheckAnomalies.length > 0) {
-    // Build map: match_name (parser) → entregue_consol (consolidado total)
+    // Build map keyed by both match name (parser) and consolidado name for broader coverage
     const entregueByMatch = new Map<string, number>();
     for (const v of (engineResult.veiculos ?? []) as { veiculo: string; match: string | null; entregue_consol: number }[]) {
-      if (v.match && v.entregue_consol) entregueByMatch.set(v.match, v.entregue_consol);
+      if (v.entregue_consol) {
+        if (v.match) entregueByMatch.set(v.match, v.entregue_consol);
+        entregueByMatch.set(v.veiculo, v.entregue_consol);
+      }
     }
     urlCheckAnomalies = urlCheckAnomalies.map((a) => {
       const total = entregueByMatch.get(a.veiculo) ?? 0;

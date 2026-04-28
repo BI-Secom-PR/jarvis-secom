@@ -193,6 +193,7 @@ def _read_consolidado(ws) -> tuple[list[dict], int]:
 
         # Entregue: sempre col 5 (Impressões) — col 9 (Views) é numerador do VTR, não entrega
         entregue = _to_int_safe(_cell_value(ws, row_idx, COL_IMPRESSOES))
+        views    = _to_int_safe(_cell_value(ws, row_idx, COL_VIEWS))
 
         indevidas = {
             cat: _to_int_safe(_cell_value(ws, row_idx, col))
@@ -212,6 +213,7 @@ def _read_consolidado(ws) -> tuple[list[dict], int]:
             "tipo_compra": tipo or None,
             "contratado": _to_int_safe(_cell_value(ws, row_idx, COL_CONTRATADO)),
             "entregue":   entregue,
+            "views":      views,
             "cliques":    _to_int_safe(_cell_value(ws, row_idx, COL_CLIQUES)),
             "viewables":  _to_int_safe(_cell_value(ws, row_idx, COL_VIEWABLES)),
             "viewability": viewability_val,
@@ -341,10 +343,32 @@ def _compare(
     else:
         linhas.append("? indevidas: sem arquivo de verification")
 
+    # ── Resumo de performance do consolidado (sempre exibido) ──────────────────
+    impressoes_c = consol_row.get("entregue", 0)
+    cliques_c    = consol_row.get("cliques", 0)
+    views_c      = consol_row.get("views", 0)
+    viewables_c  = consol_row.get("viewables", 0)
+    va_c         = consol_row.get("viewability")
+
+    # Campos já reportados pela comparação com comprovante (evita duplicação)
+    reported = {ln.split(" ")[1].rstrip(":") for ln in linhas if " " in ln}
+
+    if "entregue" not in reported and impressoes_c:
+        linhas.append(f"OK impressoes: {_fmt_num(impressoes_c)}")
+    if "cliques" not in reported and cliques_c:
+        linhas.append(f"OK cliques: {_fmt_num(cliques_c)}")
+    if impressoes_c and cliques_c:
+        linhas.append(f"OK CTR: {cliques_c / impressoes_c * 100:.2f}%")
+    if views_c:
+        linhas.append(f"OK views: {_fmt_num(views_c)}")
+    if impressoes_c and views_c:
+        linhas.append(f"OK VTR: {views_c / impressoes_c * 100:.2f}%")
+    if "viewables" not in reported and viewables_c:
+        linhas.append(f"OK VA: {_fmt_num(viewables_c)}")
+    if "viewability" not in reported and va_c is not None:
+        linhas.append(f"OK VA%: {va_c:.2f}%")
+
     if not linhas:
-        entregue = (comp_result or {}).get("entregue") or 0
-        if entregue > 0:
-            return "OK", [f"OK — entregue {_fmt_num(entregue)}"]
         return "OK", ["OK — sem dados para comparar"]
 
     return ("DIVERGENCIA" if tem_divergencia else "OK"), linhas
@@ -422,7 +446,7 @@ def verificar(
         except Exception as e:
             parse_errors.append({"arquivo": Path(cp).name, "erro": str(e)})
 
-    # ── Amostra de URLs: 5% por categoria indevida, cap global de 200 ───────
+    # ── Amostra de URLs: 10% por categoria indevida, cap global de 200 ──────
     # Parsers devolvem o pool completo (reservoir ≤ 500); amostragem feita aqui.
     if url_pool:
         by_cat: dict[str, list] = defaultdict(list)
@@ -430,7 +454,7 @@ def verificar(
             by_cat[item["categoria"]].append(item)
         url_sample: list[dict] = []
         for items in by_cat.values():
-            n = max(1, len(items) // 20)
+            n = max(1, len(items) // 10)
             url_sample.extend(random.sample(items, min(n, len(items))))
         if len(url_sample) > 200:
             url_sample = random.sample(url_sample, 200)

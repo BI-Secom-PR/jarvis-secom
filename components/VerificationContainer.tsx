@@ -12,7 +12,13 @@ type VehicleResult = {
   formato?: string;
 };
 
-type UrlAnomaly = { url: string; categoria: string; reason: string };
+type UrlAnomaly = {
+  url: string;
+  categoria: string;
+  reason: string;
+  impressoes?: number;
+  pct?: number;
+};
 
 type VerificationResult = {
   veiculos: VehicleResult[];
@@ -210,6 +216,19 @@ export default function VerificationContainer() {
   const [loadingStep, setLoadingStep] = useState(0);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  function formatInt(value?: number): string {
+    if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+    return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(value);
+  }
+
+  function formatPct(value?: number): string {
+    if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+    return `${new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(value)}%`;
+  }
 
   function selectYear(year: number) {
     setSelectedYear(year);
@@ -658,6 +677,8 @@ export default function VerificationContainer() {
                           <tr className="border-b border-white/10">
                             <th className="text-left py-2 pr-4 text-white/40 font-medium">URL</th>
                             <th className="text-left py-2 pr-4 text-white/40 font-medium whitespace-nowrap">Categoria</th>
+                            <th className="text-left py-2 pr-4 text-white/40 font-medium whitespace-nowrap">Impressões URL</th>
+                            <th className="text-left py-2 pr-4 text-white/40 font-medium whitespace-nowrap">% do total</th>
                             <th className="text-left py-2 text-white/40 font-medium">Motivo</th>
                           </tr>
                         </thead>
@@ -676,6 +697,8 @@ export default function VerificationContainer() {
                                 </a>
                               </td>
                               <td className="py-2 pr-4 text-violet-300/70 whitespace-nowrap">{a.categoria}</td>
+                              <td className="py-2 pr-4 text-white/55 whitespace-nowrap">{formatInt(a.impressoes)}</td>
+                              <td className="py-2 pr-4 text-white/55 whitespace-nowrap">{formatPct(a.pct)}</td>
                               <td className="py-2 text-white/50">{a.reason}</td>
                             </tr>
                           ))}

@@ -1,0 +1,90 @@
+Núcleo de BI | NM Secom | SPP
+ANÁLISE MÍDIA DIGITAL
+Trabalho Pelo Brasil
+Análise: 06 a 10 de abril | CALIA
+Amazonas & Santa Catarina
+
+========================================
+Performance Digital - Amazonas
+========================================
+10,7 Mi   Impressões
+1,6 Mi    Visualizações
+2,9 Mi    Engajamentos
+R$ 0,06   CPV
+15,2%     VTR
+
+Encerrada em 09/04
+Plataformas: Meta e YouTube
+
+Resumo Geral
+A campanha foi iniciada na segunda-feira (6) e encerrou sua veiculação na quinta-feira (9), completando 4 dias de veiculação. Foram ativadas as plataformas Meta e YouTube, ambas com o Filme 30s como criativo principal.
+
+O Google Ads apresentou performance sólida durante os 4 dias, com 6,3 milhões de impressões e 1,4 milhão de visualizações. O VTR de 21,6% demonstra boa retenção do público para o formato de 30 segundos. O CPV de R$0,05 reflete uma entrega eficiente, especialmente considerando a segmentação para o estado do Amazonas.
+
+Na Meta, a campanha com objetivo de engajamento alcançou 2,5 milhões de pessoas, registrando 150 mil thruplays e 4,4 milhões de impressões distribuídas entre Facebook e Instagram. O Instagram concentrou o maior volume de entrega, com 3,1 milhões de impressões e VTR de 6,6%, enquanto o Facebook registrou 1,3 milhão de impressões e VTR de 4,5%. O CPV médio de R$0,12 é esperado para campanhas com objetivo de engajamento, que priorizam interação em detrimento de visualizações completas.
+
+CRIATIVO DESTAQUE
+FILME 30S AMAZONAS | AM 18+ AS | INFRA_NP_VIDEO_30S_OBR_INF_OFF
+10,7 Mi de impressões || 1,6 Mi de views
+
+----------------------------------------
+Detalhamento por Plataforma - Amazonas
+----------------------------------------
+GOOGLE (YouTube)
+  Campanha : 2026 | TRABALHO PELO BRASIL AMAZONAS | VISUALIZAÇÃO | CALIA | PI X
+  Impressões: 6.335.680
+  Views     : 1.371.073
+  VTR       : 21,6%
+  CPV       : R$ 0,05
+  Cliques   : 4.380
+
+META (Facebook + Instagram)
+  Campanha : 2026 | TRABALHO PELO BRASIL AMAZONAS | ENGAJAMENTO | CALIA | PI X
+  Impressões: 4.378.006 (FB: 1.276.219 | IG: 3.101.787)
+  Alcance   : 2.528.252 (FB: 818.569 | IG: 1.709.683)
+  Thruplays : 150.944 (FB: 22.866 | IG: 128.078)
+  VTR       : 6,0%
+  CPV       : R$ 0,12
+
+
+========================================
+Performance Digital - Santa Catarina
+========================================
+7,0 Mi    Impressões
+1,6 Mi    Visualizações
+2,6 Mi    Engajamentos
+R$ 0,04   CPV
+22,3%     VTR
+
+Encerrada em 09/04
+Plataformas: Meta e YouTube
+
+Resumo Geral
+Também iniciada na segunda-feira (6), a campanha em Santa Catarina encerrou na quinta-feira (9), completando igualmente 4 dias de veiculação. Assim como no Amazonas, foram ativadas as plataformas Meta e YouTube, com o Filme 30s como criativo principal.
+
+O Google Ads apresentou o melhor desempenho entre as duas praças, com 4,1 milhões de impressões e 1,3 milhão de visualizações. O VTR de 31,4% indica alto interesse pelo conteúdo da campanha, superando o resultado do Amazonas em quase 10 pontos percentuais. O CPV de R$0,03 demonstra excelente eficiência na entrega de visualizações, mesmo com menor volume de impressões em relação ao estado do Norte.
+
+Na Meta, a campanha registrou 2,8 milhões de impressões e 2,0 milhões de pessoas alcançadas, com 150 mil thruplays — volume equivalente ao Amazonas. O Instagram liderou a entrega com 1,9 milhão de impressões e VTR de 10,2%, enquanto o Facebook contribuiu com 920 mil impressões e VTR de 6,1%. O CPV médio de R$0,09 ficou abaixo do registrado no Amazonas (R$0,12), indicando maior eficiência de entrega na plataforma para esta praça.
+
+CRIATIVO DESTAQUE
+FILME 30S AMAZONAS | AM 18+ AS | INFRA_NP_VIDEO_30S_OBR_INF_OFF
+7,0 Mi de impressões || 1,6 Mi de views
+
+----------------------------------------
+Detalhamento por Plataforma - Santa Catarina
+----------------------------------------
+GOOGLE (YouTube)
+  Campanha : 2026 | TRABALHO PELO BRASIL SANTA CATARINA | VISUALIZACAO | CALIA | PI X
+  Impressões: 4.134.498
+  Views     : 1.299.854
+  VTR       : 31,4%
+  CPV       : R$ 0,03
+  Cliques   : 2.718
+
+META (Facebook + Instagram)
+  Campanha : 2026 | TRABALHO PELO BRASIL SANTA CATARINA | VISUALIZAÇÃO | CALIA | PI X
+  Impressões: 2.836.338 (FB: 920.341 | IG: 1.915.997)
+  Alcance   : 2.033.762 (FB: 656.809 | IG: 1.376.953)
+  Thruplays : 150.523 (FB: 21.599 | IG: 128.924)
+  VTR       : 8,9%
+  CPV       : R$ 0,09

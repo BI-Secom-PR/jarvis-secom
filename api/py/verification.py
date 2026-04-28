@@ -42,7 +42,23 @@ def _parse_date(s: str | None) -> date | None:
         return None
 
 
+def _patch_openpyxl_colors():
+    """Some xlsx files use non-standard color codes that fail openpyxl's strict validator."""
+    try:
+        from openpyxl.descriptors import MatchedString
+        _orig = MatchedString.__set__
+        def _lenient(self, instance, value):
+            try:
+                _orig(self, instance, value)
+            except ValueError:
+                pass
+        MatchedString.__set__ = _lenient
+    except Exception:
+        pass
+
+
 def _run_engine(body: dict) -> dict:
+    _patch_openpyxl_colors()
     # Lazy import after sys.path is set
     engine = importlib.import_module("engine")
     verificar = engine.verificar
@@ -135,7 +151,8 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(length))
+            raw = self.rfile.read(length) if length > 0 else self.rfile.read()
+            body = json.loads(raw)
 
             if "url_info_by_veiculo" in body and "output_b64" in body:
                 result = _write_url_info(body)

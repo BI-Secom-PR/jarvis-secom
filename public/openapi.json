@@ -1,0 +1,119 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Jarvis SECOM API",
+    "description": "Query SECOM digital advertising analytics in natural language. Returns campaign performance data across Meta, Google, TikTok, Kwai, LinkedIn, Pinterest, and Amazon DSP.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://your-domain.com",
+      "description": "Production server — replace with your actual domain"
+    }
+  ],
+  "paths": {
+    "/api/external/query": {
+      "post": {
+        "operationId": "queryDatabase",
+        "summary": "Query SECOM analytics in natural language",
+        "description": "Send a natural language question about campaign performance. The AI generates and executes SQL against the SECOM data warehouse and returns a formatted answer. Supports questions about impressions, clicks, CTR, CPM, CPC, CPV, VTR, viewability, spend, and demographic breakdowns by platform, campaign, date range, region, age, and gender.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["query"],
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "Natural language question about SECOM campaign data. Can be in Portuguese or English.",
+                    "example": "Qual foi o total de impressões da Meta em março de 2025?"
+                  },
+                  "model": {
+                    "type": "string",
+                    "description": "Optional model ID override. Leave empty to use the default model.",
+                    "example": "llama-3.3-70b-versatile"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Query executed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "output": {
+                      "type": "string",
+                      "description": "AI-generated answer with formatted data"
+                    },
+                    "chartData": {
+                      "type": "object",
+                      "nullable": true,
+                      "description": "Structured chart data if the response includes a visualization, otherwise null"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request body",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or missing Bearer token",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "429": {
+            "description": "AI model rate limit reached",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "API key — set EXTERNAL_API_KEY on the server and pass it as the Bearer token"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" }
+        }
+      }
+    }
+  }
+}
