@@ -183,19 +183,92 @@ def _get_verif_sheets(wb):
     ] or list(wb.worksheets)
 
 
-def parse_verif(
-    filepath: str,
-    data_ini: date | None = None,
-    data_fim: date | None = None,
-) -> list[dict]:
-    """Parseia verification ADFORCE (multi-sheet, categorias compostas de indevidas)."""
-    path = Path(filepath)
-    if not path.exists():
-        raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
+def _is_flat_format(wb) -> bool:
+    """
+    Detecta o formato flat ADFORCE (sheet única "Result 1" com campaignUuid na col A).
+    Este formato tem uma linha de cabeçalho na linha 1 sem metadados acima.
+    """
+    ws = wb.worksheets[0]
+    first_row = next(ws.iter_rows(max_row=1, values_only=True), None)
+    if first_row is None:
+        return False
+    vals = {str(v).strip().lower() for v in first_row if v is not None}
+    return "campaignuuid" in vals
 
-    wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+
+def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int]:
+    """
+    Parseia o formato flat ADFORCE:
+      colunas: campaignUuid, url, ..., vehicle, keywords, categories, cpm, ...
+      cpm = impressões por linha (contagem de ad-servings, não preço).
+    Retorna (indevidas_dict, entregue_dict, url_pool, pool_count).
+    """
+    ws = wb.worksheets[0]
+    header = [str(v).strip() if v is not None else "" for v in
+              next(ws.iter_rows(max_row=1, values_only=True))]
+
+    i_vehicle    = col_index(header, "vehicle", "Vehicle", "Veículo", "Veiculo")
+    i_categories = col_index(header, "categories", "Categories", "Categoria", "Category")
+    i_url        = col_index(header, "url", "URL", "Url")
+    i_cpm        = col_index(header, "cpm", "CPM", "Impressoes", "Impressões", "Impressions")
+    i_data       = col_index(header, "date", "Date", "Data")
+
+    if i_vehicle is None or i_categories is None:
+        raise ValueError("Colunas 'vehicle'/'categories' não encontradas no formato flat ADFORCE")
+
+    veiculos_indevidas: dict[str, dict] = defaultdict(lambda: dict(INDEVIDAS_ZERO))
+    veiculos_entregue:  dict[str, int]  = defaultdict(int)
+    MAX_POOL = 500
+    url_pool: list[dict] = []
+    pool_count = 0
+
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if all(v is None for v in row):
+            continue
+
+        if (data_ini or data_fim) and i_data is not None and i_data < len(row):
+            d = parse_date(row[i_data])
+            if d:
+                if data_ini and d < data_ini:
+                    continue
+                if data_fim and d > data_fim:
+                    continue
+
+        veiculo   = str(row[i_vehicle]).strip()    if i_vehicle    < len(row) and row[i_vehicle]    else None
+        categoria = str(row[i_categories]).strip() if i_categories < len(row) and row[i_categories] else None
+        url       = str(row[i_url]).strip()        if i_url is not None and i_url < len(row) and row[i_url] else None
+        impressoes = to_int(row[i_cpm] if i_cpm is not None and i_cpm < len(row) else None)
+
+        if not veiculo or not categoria:
+            continue
+
+        cat_key = normaliza_categoria(categoria)
+        if cat_key:
+            veiculos_indevidas[veiculo][cat_key] = (
+                veiculos_indevidas[veiculo].get(cat_key, 0) + impressoes
+            )
+
+        veiculos_entregue[veiculo] += impressoes
+
+        if url and cat_key:
+            pool_count += 1
+            entry = {"url": url, "categoria": categoria, "veiculo": veiculo}
+            if len(url_pool) < MAX_POOL:
+                url_pool.append(entry)
+            else:
+                idx = random.randint(0, pool_count - 1)
+                if idx < MAX_POOL:
+                    url_pool[idx] = entry
+
+    return veiculos_indevidas, veiculos_entregue, url_pool, pool_count
+
+
+def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int]:
+    """
+    Parseia o formato multi-sheet ADFORCE (uma sheet por veículo, pula ABAT).
+    Retorna (indevidas_dict, entregue_dict, url_pool, pool_count).
+    """
     sheets = _get_verif_sheets(wb)
-
     veiculos_indevidas: dict[str, dict] = defaultdict(lambda: dict(INDEVIDAS_ZERO))
     veiculos_entregue:  dict[str, int]  = defaultdict(int)
     MAX_POOL = 500
@@ -258,12 +331,42 @@ def parse_verif(
                     if idx < MAX_POOL:
                         url_pool[idx] = entry
 
-    wb.close()
-
     if not found_header:
         raise ValueError(
-            f"Header com 'Categoria' e 'Url' não encontrado em nenhuma sheet: {path.name}"
+            f"Header com 'Categoria' e 'Veículo' não encontrado em nenhuma sheet"
         )
+
+    return veiculos_indevidas, veiculos_entregue, url_pool, pool_count
+
+
+def parse_verif(
+    filepath: str,
+    data_ini: date | None = None,
+    data_fim: date | None = None,
+) -> list[dict]:
+    """
+    Parseia verification ADFORCE — detecta automaticamente o formato:
+      - Flat (single sheet "Result 1" com campaignUuid): FEVEREIRO/MARÇO style
+      - Multi-sheet (uma tab por veículo, pula ABAT): JANEIRO style
+    """
+    path = Path(filepath)
+    if not path.exists():
+        raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
+
+    wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+
+    if _is_flat_format(wb):
+        formato = "adforce_verif_flat"
+        veiculos_indevidas, veiculos_entregue, url_pool, _ = _parse_verif_flat(
+            wb, data_ini, data_fim
+        )
+    else:
+        formato = "adforce_verif_multitab"
+        veiculos_indevidas, veiculos_entregue, url_pool, _ = _parse_verif_multitab(
+            wb, data_ini, data_fim
+        )
+
+    wb.close()
 
     results: list[dict] = []
     for veiculo in veiculos_entregue:
@@ -277,7 +380,7 @@ def parse_verif(
             "viewability":       None,
             "indevidas":         dict(veiculos_indevidas[veiculo]),
             "url_sample":        url_pool if not results else [],
-            "formato_detectado": "adforce_verif",
+            "formato_detectado": formato,
         })
 
     return results
