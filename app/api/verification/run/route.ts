@@ -119,25 +119,35 @@ export async function POST(req: NextRequest) {
       ...(fim ? { fim } : {}),
     };
 
-    const pyResp = await fetch(pyUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(pyBody),
-    });
-
-    if (!pyResp.ok) {
-      let errText = await pyResp.text();
-      try {
-        const errJson = JSON.parse(errText) as { error?: string; trace?: string };
-        const trace = errJson.trace ? `\n${errJson.trace}` : '';
-        errText = `${errJson.error ?? errText}${trace}`;
-      } catch {
-        // Keep raw body if response is not valid JSON.
-      }
-      return NextResponse.json({ error: `Python engine error: ${errText}` }, { status: 500 });
+    let pyResp: Response;
+    try {
+      pyResp = await fetch(pyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pyBody),
+      });
+    } catch (fetchErr) {
+      return NextResponse.json({ error: `Failed to reach Python engine: ${fetchErr}` }, { status: 502 });
     }
 
-    engineResult = await pyResp.json() as Record<string, unknown>;
+    const pyRespText = await pyResp.text();
+    if (!pyResp.ok) {
+      let errText = pyRespText;
+      try {
+        const errJson = JSON.parse(pyRespText) as { error?: string; trace?: string };
+        const trace = errJson.trace ? `\n${errJson.trace}` : '';
+        errText = `${errJson.error ?? pyRespText}${trace}`;
+      } catch {
+        // Keep raw body if response is not valid JSON (e.g. Vercel HTML error page).
+      }
+      return NextResponse.json({ error: `Python engine error (HTTP ${pyResp.status}): ${errText}` }, { status: 500 });
+    }
+
+    try {
+      engineResult = JSON.parse(pyRespText) as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: `Python engine returned non-JSON response (HTTP ${pyResp.status}): ${pyRespText.slice(0, 500)}` }, { status: 500 });
+    }
   } else {
     // On-prem: spawn python3 as before
     const tmpDir = path.join(os.tmpdir(), `secom-verif-${randomUUID()}`);
