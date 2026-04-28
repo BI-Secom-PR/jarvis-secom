@@ -101,9 +101,10 @@ export async function POST(req: NextRequest) {
   // ── Executar engine ────────────────────────────────────────────────────────
   let engineResult: Record<string, unknown>;
 
-  if (process.env.VERCEL) {
+  if (process.env.VERCEL_URL) {
     // On Vercel: call the Python serverless function via internal fetch
-    const pyUrl = `${process.env.NEXT_PUBLIC_BASE_URL ?? ''}/api/py/verification`;
+    // VERCEL_URL is set to the deployment hostname only on actual Vercel infra (not in local .env.local pulls)
+    const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
 
     const toB64 = async (f: File) =>
       Buffer.from(await f.arrayBuffer()).toString('base64');
@@ -210,9 +211,9 @@ export async function POST(req: NextRequest) {
     );
 
     try {
-      if (process.env.VERCEL) {
+      if (process.env.VERCEL_URL) {
         // On Vercel: call the Python function again for url_info write
-        const pyUrl = `${process.env.NEXT_PUBLIC_BASE_URL ?? ''}/api/py/verification`;
+        const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
         const pyResp = await fetch(pyUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
