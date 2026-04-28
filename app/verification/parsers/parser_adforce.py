@@ -36,14 +36,14 @@ def _normalize_va(v) -> float | None:
 
 
 def _find_header(ws):
-    """Varre até 25 linhas buscando Veículo + Impressões/Entregues/Views."""
-    veiculo_variants  = {"veículo", "veiculo", "vehicle"}
+    """Varre até 25 linhas buscando Impressões/Entregues (Veículo é opcional)."""
     entregue_variants = {"impressões", "impressoes", "impressions",
-                         "entregues", "entregue", "views"}
+                         "entregues", "entregue", "entregues/impressões",
+                         "entregues/impressoes", "views"}
     for i, row in enumerate(ws.iter_rows(max_row=25, values_only=True), start=1):
         vals = [str(v).strip() if v is not None else "" for v in row]
         lows = {v.lower() for v in vals}
-        if lows & veiculo_variants and lows & entregue_variants:
+        if lows & entregue_variants:
             return i, vals
     return None, []
 
@@ -80,12 +80,13 @@ def parse_comprovante(
     if header_row_idx is None:
         wb.close()
         raise ValueError(
-            f"Cabeçalho com 'Veículo' e 'Entregues/Impressões' não encontrado: {path.name}"
+            f"Cabeçalho com coluna de Impressões/Entregues não encontrado: {path.name}"
         )
 
     i_veiculo    = col_index(header, "Veículo", "Veiculo", "Vehicle")
     i_impressoes = col_index(header, "Impressões", "Impressoes", "Impressions",
-                              "Entregues", "Entregue")
+                              "Entregues", "Entregue",
+                              "Entregues/Impressões", "Entregues/Impressoes")
     i_cliques    = col_index(header, "Cliques", "Clicks", "Cliques Únicos")
     i_viewable   = col_index(header, "Viewable", "Viewables")
     i_viewability= col_index(header, "VA%", "Viewability", "VA %", "View%",
@@ -93,9 +94,16 @@ def parse_comprovante(
     i_contratado = col_index(header, "Contratado", "Contracted")
     i_data       = col_index(header, "Data", "Date")
 
-    if i_veiculo is None or i_impressoes is None:
+    if i_impressoes is None:
         wb.close()
-        raise ValueError(f"Colunas obrigatórias ausentes (Veículo/Impressões): {path.name}")
+        raise ValueError(f"Coluna de Impressões/Entregues não encontrada: {path.name}")
+
+    # Arquivo de veículo único: infere nome do veículo pelo nome do arquivo
+    # Ex.: "CAMPANHA BAHIA - Teads.xlsx" → "Teads"
+    single_vehicle: str | None = None
+    if i_veiculo is None:
+        stem = path.stem
+        single_vehicle = stem.split(" - ")[-1].strip() if " - " in stem else stem
 
     entregue:   dict[str, int]   = defaultdict(int)
     cliques:    dict[str, int]   = defaultdict(int)
@@ -109,14 +117,17 @@ def parse_comprovante(
         if all(v is None for v in row):
             continue
 
-        veiculo_raw = row[i_veiculo] if i_veiculo < len(row) else None
-        if veiculo_raw is None:
-            continue
-        vname = str(veiculo_raw).strip()
-        if not vname or vname.lower() in SKIP_VEHICLE_NAMES:
-            continue
-        if vname.endswith(" Total") or vname.endswith(" total"):
-            continue
+        if i_veiculo is not None:
+            veiculo_raw = row[i_veiculo] if i_veiculo < len(row) else None
+            if veiculo_raw is None:
+                continue
+            vname = str(veiculo_raw).strip()
+            if not vname or vname.lower() in SKIP_VEHICLE_NAMES:
+                continue
+            if vname.endswith(" Total") or vname.endswith(" total"):
+                continue
+        else:
+            vname = single_vehicle
 
         if (data_ini or data_fim) and i_data is not None and i_data < len(row):
             d = parse_date(row[i_data])
