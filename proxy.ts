@@ -11,6 +11,7 @@ export function proxy(req: NextRequest) {
   if (
     PUBLIC_PATHS.some(p => pathname.startsWith(p)) ||
     pathname.startsWith('/api/auth/') ||
+    pathname.startsWith('/api/py/') ||
     pathname.startsWith('/_next/') ||
     pathname === '/icon' ||
     pathname === '/apple-icon' ||
