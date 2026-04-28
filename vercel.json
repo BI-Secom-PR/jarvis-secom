@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/py/*.py": {
+      "runtime": "vercel-python@0.1.4"
+    }
+  },
   "headers": [
     {
       "source": "/api/(.*)",

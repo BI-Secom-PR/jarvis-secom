@@ -73,147 +73,189 @@ function runEngine(args: string[]): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
-  if (process.env.VERCEL)
-    return NextResponse.json(
-      { error: 'Verificação não disponível neste ambiente. Use o servidor on-prem.' },
-      { status: 501 }
-    );
-
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const tmpDir = path.join(os.tmpdir(), `secom-verif-${randomUUID()}`);
-  await fs.mkdir(tmpDir, { recursive: true });
+  const form = await req.formData();
 
-  try {
-    const form = await req.formData();
+  // ── Validar campos obrigatórios ────────────────────────────────────────────
+  const consolidadoFile = form.get('consolidado') as File | null;
+  if (!consolidadoFile) {
+    return NextResponse.json({ error: 'Arquivo consolidado não enviado.' }, { status: 400 });
+  }
 
-    // ── Salvar arquivo consolidado ─────────────────────────────────────────
-    const consolidadoFile = form.get('consolidado') as File | null;
-    if (!consolidadoFile) {
-      return NextResponse.json({ error: 'Arquivo consolidado não enviado.' }, { status: 400 });
+  const adserver = form.get('adserver') as string | null;
+  if (!adserver) {
+    return NextResponse.json({ error: 'Adserver não informado.' }, { status: 400 });
+  }
+
+  const compFiles = form.getAll('comprovante') as File[];
+  if (!compFiles.length) {
+    return NextResponse.json({ error: 'Nenhum comprovante enviado.' }, { status: 400 });
+  }
+
+  const verifFiles = form.getAll('verif') as File[];
+  const ini = form.get('ini') as string | null;
+  const fim = form.get('fim') as string | null;
+
+  // ── Executar engine ────────────────────────────────────────────────────────
+  let engineResult: Record<string, unknown>;
+
+  if (process.env.VERCEL) {
+    // On Vercel: call the Python serverless function via internal fetch
+    const pyUrl = `${process.env.NEXT_PUBLIC_BASE_URL ?? ''}/api/py/verification`;
+
+    const toB64 = async (f: File) =>
+      Buffer.from(await f.arrayBuffer()).toString('base64');
+
+    const pyBody = {
+      consolidado_b64:  await toB64(consolidadoFile),
+      consolidado_name: consolidadoFile.name,
+      comp_files: await Promise.all(compFiles.map(async (f) => ({ name: f.name, b64: await toB64(f) }))),
+      verif_files: await Promise.all(verifFiles.map(async (f) => ({ name: f.name, b64: await toB64(f) }))),
+      adserver,
+      ...(ini ? { ini } : {}),
+      ...(fim ? { fim } : {}),
+    };
+
+    const pyResp = await fetch(pyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pyBody),
+    });
+
+    if (!pyResp.ok) {
+      const err = await pyResp.text();
+      return NextResponse.json({ error: `Python engine error: ${err}` }, { status: 500 });
     }
 
-    const consolidadoPath = path.join(tmpDir, 'consolidado.xlsx');
-    await fs.writeFile(consolidadoPath, Buffer.from(await consolidadoFile.arrayBuffer()));
+    engineResult = await pyResp.json() as Record<string, unknown>;
+  } else {
+    // On-prem: spawn python3 as before
+    const tmpDir = path.join(os.tmpdir(), `secom-verif-${randomUUID()}`);
+    await fs.mkdir(tmpDir, { recursive: true });
 
-    // ── Adserver ───────────────────────────────────────────────────────────
-    const adserver = form.get('adserver') as string | null;
-    if (!adserver) {
-      return NextResponse.json({ error: 'Adserver não informado.' }, { status: 400 });
-    }
+    try {
+      const consolidadoPath = path.join(tmpDir, 'consolidado.xlsx');
+      await fs.writeFile(consolidadoPath, Buffer.from(await consolidadoFile.arrayBuffer()));
 
-    // ── Salvar comprovantes ────────────────────────────────────────────────
-    const compFiles = form.getAll('comprovante') as File[];
-    if (!compFiles.length) {
-      return NextResponse.json({ error: 'Nenhum comprovante enviado.' }, { status: 400 });
-    }
-
-    const compPaths: string[] = [];
-    for (const file of compFiles) {
-      const dest = path.join(tmpDir, file.name);
-      await fs.writeFile(dest, Buffer.from(await file.arrayBuffer()));
-      compPaths.push(dest);
-    }
-
-    // ── Salvar verification files (opcional) ──────────────────────────────
-    const verifFiles = form.getAll('verif') as File[];
-    const verifPaths: string[] = [];
-    for (const file of verifFiles) {
-      const dest = path.join(tmpDir, file.name);
-      await fs.writeFile(dest, Buffer.from(await file.arrayBuffer()));
-      verifPaths.push(dest);
-    }
-
-    // ── Parâmetros opcionais de data ───────────────────────────────────────
-    const ini = form.get('ini') as string | null;
-    const fim = form.get('fim') as string | null;
-
-    const args = [consolidadoPath, '--adserver', adserver];
-    if (compPaths.length > 0)  args.push('--comp',  ...compPaths);
-    if (verifPaths.length > 0) args.push('--verif', ...verifPaths);
-    if (ini) args.push('--ini', ini);
-    if (fim) args.push('--fim', fim);
-
-    // ── Executar engine ────────────────────────────────────────────────────
-    const stdout = await runEngine(args);
-
-    // engine.py imprime apenas JSON no stdout (resumo vai para stderr)
-    const engineResult = JSON.parse(stdout.trim());
-
-    const outputPath: string = engineResult.output;
-
-    // ── AI URL check (5%, máx 50 URLs, 10 por vez para evitar rate limit) ────
-    let urlCheckAnomalies: UrlAnomalyItem[] = [];
-    const urlSample: UrlSampleItem[] = engineResult.url_sample ?? [];
-    if (urlSample.length > 0 && process.env.OLLAMA_BASE_URL) {
-      const capped = urlSample.slice(0, 50);
-      const BATCH = 10;
-      for (let i = 0; i < capped.length; i += BATCH) {
-        const settled = await Promise.allSettled(
-          capped.slice(i, i + BATCH).map(checkUrlCategory)
-        );
-        urlCheckAnomalies.push(
-          ...settled
-            .filter((r): r is PromiseFulfilledResult<UrlAnomalyItem> =>
-              r.status === 'fulfilled' && r.value !== null
-            )
-            .map((r) => r.value)
-        );
+      const compPaths: string[] = [];
+      for (const file of compFiles) {
+        const dest = path.join(tmpDir, file.name);
+        await fs.writeFile(dest, Buffer.from(await file.arrayBuffer()));
+        compPaths.push(dest);
       }
-    }
 
-    // ── Escrever URL info (col 30) no arquivo verificado ─────────────────────
-    if (urlCheckAnomalies.length > 0) {
-      // Mapear nome do veículo no parser → nome no consolidado
-      const matchToConsol = new Map<string, string>();
-      for (const v of (engineResult.veiculos ?? []) as { veiculo: string; match: string | null }[]) {
-        if (v.match) matchToConsol.set(v.match, v.veiculo);
+      const verifPaths: string[] = [];
+      for (const file of verifFiles) {
+        const dest = path.join(tmpDir, file.name);
+        await fs.writeFile(dest, Buffer.from(await file.arrayBuffer()));
+        verifPaths.push(dest);
       }
-      // Agregar anomalias por veículo (nome do consolidado)
-      const urlInfoByVeiculo: Record<string, string[]> = {};
-      for (const a of urlCheckAnomalies) {
-        const consolName = matchToConsol.get(a.veiculo) ?? a.veiculo;
-        if (!urlInfoByVeiculo[consolName]) urlInfoByVeiculo[consolName] = [];
-        urlInfoByVeiculo[consolName].push(`${a.url} → ${a.reason}`);
-      }
-      const WRITE_URL_INFO = path.join(path.dirname(ENGINE_PATH), 'parsers', 'write_url_info.py');
-      try {
+
+      const args = [consolidadoPath, '--adserver', adserver];
+      if (compPaths.length > 0)  args.push('--comp',  ...compPaths);
+      if (verifPaths.length > 0) args.push('--verif', ...verifPaths);
+      if (ini) args.push('--ini', ini);
+      if (fim) args.push('--fim', fim);
+
+      const stdout = await runEngine(args);
+      engineResult = JSON.parse(stdout.trim()) as Record<string, unknown>;
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  // On Vercel the engine returns output_b64 directly; on-prem we read the file.
+  let fileBase64: string | null = (engineResult.output_b64 as string | null) ?? null;
+  const outputPath: string = (engineResult.output as string) ?? '';
+  const outputName: string = engineResult.output_name
+    ? (engineResult.output_name as string)
+    : outputPath ? path.basename(outputPath) : 'verificado.xlsx';
+
+  // ── AI URL check (5%, máx 50 URLs, 10 por vez para evitar rate limit) ──────
+  let urlCheckAnomalies: UrlAnomalyItem[] = [];
+  const urlSample: UrlSampleItem[] = (engineResult.url_sample as UrlSampleItem[]) ?? [];
+  if (urlSample.length > 0 && process.env.OLLAMA_BASE_URL) {
+    const capped = urlSample.slice(0, 50);
+    const BATCH = 10;
+    for (let i = 0; i < capped.length; i += BATCH) {
+      const settled = await Promise.allSettled(
+        capped.slice(i, i + BATCH).map(checkUrlCategory)
+      );
+      urlCheckAnomalies.push(
+        ...settled
+          .filter((r): r is PromiseFulfilledResult<UrlAnomalyItem> =>
+            r.status === 'fulfilled' && r.value !== null
+          )
+          .map((r) => r.value)
+      );
+    }
+  }
+
+  // ── Escrever URL info (col 30) no arquivo verificado ────────────────────────
+  if (urlCheckAnomalies.length > 0) {
+    const matchToConsol = new Map<string, string>();
+    for (const v of (engineResult.veiculos ?? []) as { veiculo: string; match: string | null }[]) {
+      if (v.match) matchToConsol.set(v.match, v.veiculo);
+    }
+    const urlInfoByVeiculo: Record<string, string[]> = {};
+    for (const a of urlCheckAnomalies) {
+      const consolName = matchToConsol.get(a.veiculo) ?? a.veiculo;
+      if (!urlInfoByVeiculo[consolName]) urlInfoByVeiculo[consolName] = [];
+      urlInfoByVeiculo[consolName].push(`${a.url} → ${a.reason}`);
+    }
+    const urlInfoFlat = Object.fromEntries(
+      Object.entries(urlInfoByVeiculo).map(([k, v]) => [k, v.join('\n')])
+    );
+
+    try {
+      if (process.env.VERCEL) {
+        // On Vercel: call the Python function again for url_info write
+        const pyUrl = `${process.env.NEXT_PUBLIC_BASE_URL ?? ''}/api/py/verification`;
+        const pyResp = await fetch(pyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            output_b64:          fileBase64,
+            output_name:         outputName,
+            url_info_by_veiculo: urlInfoFlat,
+          }),
+        });
+        if (pyResp.ok) {
+          const upd = await pyResp.json() as { output_b64?: string };
+          if (upd.output_b64) fileBase64 = upd.output_b64;
+        }
+      } else {
+        // On-prem: spawn write_url_info.py
+        const WRITE_URL_INFO = path.join(path.dirname(ENGINE_PATH), 'parsers', 'write_url_info.py');
         await new Promise<void>((resolve, reject) => {
-          const proc = spawn('python3', [WRITE_URL_INFO, outputPath, JSON.stringify(
-            Object.fromEntries(Object.entries(urlInfoByVeiculo).map(([k, v]) => [k, v.join('\n')]))
-          )], { env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
+          const proc = spawn('python3', [WRITE_URL_INFO, outputPath, JSON.stringify(urlInfoFlat)], {
+            env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+          });
           proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`write_url_info exited ${code}`)));
           proc.on('error', reject);
         });
-      } catch {
-        // falha não-crítica: arquivo segue sem col 30
+        // Re-read updated file
+        try {
+          fileBase64 = (await fs.readFile(outputPath)).toString('base64');
+        } catch { /* non-critical */ }
       }
-    }
-
-    // ── Ler arquivo verificado (após write_url_info) e embutir como base64 ───
-    let fileBase64: string | null = null;
+    } catch { /* falha não-crítica: arquivo segue sem col 30 */ }
+  } else if (!fileBase64 && outputPath) {
+    // On-prem without url_info: read the output file
     try {
       fileBase64 = (await fs.readFile(outputPath)).toString('base64');
-    } catch {
-      // arquivo pode não ter sido gerado se houve erro
-    }
-
-    return NextResponse.json({
-      veiculos:            engineResult.veiculos,
-      sem_comprovante:     engineResult.sem_comprovante,
-      sem_consolidado:     engineResult.sem_consolidado,
-      parse_errors:        engineResult.parse_errors,
-      file_base64:         fileBase64,
-      file_name:           path.basename(outputPath),
-      url_check_anomalies: urlCheckAnomalies,
-    });
-
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
-  } finally {
-    // Limpeza dos arquivos temporários
-    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    } catch { /* non-critical */ }
   }
+
+  return NextResponse.json({
+    veiculos:            engineResult.veiculos,
+    sem_comprovante:     engineResult.sem_comprovante,
+    sem_consolidado:     engineResult.sem_consolidado,
+    parse_errors:        engineResult.parse_errors,
+    file_base64:         fileBase64,
+    file_name:           outputName,
+    url_check_anomalies: urlCheckAnomalies,
+  });
 }

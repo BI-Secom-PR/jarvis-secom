@@ -18,14 +18,8 @@ COL_URL_INFO = 30
 DATA_START   = 9
 
 
-def main():
-    if len(sys.argv) < 3:
-        print("Uso: write_url_info.py <xlsx> '<json>'", file=sys.stderr)
-        sys.exit(1)
-
-    xlsx_path = sys.argv[1]
-    url_info: dict[str, str] = json.loads(sys.argv[2])
-
+def write(xlsx_path: str, url_info: dict[str, str]) -> None:
+    """Write url_info dict {veiculo: text} into COL_URL_INFO of xlsx_path (in-place)."""
     if not url_info:
         return
 
@@ -42,6 +36,13 @@ def main():
 
     wb.save(xlsx_path)
     wb.close()
+
+
+def main():
+    if len(sys.argv) < 3:
+        print("Uso: write_url_info.py <xlsx> '<json>'", file=sys.stderr)
+        sys.exit(1)
+    write(sys.argv[1], json.loads(sys.argv[2]))
 
 
 if __name__ == "__main__":
