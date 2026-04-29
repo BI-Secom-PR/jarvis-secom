@@ -209,10 +209,13 @@ def _is_flat_format(wb) -> bool:
 
 def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int]:
     """
-    Parseia o formato flat ADFORCE:
-      colunas: campaignUuid, url, ..., vehicle, keywords, categories, cpm, ...
-      cpm = impressões por linha (contagem de ad-servings, não preço).
-    Retorna (indevidas_dict, entregue_dict, url_pool, pool_count).
+    Parseia o formato flat ADFORCE (Result 1, header na linha 1):
+      campaignUuid, url, ..., vehicle, keywords, categories,
+      cpm, cpmBlocked, cpc, cpcBlocked, cpv, cpvBlocked, cpcv, cpcvBlocked
+    cpm/cpc/cpv/cpcv = impressões entregues por métrica (não bloqueados).
+    objetivo_midia no consolidado determina qual coluna usar para indevidas.
+    Retorna (indevidas_by_metric, entregue_dict, url_pool, pool_count).
+    indevidas_by_metric = {"cpm": {veiculo: {cat: n}}, "cpc": ..., "cpv": ..., "cpcv": ...}
     """
     ws = wb.worksheets[0]
     header = [str(v).strip() if v is not None else "" for v in
@@ -222,13 +225,21 @@ def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int]:
     i_categories = col_index(header, "categories", "Categories", "Categoria", "Category")
     i_url        = col_index(header, "url", "URL", "Url")
     i_cpm        = col_index(header, "cpm", "CPM", "Impressoes", "Impressões", "Impressions")
+    i_cpc        = col_index(header, "cpc", "CPC", "Cliques", "Clicks")
+    i_cpv        = col_index(header, "cpv", "CPV", "Views", "Visualizações", "Visualizacoes")
+    i_cpcv       = col_index(header, "cpcv", "CPCV")
     i_data       = col_index(header, "date", "Date", "Data")
 
     if i_vehicle is None or i_categories is None:
         raise ValueError("Colunas 'vehicle'/'categories' não encontradas no formato flat ADFORCE")
 
-    veiculos_indevidas: dict[str, dict] = defaultdict(lambda: dict(INDEVIDAS_ZERO))
-    veiculos_entregue:  dict[str, int]  = defaultdict(int)
+    indev: dict[str, dict[str, dict]] = {
+        "cpm":  defaultdict(lambda: dict(INDEVIDAS_ZERO)),
+        "cpc":  defaultdict(lambda: dict(INDEVIDAS_ZERO)),
+        "cpv":  defaultdict(lambda: dict(INDEVIDAS_ZERO)),
+        "cpcv": defaultdict(lambda: dict(INDEVIDAS_ZERO)),
+    }
+    veiculos_entregue: dict[str, int] = defaultdict(int)
     MAX_POOL = 500
     url_pool: list[dict] = []
     pool_count = 0
@@ -248,23 +259,42 @@ def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int]:
         veiculo   = str(row[i_vehicle]).strip()    if i_vehicle    < len(row) and row[i_vehicle]    else None
         categoria = str(row[i_categories]).strip() if i_categories < len(row) and row[i_categories] else None
         url       = str(row[i_url]).strip()        if i_url is not None and i_url < len(row) and row[i_url] else None
-        # cpm = impression count per row in flat ADFORCE export; fallback to 1 if column absent
-        impressoes = to_int(row[i_cpm] if i_cpm is not None and i_cpm < len(row) else None) or 1
 
-        if not veiculo or not categoria:
+        if not veiculo:
+            continue
+
+        def _metric(i_col) -> int:
+            if i_col is None or i_col >= len(row):
+                return 0
+            return to_int(row[i_col]) or 0
+
+        v_cpm  = _metric(i_cpm)
+        v_cpc  = _metric(i_cpc)
+        v_cpv  = _metric(i_cpv)
+        v_cpcv = _metric(i_cpcv)
+
+        # Track total delivered as sum of all metric counts
+        veiculos_entregue[veiculo] += v_cpm + v_cpc + v_cpv + v_cpcv
+
+        if not categoria:
             continue
 
         cat_key = normaliza_categoria(categoria)
-        if cat_key:
-            veiculos_indevidas[veiculo][cat_key] = (
-                veiculos_indevidas[veiculo].get(cat_key, 0) + impressoes
-            )
+        if not cat_key:
+            continue
 
-        veiculos_entregue[veiculo] += impressoes
+        for metric, val in (("cpm", v_cpm), ("cpc", v_cpc),
+                            ("cpv", v_cpv), ("cpcv", v_cpcv)):
+            if val > 0:
+                indev[metric][veiculo][cat_key] = (
+                    indev[metric][veiculo].get(cat_key, 0) + val
+                )
 
-        if url and cat_key:
+        total_val = v_cpm + v_cpc + v_cpv + v_cpcv
+        if url and total_val > 0:
             pool_count += 1
-            entry = {"url": url, "categoria": categoria, "veiculo": veiculo, "impressoes": impressoes}
+            entry = {"url": url, "categoria": categoria, "veiculo": veiculo,
+                     "impressoes": total_val}
             if len(url_pool) < MAX_POOL:
                 url_pool.append(entry)
             else:
@@ -272,17 +302,25 @@ def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int]:
                 if idx < MAX_POOL:
                     url_pool[idx] = entry
 
-    return veiculos_indevidas, veiculos_entregue, url_pool, pool_count
+    return indev, veiculos_entregue, url_pool, pool_count
 
 
 def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int]:
     """
     Parseia o formato multi-sheet ADFORCE (uma sheet por veículo, pula ABAT).
-    Retorna (indevidas_dict, entregue_dict, url_pool, pool_count).
+    Colunas por seção: Impressões|Bloqueados|Válidos | Cliques|Bloqueados|Válidos |
+                       Visualizações|Bloqueados|Válidos | Vis.Completas|Bloqueados|Válidos | Url
+    Retorna (indevidas_by_metric, entregue_dict, url_pool, pool_count).
+    indevidas_by_metric = {"cpm": {veiculo: {cat: n}}, "cpc": ..., "cpv": ..., "cpcv": ...}
     """
     sheets = _get_verif_sheets(wb)
-    veiculos_indevidas: dict[str, dict] = defaultdict(lambda: dict(INDEVIDAS_ZERO))
-    veiculos_entregue:  dict[str, int]  = defaultdict(int)
+    indev: dict[str, dict[str, dict]] = {
+        "cpm":  defaultdict(lambda: dict(INDEVIDAS_ZERO)),
+        "cpc":  defaultdict(lambda: dict(INDEVIDAS_ZERO)),
+        "cpv":  defaultdict(lambda: dict(INDEVIDAS_ZERO)),
+        "cpcv": defaultdict(lambda: dict(INDEVIDAS_ZERO)),
+    }
+    veiculos_entregue: dict[str, int] = defaultdict(int)
     MAX_POOL = 500
     url_pool: list[dict] = []
     pool_count = 0
@@ -294,14 +332,22 @@ def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int
             continue
         found_header = True
 
-        i_veiculo    = col_index(header, "Veículo", "Veiculo", "Vehicle",
-                                  "Veículos", "Veiculos")
-        i_impressoes = col_index(header, "Impressões", "Impressoes", "Impressions",
-                                  "Impressões Totais", "Impressoes Totais")
-        i_categoria  = col_index(header, "Categoria", "Category")
-        i_url        = col_index(header, "Url", "URL", "url", "URL Veiculada",
-                                  "Url Veiculada")
-        i_data       = col_index(header, "Data", "Date")
+        i_veiculo   = col_index(header, "Veículo", "Veiculo", "Vehicle",
+                                 "Veículos", "Veiculos")
+        i_categoria = col_index(header, "Categoria", "Category")
+        i_url       = col_index(header, "Url", "URL", "url", "URL Veiculada",
+                                 "Url Veiculada")
+        i_data      = col_index(header, "Data", "Date")
+
+        # Metric columns: each section has Impressões/Cliques/Visualizações/Vis.Completas
+        i_imp      = col_index(header, "Impressões", "Impressoes", "Impressions",
+                                "Impressões Totais", "Impressoes Totais")
+        i_cliques  = col_index(header, "Cliques", "Clicks")
+        i_vis      = col_index(header, "Visualizações", "Visualizacoes", "Views",
+                                "Visualizações CPV", "Visualizacoes CPV")
+        i_vis_comp = col_index(header, "Visualizações Completas",
+                                "Visualizacoes Completas", "Complete Views",
+                                "Completed Views", "Visualizações Completadas")
 
         if i_veiculo is None or i_categoria is None:
             continue
@@ -320,23 +366,38 @@ def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int
             veiculo   = str(row[i_veiculo]).strip()   if i_veiculo   < len(row) and row[i_veiculo]   else None
             categoria = str(row[i_categoria]).strip()  if i_categoria < len(row) and row[i_categoria] else None
             url       = str(row[i_url]).strip()        if i_url is not None and i_url < len(row) and row[i_url] else None
-            # Fallback: se coluna ausente cada linha conta como 1 impressão (1 ad serving)
-            impressoes = to_int(row[i_impressoes] if i_impressoes is not None and i_impressoes < len(row) else None) or 1
 
             if not veiculo or not categoria:
                 continue
 
+            def _metric(i_col) -> int:
+                if i_col is None or i_col >= len(row):
+                    return 0
+                return to_int(row[i_col]) or 0
+
+            v_cpm  = _metric(i_imp)
+            v_cpc  = _metric(i_cliques)
+            v_cpv  = _metric(i_vis)
+            v_cpcv = _metric(i_vis_comp)
+            total  = v_cpm + v_cpc + v_cpv + v_cpcv
+
+            veiculos_entregue[veiculo] += total
+
             cat_key = normaliza_categoria(categoria)
-            if cat_key:
-                veiculos_indevidas[veiculo][cat_key] = (
-                    veiculos_indevidas[veiculo].get(cat_key, 0) + impressoes
-                )
+            if not cat_key:
+                continue
 
-            veiculos_entregue[veiculo] += impressoes
+            for metric, val in (("cpm", v_cpm), ("cpc", v_cpc),
+                                ("cpv", v_cpv), ("cpcv", v_cpcv)):
+                if val > 0:
+                    indev[metric][veiculo][cat_key] = (
+                        indev[metric][veiculo].get(cat_key, 0) + val
+                    )
 
-            if url and cat_key:
+            if url and total > 0:
                 pool_count += 1
-                entry = {"url": url, "categoria": categoria, "veiculo": veiculo, "impressoes": impressoes}
+                entry = {"url": url, "categoria": categoria, "veiculo": veiculo,
+                         "impressoes": total}
                 if len(url_pool) < MAX_POOL:
                     url_pool.append(entry)
                 else:
@@ -346,10 +407,10 @@ def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int
 
     if not found_header:
         raise ValueError(
-            f"Header com 'Categoria' e 'Veículo' não encontrado em nenhuma sheet"
+            "Header com 'Categoria' e 'Veículo' não encontrado em nenhuma sheet"
         )
 
-    return veiculos_indevidas, veiculos_entregue, url_pool, pool_count
+    return indev, veiculos_entregue, url_pool, pool_count
 
 
 def parse_verif(
@@ -370,12 +431,12 @@ def parse_verif(
 
     if _is_flat_format(wb):
         formato = "adforce_verif_flat"
-        veiculos_indevidas, veiculos_entregue, url_pool, _ = _parse_verif_flat(
+        indev_by_metric, veiculos_entregue, url_pool, _ = _parse_verif_flat(
             wb, data_ini, data_fim
         )
     else:
         formato = "adforce_verif_multitab"
-        veiculos_indevidas, veiculos_entregue, url_pool, _ = _parse_verif_multitab(
+        indev_by_metric, veiculos_entregue, url_pool, _ = _parse_verif_multitab(
             wb, data_ini, data_fim
         )
 
@@ -391,7 +452,11 @@ def parse_verif(
             "cliques":           None,
             "viewables":         None,
             "viewability":       None,
-            "indevidas":         dict(veiculos_indevidas[veiculo]),
+            "indevidas":         {},   # resolved by engine from indevidas_* below
+            "indevidas_cpm":     dict(indev_by_metric["cpm"].get(veiculo, {})),
+            "indevidas_cpc":     dict(indev_by_metric["cpc"].get(veiculo, {})),
+            "indevidas_cpv":     dict(indev_by_metric["cpv"].get(veiculo, {})),
+            "indevidas_cpcv":    dict(indev_by_metric["cpcv"].get(veiculo, {})),
             "url_sample":        url_pool if not results else [],
             "formato_detectado": formato,
         })

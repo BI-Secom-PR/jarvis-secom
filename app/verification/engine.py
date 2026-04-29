@@ -57,31 +57,32 @@ FUZZY_THRESHOLD  = 85     # % mínimo para aceitar match de veículo
 HEADER_ROW       = 8      # linha 1-indexed do cabeçalho no template
 DATA_START_ROW   = 9      # primeira linha de dados (1-indexed)
 
-# Mapeamento col_index(1-based) → chave interna  [template 29 colunas]
+# Mapeamento col_index(1-based) → chave interna  [template 30 colunas]
 COL_VEICULO        = 1
 COL_PRACA          = 2
 COL_TIPO_COMPRA    = 3
-COL_CONTRATADO     = 4
-COL_IMPRESSOES     = 5
-COL_CLIQUES        = 7
-COL_VIEWS          = 9
-COL_VIEWABLES      = 11
-COL_VIEWABILITY    = 12
-COL_ENTREGAS_VAL   = 13
+COL_OBJETIVO_MIDIA = 4   # novo — CPM / CPC / CPV / CPCV
+COL_CONTRATADO     = 5
+COL_IMPRESSOES     = 6
+COL_CLIQUES        = 8
+COL_VIEWS          = 10
+COL_VIEWABLES      = 12
+COL_VIEWABILITY    = 13
+COL_ENTREGAS_VAL   = 14
 COL_INDEVIDAS = {
-    "conteudo_sensivel":  14,   # novo — Conteúdo Sensível (agregado)
-    "acidente":           15,
-    "violencia":          16,
-    "lingua_estrangeira": 17,
-    "pornografia":        18,
-    "safeframe":          19,
-    "app_movel":          20,
-    "teste_tag":          21,
-    "nao_classificado":   22,
+    "conteudo_sensivel":  15,   # Conteúdo Sensível (agregado)
+    "acidente":           16,
+    "violencia":          17,
+    "lingua_estrangeira": 18,
+    "pornografia":        19,
+    "safeframe":          20,
+    "app_movel":          21,
+    "teste_tag":          22,
+    "nao_classificado":   23,
 }
-COL_DEVOLUTIVA_BI      = 28   # era 27
-COL_DEVOLUTIVA_AGENCIA = 29   # era 28
-COL_URL_INFO           = 30   # novo — levantamento IA de URLs indevidas
+COL_DEVOLUTIVA_BI      = 29
+COL_DEVOLUTIVA_AGENCIA = 30
+COL_URL_INFO           = 31
 
 
 # ── Detecção dinâmica de colunas por header ────────────────────────────────────
@@ -189,9 +190,9 @@ def _read_consolidado(ws) -> tuple[list[dict], int]:
         if not veiculo or not str(veiculo).strip():
             continue
 
-        tipo = str(_cell_value(ws, row_idx, COL_TIPO_COMPRA) or "").strip().upper()
+        tipo     = str(_cell_value(ws, row_idx, COL_TIPO_COMPRA) or "").strip().upper()
+        objetivo = str(_cell_value(ws, row_idx, COL_OBJETIVO_MIDIA) or "").strip().upper()
 
-        # Entregue: sempre col 5 (Impressões) — col 9 (Views) é numerador do VTR, não entrega
         entregue = _to_int_safe(_cell_value(ws, row_idx, COL_IMPRESSOES))
         views    = _to_int_safe(_cell_value(ws, row_idx, COL_VIEWS))
 
@@ -208,16 +209,17 @@ def _read_consolidado(ws) -> tuple[list[dict], int]:
             viewability_val = None
 
         rows.append({
-            "row_idx":    row_idx,
-            "veiculo":    str(veiculo).strip(),
-            "tipo_compra": tipo or None,
-            "contratado": _to_int_safe(_cell_value(ws, row_idx, COL_CONTRATADO)),
-            "entregue":   entregue,
-            "views":      views,
-            "cliques":    _to_int_safe(_cell_value(ws, row_idx, COL_CLIQUES)),
-            "viewables":  _to_int_safe(_cell_value(ws, row_idx, COL_VIEWABLES)),
-            "viewability": viewability_val,
-            "indevidas":  indevidas,
+            "row_idx":       row_idx,
+            "veiculo":       str(veiculo).strip(),
+            "tipo_compra":   tipo or None,
+            "objetivo_midia": objetivo or None,
+            "contratado":    _to_int_safe(_cell_value(ws, row_idx, COL_CONTRATADO)),
+            "entregue":      entregue,
+            "views":         views,
+            "cliques":       _to_int_safe(_cell_value(ws, row_idx, COL_CLIQUES)),
+            "viewables":     _to_int_safe(_cell_value(ws, row_idx, COL_VIEWABLES)),
+            "viewability":   viewability_val,
+            "indevidas":     indevidas,
         })
 
     return rows, col_dev_bi
@@ -318,7 +320,12 @@ def _compare(
     consol_indev = consol_row.get("indevidas", {})
 
     if verif_result is not None:
-        verif_indev = verif_result.get("indevidas", {})
+        # Multi-metric format: resolve indevidas by objetivo_midia
+        if "indevidas_cpm" in verif_result:
+            obj = (consol_row.get("objetivo_midia") or "cpm").lower()
+            verif_indev = verif_result.get(f"indevidas_{obj}", {})
+        else:
+            verif_indev = verif_result.get("indevidas", {})
         indev_linhas: list[str] = []
         alguma_indevida_com_dado = False
 
