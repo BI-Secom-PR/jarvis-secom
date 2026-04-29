@@ -289,7 +289,7 @@ def _compare(
 
     # ── Campos do comprovante ─────────────────────────────────────────────────
     if comp_result is not None:
-        for campo in ("entregue", "cliques", "viewables"):
+        for campo in ("entregue", "cliques", "views", "viewables"):
             comp_val   = comp_result.get(campo) or 0
             consol_val = consol_row.get(campo)  or 0
             if comp_val == 0:
@@ -366,7 +366,7 @@ def _compare(
         linhas.append(f"OK cliques: {_fmt_num(cliques_c)}")
     if impressoes_c and cliques_c:
         linhas.append(f"OK CTR: {cliques_c / impressoes_c * 100:.2f}%")
-    if views_c:
+    if "views" not in reported and views_c:
         linhas.append(f"OK views: {_fmt_num(views_c)}")
     if impressoes_c and views_c:
         linhas.append(f"OK VTR: {views_c / impressoes_c * 100:.2f}%")
@@ -377,6 +377,27 @@ def _compare(
 
     if not linhas:
         return "OK", ["OK — sem dados para comparar"]
+
+    # ── Delta comprovante vs verification (sempre ao final) ───────────────────────
+    if comp_result is not None and verif_result is not None:
+        comp_imp   = comp_result.get("entregue") or 0
+        verif_imp  = verif_result.get("entregue") or 0
+        comp_views = comp_result.get("views") or 0
+        verif_views = verif_result.get("views") or 0
+        if comp_imp and verif_imp:
+            delta = comp_imp - verif_imp
+            pct   = delta / comp_imp * 100
+            linhas.append(
+                f"DIF impressoes: comp {_fmt_num(comp_imp)} / "
+                f"verif {_fmt_num(verif_imp)} = {_fmt_num(delta)} ({pct:+.1f}%)"
+            )
+        if comp_views and verif_views:
+            delta = comp_views - verif_views
+            pct   = delta / comp_views * 100
+            linhas.append(
+                f"DIF views: comp {_fmt_num(comp_views)} / "
+                f"verif {_fmt_num(verif_views)} = {_fmt_num(delta)} ({pct:+.1f}%)"
+            )
 
     return ("DIVERGENCIA" if tem_divergencia else "OK"), linhas
 

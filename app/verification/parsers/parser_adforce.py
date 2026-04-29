@@ -36,14 +36,16 @@ def _normalize_va(v) -> float | None:
 
 
 def _find_header(ws):
-    """Varre até 25 linhas buscando Impressões/Entregues (Veículo é opcional)."""
+    """Varre até 25 linhas buscando Impressões/Entregues com pelo menos uma coluna âncora."""
     entregue_variants = {"impressões", "impressoes", "impressions",
                          "entregues", "entregue", "entregues/impressões",
                          "entregues/impressoes", "views"}
+    # Colunas âncora: confirmam que é um header de tabela, não um label de metadado
+    anchor_variants = {"veículo", "veiculo", "vehicle", "placement", "data", "date", "formato", "canal"}
     for i, row in enumerate(ws.iter_rows(max_row=25, values_only=True), start=1):
         vals = [str(v).strip() if v is not None else "" for v in row]
         lows = {v.lower() for v in vals}
-        if lows & entregue_variants:
+        if (lows & entregue_variants) and (lows & anchor_variants):
             return i, vals
     return None, []
 
@@ -58,7 +60,7 @@ def _find_verif_header(ws):
     return None, []
 
 
-SKIP_VEHICLE_NAMES = {"---", "grand total:", "grand total", "total"}
+SKIP_VEHICLE_NAMES = {"---", "-", "grand total:", "grand total", "total"}
 
 
 # ── parse_comprovante ────────────────────────────────────────────────────────────
@@ -73,7 +75,10 @@ def parse_comprovante(
     if not path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
 
-    wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+    try:
+        wb = openpyxl.load_workbook(str(path), data_only=True)
+    except Exception:
+        wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
     ws = wb.worksheets[0]
 
     header_row_idx, header = _find_header(ws)
@@ -88,6 +93,7 @@ def parse_comprovante(
                               "Entregues", "Entregue",
                               "Entregues/Impressões", "Entregues/Impressoes")
     i_cliques    = col_index(header, "Cliques", "Clicks", "Cliques Únicos")
+    i_views50    = col_index(header, "50%")
     i_viewable   = col_index(header, "Viewable", "Viewables")
     i_viewability= col_index(header, "VA%", "Viewability", "VA %", "View%",
                               "Viewability (IAB)", "VA (IAB)")
@@ -107,6 +113,7 @@ def parse_comprovante(
 
     entregue:   dict[str, int]   = defaultdict(int)
     cliques:    dict[str, int]   = defaultdict(int)
+    views50:    dict[str, int]   = defaultdict(int)
     viewables:  dict[str, int]   = defaultdict(int)
     contratado: dict[str, int]   = {}
     viewability:dict[str, float] = {}
@@ -137,18 +144,22 @@ def parse_comprovante(
                 if data_fim and d > data_fim:
                     continue
 
-        imp = to_int(row[i_impressoes] if i_impressoes < len(row) else None)
-        if imp == 0:
+        imp      = to_int(row[i_impressoes] if i_impressoes < len(row) else None)
+        cliq_val = to_int(row[i_cliques]   if i_cliques  is not None and i_cliques  < len(row) else None)
+        v50_val  = to_int(row[i_views50]   if i_views50  is not None and i_views50  < len(row) else None)
+        va_val   = to_int(row[i_viewable]  if i_viewable is not None and i_viewable < len(row) else None)
+
+        if imp == 0 and cliq_val == 0 and v50_val == 0 and va_val == 0:
             continue
 
-        entregue[vname] += imp
-        if i_cliques is not None and i_cliques < len(row):
-            cliques[vname] += to_int(row[i_cliques])
-        if i_viewable is not None and i_viewable < len(row):
-            viewables[vname] += to_int(row[i_viewable])
-        if i_viewability is not None and i_viewability < len(row):
+        if imp:
+            entregue[vname] += imp
+        cliques[vname]  += cliq_val
+        views50[vname]  += v50_val
+        viewables[vname] += va_val
+        if i_viewability is not None and i_viewability < len(row) and imp > 0:
             va = _normalize_va(row[i_viewability])
-            if va is not None and imp > 0:
+            if va is not None:
                 va_wsum[vname]   += va * imp
                 va_weight[vname] += imp
 
@@ -174,6 +185,7 @@ def parse_comprovante(
             "contratado":        contratado.get(vname),
             "entregue":          imp,
             "cliques":           cliques[vname] or None,
+            "views":             views50[vname] or None,
             "viewables":         viewables[vname] or None,
             "viewability":       viewability.get(vname),
             "indevidas":         {},
@@ -444,11 +456,13 @@ def parse_verif(
 
     results: list[dict] = []
     for veiculo in veiculos_entregue:
+        cpv_total = sum(indev_by_metric["cpv"].get(veiculo, {}).values())
         results.append({
             "veiculo":           veiculo,
             "tipo_compra":       None,
             "contratado":        None,
             "entregue":          veiculos_entregue[veiculo],
+            "views":             cpv_total or None,
             "cliques":           None,
             "viewables":         None,
             "viewability":       None,
