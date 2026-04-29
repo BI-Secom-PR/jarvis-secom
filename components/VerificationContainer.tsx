@@ -131,7 +131,7 @@ function FileDrop({
 }
 
 // Regex: captura (prefixo) (campo) (resto) de linhas da devolutiva
-const DEVOLUTIVA_LINE_RE = /^(OK|DIV|\?)\s+([^:]+):(.*)$/;
+const DEVOLUTIVA_LINE_RE = /^(OK|DIV|DIF|\?)\s+([^:]+):(.*)$/;
 
 function DevolutivaLines({ text }: { text: string }) {
   const lines = text.split("\n").filter(Boolean);
@@ -143,9 +143,19 @@ function DevolutivaLines({ text }: { text: string }) {
           const [, prefix, campo, rest] = m;
           const isOk  = prefix === "OK";
           const isDiv = prefix === "DIV";
+          const isDifImpressoes = prefix === "DIF" && campo.trim().toLowerCase() === "impressoes";
+          const pctMatch = rest.match(/\(([+-]?\d+(?:[.,]\d+)?)%\)/);
+          const pctValue = pctMatch
+            ? Number.parseFloat(pctMatch[1].replace(",", "."))
+            : null;
+          const shouldHighlightDifImpressoes =
+            isDifImpressoes &&
+            typeof pctValue === "number" &&
+            Number.isFinite(pctValue) &&
+            Math.abs(pctValue) > 5;
           const color = isOk
             ? "text-emerald-400"
-            : isDiv
+            : isDiv || shouldHighlightDifImpressoes
             ? "text-rose-400"
             : "text-amber-400/70";
           return (
