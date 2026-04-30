@@ -37,6 +37,14 @@ def parse_date(v) -> date | None:
                 return datetime.strptime(s[:10], fmt).date()
             except ValueError:
                 pass
+    # Excel serial number stored as float (openpyxl returns raw float for unformatted date cells)
+    if isinstance(v, (int, float)) and 1 < float(v) < 2958466:
+        try:
+            from openpyxl.utils.datetime import from_excel
+            result = from_excel(float(v))
+            return result.date() if isinstance(result, datetime) else result
+        except Exception:
+            pass
     return None
 
 

@@ -12,9 +12,12 @@ Verification:
   Categorias podem ser compostas, ex.: "Acidentes, violência, crime".
 """
 
+import io
 import json
 import random
+import re
 import sys
+import zipfile
 from collections import defaultdict
 from datetime import date
 from pathlib import Path
@@ -26,6 +29,28 @@ from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehi
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
+
+_NAN_CELL_RE = re.compile(rb"<v>NaN</v>", re.IGNORECASE)
+
+
+def _load_workbook_safe(path: str, read_only: bool = False) -> openpyxl.Workbook:
+    """Loads workbook, sanitizing NaN cell values that crash openpyxl."""
+    try:
+        return openpyxl.load_workbook(path, read_only=read_only, data_only=True)
+    except Exception:
+        pass
+    # Sanitize <v>NaN</v> in worksheet XML, then retry
+    buf = io.BytesIO()
+    with zipfile.ZipFile(path, "r") as zin:
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                if item.filename.startswith("xl/worksheets/"):
+                    data = _NAN_CELL_RE.sub(b"", data)
+                zout.writestr(item, data)
+    buf.seek(0)
+    return openpyxl.load_workbook(buf, read_only=read_only, data_only=True)
+
 
 def _normalize_va(v) -> float | None:
     """Decimal (0.622) → percentagem (62.2). Mantém se já > 1."""
@@ -75,10 +100,7 @@ def parse_comprovante(
     if not path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
 
-    try:
-        wb = openpyxl.load_workbook(str(path), data_only=True)
-    except Exception:
-        wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+    wb = _load_workbook_safe(str(path))
     ws = wb.worksheets[0]
 
     header_row_idx, header = _find_header(ws)
@@ -89,9 +111,12 @@ def parse_comprovante(
         )
 
     i_veiculo    = col_index(header, "Veículo", "Veiculo", "Vehicle")
+    # Prefer "Impressões" over "Entregues": for CPV files both columns exist and
+    # "Impressões" is the ad displays (= consolidado col 5), while "Entregues" = plays.
     i_impressoes = col_index(header, "Impressões", "Impressoes", "Impressions",
-                              "Entregues", "Entregue",
                               "Entregues/Impressões", "Entregues/Impressoes")
+    if i_impressoes is None:
+        i_impressoes = col_index(header, "Entregues", "Entregue")
     i_cliques    = col_index(header, "Cliques", "Clicks", "Cliques Únicos")
     i_views50    = col_index(header, "0%")
     i_viewable   = col_index(header, "Viewable", "Viewables")
@@ -415,7 +440,7 @@ def parse_verif(
     if not path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
 
-    wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+    wb = _load_workbook_safe(str(path), read_only=True)
 
     if _is_flat_format(wb):
         formato = "adforce_verif_flat"
