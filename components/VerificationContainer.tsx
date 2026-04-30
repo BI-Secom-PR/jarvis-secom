@@ -133,6 +133,16 @@ function FileDrop({
 // Regex: captura (prefixo) (campo) (resto) de linhas da devolutiva
 const DEVOLUTIVA_LINE_RE = /^(OK|DIV|DIF|\?)\s+([^:]+):(.*)$/;
 
+function difColorByPct(pctValue: number | null): string {
+  if (typeof pctValue !== "number" || !Number.isFinite(pctValue)) {
+    return "text-amber-400/70";
+  }
+  const absPct = Math.abs(pctValue);
+  if (absPct === 0) return "text-[#00fff7]";
+  if (absPct <= 5) return "text-[#ffae00]";
+  return "text-[#ff1c1c]";
+}
+
 function DevolutivaLines({ text }: { text: string }) {
   const lines = text.split("\n").filter(Boolean);
   return (
@@ -143,20 +153,17 @@ function DevolutivaLines({ text }: { text: string }) {
           const [, prefix, campo, rest] = m;
           const isOk  = prefix === "OK";
           const isDiv = prefix === "DIV";
-          const isDifImpressoes = prefix === "DIF" && campo.trim().toLowerCase() === "impressoes";
+          const isDif = prefix === "DIF";
           const pctMatch = rest.match(/\(([+-]?\d+(?:[.,]\d+)?)%\)/);
           const pctValue = pctMatch
             ? Number.parseFloat(pctMatch[1].replace(",", "."))
             : null;
-          const shouldHighlightDifImpressoes =
-            isDifImpressoes &&
-            typeof pctValue === "number" &&
-            Number.isFinite(pctValue) &&
-            Math.abs(pctValue) > 5;
           const color = isOk
             ? "text-emerald-400"
-            : isDiv || shouldHighlightDifImpressoes
+            : isDiv
             ? "text-rose-400"
+            : isDif
+            ? difColorByPct(pctValue)
             : "text-amber-400/70";
           return (
             <div key={i} className="text-xs leading-relaxed">

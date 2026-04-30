@@ -23,7 +23,7 @@ from pathlib import Path
 import openpyxl
 
 from category_map import INDEVIDAS_ZERO, normaliza_categoria
-from parser_utils import col_index, parse_date, to_int, cli_date
+from parser_utils import col_index, parse_date, to_int, cli_date, vehicle_from_filename
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -84,9 +84,10 @@ def parse_comprovante(
     i_contratado = col_index(header, "Contratado", "Contracted")
     i_data       = col_index(header, "Data", "Date")
 
-    if i_veiculo is None or i_impressoes is None:
+    if i_impressoes is None:
         wb.close()
-        raise ValueError(f"Colunas obrigatórias ausentes: {path.name}")
+        raise ValueError(f"Coluna obrigatória ausente (Impressões): {path.name}")
+    fallback_vehicle = vehicle_from_filename(filepath)
 
     entregue:   dict[str, int]   = defaultdict(int)
     cliques:    dict[str, int]   = defaultdict(int)
@@ -98,12 +99,10 @@ def parse_comprovante(
         if all(v is None for v in row):
             continue
 
-        veiculo_raw = row[i_veiculo] if i_veiculo < len(row) else None
-        if veiculo_raw is None:
-            continue
-        vname = str(veiculo_raw).strip()
+        veiculo_raw = row[i_veiculo] if i_veiculo is not None and i_veiculo < len(row) else None
+        vname = str(veiculo_raw).strip() if veiculo_raw is not None else ""
         if not vname:
-            continue
+            vname = fallback_vehicle
 
         # Linha #TOTAL → apenas contratado (viewability calculado de viewables/entregue)
         if "#TOTAL" in vname.upper():

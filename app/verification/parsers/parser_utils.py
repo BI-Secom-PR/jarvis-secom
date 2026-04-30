@@ -3,6 +3,8 @@ Utilitários compartilhados pelos parsers de verification/comprovante.
 """
 
 from datetime import date, datetime
+from pathlib import Path
+import re
 
 
 def to_int(v) -> int:
@@ -56,3 +58,18 @@ def cli_date(s: str | None) -> date | None:
         except ValueError:
             pass
     return None
+
+
+def vehicle_from_filename(filepath: str) -> str:
+    """
+    Inferência simples de veículo via nome do arquivo.
+    Prioriza o último segmento após " - " e remove sufixos comuns.
+    """
+    stem = Path(filepath).stem.strip()
+    if " - " in stem:
+        candidate = stem.split(" - ")[-1].strip()
+    else:
+        candidate = stem
+    candidate = re.sub(r"\b(comprovante|verification|verificacao|relatorio)\b", "", candidate, flags=re.IGNORECASE)
+    candidate = re.sub(r"\s+", " ", candidate).strip(" _-")
+    return candidate or stem

@@ -32,7 +32,7 @@ from pathlib import Path
 
 import openpyxl
 
-from parser_utils import col_index, parse_date, to_float, to_int, cli_date
+from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename
 
 
 def _find_header(ws) -> tuple[int | None, list[str]]:
@@ -85,11 +85,12 @@ def parse(
     i_contratado = col_index(header, "Contratado", "Contracted")
     i_data       = col_index(header, "Data", "Date")
 
-    if i_veiculo is None or i_impressoes is None:
+    if i_impressoes is None:
         wb.close()
         raise ValueError(
-            f"Colunas obrigatórias ausentes (Veículo/Impressões): {path.name}"
+            f"Coluna obrigatória ausente (Impressões): {path.name}"
         )
+    fallback_vehicle = vehicle_from_filename(filepath)
 
     # Acumuladores por veículo
     entregue:    dict[str, int]          = defaultdict(int)
@@ -103,12 +104,10 @@ def parse(
         if all(v is None for v in row):
             continue
 
-        veiculo_raw = row[i_veiculo] if i_veiculo < len(row) else None
-        if veiculo_raw is None:
-            continue
-        vname = str(veiculo_raw).strip()
+        veiculo_raw = row[i_veiculo] if i_veiculo is not None and i_veiculo < len(row) else None
+        vname = str(veiculo_raw).strip() if veiculo_raw is not None else ""
         if not vname:
-            continue
+            vname = fallback_vehicle
 
         # Linha de total (#TOTAL POR VEÍCULO): extrair Contratado e VA%
         # associados ao último veículo real visto antes desta linha

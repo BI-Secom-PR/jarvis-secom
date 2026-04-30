@@ -309,6 +309,8 @@ def _compare(
             else:
                 ref = f"{consol_va:.2f}%" if consol_va is not None else "—"
                 linhas.append(f"OK viewability: {comp_va:.2f}% (consolidado {ref})")
+    else:
+        linhas.append("? comprovante: veiculo nao localizado")
 
     # ── Indevidas ──────────────────────────────────────────────────────────────
     consol_indev = consol_row.get("indevidas", {})
@@ -367,36 +369,37 @@ def _compare(
     if not linhas:
         return "OK", ["OK — sem dados para comparar"]
 
-    # ── Delta comprovante vs verification (sempre ao final) ───────────────────────
-    if comp_result is not None and verif_result is not None:
-        comp_imp    = comp_result.get("entregue") or 0
+    # ── Delta (comp/consol) vs verification (sempre ao final) ──────────────────
+    if verif_result is not None:
+        base_imp    = (comp_result.get("entregue") if comp_result is not None else consol_row.get("entregue")) or 0
         verif_imp   = verif_result.get("entregue") or 0
-        comp_views  = comp_result.get("views") or 0
-        verif_views = verif_result.get("views") or 0
+        base_views  = (comp_result.get("views") if comp_result is not None else consol_row.get("views")) or 0
+        # Alguns verifs reportam contagem equivalente em "entregue".
+        verif_views = (verif_result.get("views") or verif_imp or 0)
+        base_label  = "comp" if comp_result is not None else "consol"
 
-        # Regra: quando o consolidado traz views, mostramos apenas DIF views
-        # usando o delta principal de entrega (comp vs verif).
+        # Regra: se houver views no consolidado, o DIF principal deve usar views.
         if consol_row.get("views"):
-            if comp_imp and verif_imp:
-                delta = comp_imp - verif_imp
-                pct   = delta / comp_imp * 100
+            if base_views and verif_views:
+                delta = base_views - verif_views
+                pct   = delta / base_views * 100
                 linhas.append(
-                    f"DIF views: comp {_fmt_num(comp_imp)} / "
-                    f"verif {_fmt_num(verif_imp)} = {_fmt_num(delta)} ({pct:+.1f}%)"
+                    f"DIF views: {base_label} {_fmt_num(base_views)} / "
+                    f"verif {_fmt_num(verif_views)} = {_fmt_num(delta)} ({pct:+.1f}%)"
                 )
         else:
-            if comp_imp and verif_imp:
-                delta = comp_imp - verif_imp
-                pct   = delta / comp_imp * 100
+            if base_imp and verif_imp:
+                delta = base_imp - verif_imp
+                pct   = delta / base_imp * 100
                 linhas.append(
-                    f"DIF impressoes: comp {_fmt_num(comp_imp)} / "
+                    f"DIF impressoes: {base_label} {_fmt_num(base_imp)} / "
                     f"verif {_fmt_num(verif_imp)} = {_fmt_num(delta)} ({pct:+.1f}%)"
                 )
-            if comp_views and verif_views:
-                delta = comp_views - verif_views
-                pct   = delta / comp_views * 100
+            if base_views and verif_views:
+                delta = base_views - verif_views
+                pct   = delta / base_views * 100
                 linhas.append(
-                    f"DIF views: comp {_fmt_num(comp_views)} / "
+                    f"DIF views: {base_label} {_fmt_num(base_views)} / "
                     f"verif {_fmt_num(verif_views)} = {_fmt_num(delta)} ({pct:+.1f}%)"
                 )
 

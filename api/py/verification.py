@@ -90,7 +90,11 @@ def _run_engine(body: dict) -> dict:
         adserver = body["adserver"]
         data_ini = _parse_date(body.get("ini"))
         data_fim = _parse_date(body.get("fim"))
-        output_path = os.path.join(tmpdir, "output_verificado.xlsx")
+        consol_filename = os.path.basename(consol_name)
+        consol_path_obj = Path(consol_filename)
+        suffix = consol_path_obj.suffix or ".xlsx"
+        output_filename = f"{consol_path_obj.stem}_verificado{suffix}"
+        output_path = os.path.join(tmpdir, output_filename)
 
         result = verificar(
             consolidado_path=consol_path,

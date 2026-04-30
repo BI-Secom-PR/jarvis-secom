@@ -22,7 +22,7 @@ from pathlib import Path
 import openpyxl
 
 from category_map import INDEVIDAS_ZERO, normaliza_categoria
-from parser_utils import col_index, parse_date, to_float, to_int, cli_date
+from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
 
@@ -90,6 +90,7 @@ def parse_comprovante(
     va_weight:   dict[str, int]   = defaultdict(int)
     last_vehicle: str | None      = None
     found_header  = False
+    fallback_vehicle = vehicle_from_filename(filepath)
 
     for ws in sheets:
         header_row_idx, header = _find_header(ws)
@@ -107,19 +108,17 @@ def parse_comprovante(
         i_contratado = col_index(header, "Contratado", "Contracted")
         i_data       = col_index(header, "Data", "Date")
 
-        if i_veiculo is None or i_impressoes is None:
+        if i_impressoes is None:
             continue
 
         for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
             if all(v is None for v in row):
                 continue
 
-            veiculo_raw = row[i_veiculo] if i_veiculo < len(row) else None
-            if veiculo_raw is None:
-                continue
-            vname = str(veiculo_raw).strip()
+            veiculo_raw = row[i_veiculo] if i_veiculo is not None and i_veiculo < len(row) else None
+            vname = str(veiculo_raw).strip() if veiculo_raw is not None else ""
             if not vname:
-                continue
+                vname = fallback_vehicle
             if vname.lower() in SKIP_VEHICLE_NAMES:
                 continue
             if vname.endswith(" Total") or vname.endswith(" total"):

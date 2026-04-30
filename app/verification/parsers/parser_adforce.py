@@ -22,7 +22,7 @@ from pathlib import Path
 import openpyxl
 
 from category_map import INDEVIDAS_ZERO, normaliza_categoria
-from parser_utils import col_index, parse_date, to_float, to_int, cli_date
+from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -104,12 +104,8 @@ def parse_comprovante(
         wb.close()
         raise ValueError(f"Coluna de Impressões/Entregues não encontrada: {path.name}")
 
-    # Arquivo de veículo único: infere nome do veículo pelo nome do arquivo
-    # Ex.: "CAMPANHA BAHIA - Teads.xlsx" → "Teads"
-    single_vehicle: str | None = None
-    if i_veiculo is None:
-        stem = path.stem
-        single_vehicle = stem.split(" - ")[-1].strip() if " - " in stem else stem
+    # Arquivo de veículo único: infere nome do veículo pelo nome do arquivo.
+    single_vehicle = vehicle_from_filename(filepath)
 
     entregue:   dict[str, int]   = defaultdict(int)
     cliques:    dict[str, int]   = defaultdict(int)
@@ -126,10 +122,10 @@ def parse_comprovante(
 
         if i_veiculo is not None:
             veiculo_raw = row[i_veiculo] if i_veiculo < len(row) else None
-            if veiculo_raw is None:
-                continue
-            vname = str(veiculo_raw).strip()
-            if not vname or vname.lower() in SKIP_VEHICLE_NAMES:
+            vname = str(veiculo_raw).strip() if veiculo_raw is not None else ""
+            if not vname:
+                vname = single_vehicle
+            elif vname.lower() in SKIP_VEHICLE_NAMES:
                 continue
             if vname.endswith(" Total") or vname.endswith(" total"):
                 continue
@@ -138,14 +134,13 @@ def parse_comprovante(
 
         if i_data is not None and i_data < len(row):
             raw_date = row[i_data]
-            if raw_date is not None:
-                d = parse_date(raw_date)
-                if d is None:
-                    continue  # linha de total/subtotal (ex: 'NaN', 'Total')
-                if data_ini and d < data_ini:
-                    continue
-                if data_fim and d > data_fim:
-                    continue
+            d = parse_date(raw_date)
+            if d is None:
+                continue  # linha de total/subtotal ou data vazia (evita dupla contagem)
+            if data_ini and d < data_ini:
+                continue
+            if data_fim and d > data_fim:
+                continue
 
         imp      = to_int(row[i_impressoes] if i_impressoes < len(row) else None)
         cliq_val = to_int(row[i_cliques]   if i_cliques  is not None and i_cliques  < len(row) else None)
@@ -222,12 +217,12 @@ def _is_flat_format(wb) -> bool:
     return "campaignuuid" in vals
 
 
-def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int, dict]:
+def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int, dict, dict]:
     """
     Parseia o formato flat ADFORCE (Result 1, header na linha 1).
     Indevidas = soma de CPM+CPC+CPV+CPCV por categoria (apenas uma terá valor por linha).
-    Retorna (indev, entregue_dict, url_pool, pool_count, cpv_indev).
-    cpv_indev é separado para a linha DIF views.
+    Retorna (indev, entregue_dict, url_pool, pool_count, cpv_indev, cpv_total_by_vehicle).
+    cpv_indev é separado para indevidas; cpv_total_by_vehicle alimenta DIF views.
     """
     ws = wb.worksheets[0]
     header = [str(v).strip() if v is not None else "" for v in
@@ -247,6 +242,7 @@ def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int, di
 
     indev:     dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     cpv_indev: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    cpv_total_by_vehicle: dict[str, int] = defaultdict(int)
     veiculos_entregue: dict[str, int] = defaultdict(int)
     MAX_POOL = 500
     url_pool: list[dict] = []
@@ -283,6 +279,7 @@ def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int, di
         total_val = v_cpm + v_cpc + v_cpv + v_cpcv
 
         veiculos_entregue[veiculo] += total_val
+        cpv_total_by_vehicle[veiculo] += v_cpv
 
         if not categoria:
             continue
@@ -307,7 +304,7 @@ def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int, di
                 if idx < MAX_POOL:
                     url_pool[idx] = entry
 
-    return indev, veiculos_entregue, url_pool, pool_count, cpv_indev
+    return indev, veiculos_entregue, url_pool, pool_count, cpv_indev, cpv_total_by_vehicle
 
 
 def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int, dict]:
@@ -422,7 +419,7 @@ def parse_verif(
 
     if _is_flat_format(wb):
         formato = "adforce_verif_flat"
-        indev, veiculos_entregue, url_pool, _, cpv_indev = _parse_verif_flat(
+        indev, veiculos_entregue, url_pool, _, cpv_indev, cpv_total = _parse_verif_flat(
             wb, data_ini, data_fim
         )
     else:
@@ -430,17 +427,20 @@ def parse_verif(
         indev, veiculos_entregue, url_pool, _, cpv_indev = _parse_verif_multitab(
             wb, data_ini, data_fim
         )
+        cpv_total = {}
 
     wb.close()
 
     results: list[dict] = []
     for veiculo in veiculos_entregue:
-        cpv_total = sum(cpv_indev.get(veiculo, {}).values())
+        cpv_total_vehicle = cpv_total.get(veiculo) if formato == "adforce_verif_flat" else None
+        if cpv_total_vehicle is None:
+            cpv_total_vehicle = sum(cpv_indev.get(veiculo, {}).values())
         results.append({
             "veiculo":           veiculo,
             "contratado":        None,
             "entregue":          veiculos_entregue[veiculo],
-            "views":             cpv_total or None,
+            "views":             cpv_total_vehicle or None,
             "cliques":           None,
             "viewables":         None,
             "viewability":       None,
