@@ -67,6 +67,7 @@ COLUNAS COMPARTILHADAS (todas as tabelas):
   Performance:   impressions BIGINT, clicks BIGINT, reach BIGINT,
                  engagements BIGINT, conversions BIGINT
   Social:        likes, comments, shares, reactions (Meta only), saves
+  Engajamento Real (Meta only): soma de likes + comments + shares + reactions + saves. Se estas métricas não existirem, use engagements.
   Vídeo:         video_views, video_plays, video_2s, video_30s,
                  video_p25, video_p50, video_p75, video_p95, video_p100, video_completions
 
@@ -140,7 +141,7 @@ KPIs COMUNS:
   CPA  = SUM(cost)/NULLIF(SUM(conversions),0)
   VCR  = SUM(video_p100)/NULLIF(SUM(impressions),0)*100
   CPV  = SUM(cost)/NULLIF(SUM(video_views),0)  [kwai/linkedin: usar video_completions]
-  TPR  = SUM(video_views)/NULLIF(SUM(impressions),0)*100  [kwai: video_completions]
+  VTR  = SUM(video_views)/NULLIF(SUM(impressions),0)*100  [kwai: video_completions]
   VTRc = SUM(video_p100)/NULLIF(SUM(impressions),0)*100   [linkedin: video_completions]
 
 ═══════════════════════════════════════════════
@@ -252,30 +253,30 @@ Fonte: gold DB jan/2025–abr/2026 + doc. oficial SECOM Set/2025. Todos os custo
 ═══════════════════════════════════════════════
 
 META (obj gold → THRUPLAY/REACH/POST_ENGAGEMENT/LINK_CLICKS):
-  Visualizações (THRUPLAY)      → CPV R$0,06 | TPR 12,19% | VTRc 4,87% | CPM R$7,87
+  Visualizações (THRUPLAY)      → CPV R$0,06 | VTR 12,19% | VTRc 4,87% | CPM R$7,87
   Alcance (REACH)               → CPM R$2,21 | CPC R$0,99
   Engajamento (POST_ENGAGEMENT) → CPE R$0,03 | CPM R$8,04 | CTR 1,32%
   Tráfego (LINK_CLICKS)         → CPC R$0,35 | CTR 1,57% | CPM R$5,44
 
 GOOGLE (obj gold → TARGET_CPV/TARGET_SPEND/MAXIMIZE_CONVERSIONS/TARGET_CPA):
-  YouTube/Viz (TARGET_CPV)      → CPV R$0,02 | TPR 33,54% | CPM R$7,29 | CTR 0,18%
+  YouTube/Viz (TARGET_CPV)      → CPV R$0,02 | VTR 33,54% | CPM R$7,29 | CTR 0,18%
   Display (TARGET_SPEND)        → CPC R$0,24 | CTR 2,46% | CPM R$6,02
   Search (MAXIMIZE_CONVERSIONS) → CPC R$0,47 | CPM R$2,76
   GDN/Demanda (TARGET_CPA)      → CPC R$0,17 | CTR 1,99% | CPM R$3,47
 
-KWAI (CPV/TPR via video_completions — obj → Community Interaction/Awareness/Consideration):
-  Visualizações (Community Interaction) → CPM R$6,35 | CPV R$0,53 | TPR 1,20%
-  Alcance (Awareness)                   → CPM R$3,20 | CPV R$0,18 | TPR 1,76% | CTR 0,14%
+KWAI (CPV/VTR via video_completions — obj → Community Interaction/Awareness/Consideration):
+  Visualizações (Community Interaction) → CPM R$6,35 | CPV R$0,53 | VTR 1,20%
+  Alcance (Awareness)                   → CPM R$3,20 | CPV R$0,18 | VTR 1,76% | CTR 0,14%
   Tráfego (Consideration)               → CPC R$0,87 | CTR 0,45% | CPM R$3,93
 
 TIKTOK (obj gold → VIDEO_VIEWS/REACH/TRAFFIC/ENGAGEMENT):
-  Visualizações (VIDEO_VIEWS)   → CPV R$0,04 | TPR 13,59% | VTRc 1,60% | CPM R$5,38
-  Alcance (REACH)               → CPV R$0,16 | TPR 1,84% | CPM R$2,99 | CTR 0,17%
+  Visualizações (VIDEO_VIEWS)   → CPV R$0,04 | VTR 13,59% | VTRc 1,60% | CPM R$5,38
+  Alcance (REACH)               → CPV R$0,16 | VTR 1,84% | CPM R$2,99 | CTR 0,17%
   Tráfego (TRAFFIC)             → CPC R$0,15 | CTR 3,08% | CPM R$4,52
 
 LINKEDIN (CPV/VTR via video_completions — obj → VIDEO_VIEW/BRAND_AWARENESS/WEBSITE_VISIT):
-  Visualizações (VIDEO_VIEW)    → CPV R$0,14 | TPR(2s) 27,04% | CPM R$37,51 | CTR 0,46%
-  Alcance (BRAND_AWARENESS)     → TPR(2s) 13,15% | CPM R$27,38 | CTR 0,47%
+  Visualizações (VIDEO_VIEW)    → CPV R$0,14 | VTR(2s) 27,04% | CPM R$37,51 | CTR 0,46%
+  Alcance (BRAND_AWARENESS)     → VTR(2s) 13,15% | CPM R$27,38 | CTR 0,47%
   Tráfego (WEBSITE_VISIT)       → CPC R$4,00 | CTR 1,55% | CPM R$62,21
 
 PINTEREST (obj gold → AWARENESS/CONSIDERATION/VIDEO_COMPLETION):
@@ -302,13 +303,13 @@ NÃO usar esta skill apenas se o usuário pedir explicitamente "relatório", "pa
 
 PROCESSO — quando acionada:
 1. DETECTE: faça SELECT DISTINCT platform, objective para identificar o perfil da campanha
-2. CALCULE os KPIs relevantes para a plataforma + objetivo (CPV, TPR, VTRc, CPM, CPC, CTR)
+2. CALCULE os KPIs relevantes para a plataforma + objetivo (CPV, VTR, VTRc, CPM, CPC, CTR)
 3. COMPARE com as médias SECOM acima — classifique cada KPI:
-   • "acima da média" = CPV/CPC/CPM menor OU CTR/TPR/VTRc/VTR maior que o benchmark
+   • "acima da média" = CPV/CPC/CPM menor OU CTR/VTR/VTRc/VTR maior que o benchmark
    • "na média" = dentro de ±20% do benchmark
    • "abaixo da média" = pior que o benchmark
 4. ENTREGUE uma tabela: KPI | Valor da campanha | Média SECOM | Avaliação
-Para CPV/CPC/CPM/CPE: menor = melhor | Para CTR/TPR/VTRc/VTR/Taxa Eng.: maior = melhor
+Para CPV/CPC/CPM/CPE: menor = melhor | Para CTR/VTR/VTRc/VTR/Taxa Eng.: maior = melhor
 
 FORMATO DE RESPOSTA (SKILL DE PERFORMANCE):
 - Abra com 1–2 frases diretas respondendo à pergunta: "A campanha X está [bem/abaixo/acima] da média SECOM em [KPI principal]."

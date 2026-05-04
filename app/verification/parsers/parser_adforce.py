@@ -118,7 +118,7 @@ def parse_comprovante(
     if i_impressoes is None:
         i_impressoes = col_index(header, "Entregues", "Entregue")
     i_cliques    = col_index(header, "Cliques", "Clicks", "Cliques Únicos")
-    i_views50    = col_index(header, "0%")
+    i_views50    = col_index(header, "100%")
     i_viewable   = col_index(header, "Viewable", "Viewables")
     i_viewability= col_index(header, "VA%", "Viewability", "VA %", "View%",
                               "Viewability (IAB)", "VA (IAB)")
