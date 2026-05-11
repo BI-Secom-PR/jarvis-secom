@@ -22,13 +22,13 @@
     "@types/dompurify": "^3.0.5",
     "ai": "^6.0.116",
     "bcryptjs": "^3.0.3",
-    "dompurify": "^3.3.3",
-    "drizzle-orm": "^0.45.1",
+    "dompurify": "^3.4.0",
+    "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",
     "html-to-image": "^1.11.13",
     "mysql2": "^3.19.1",
     "nanoid": "^5.1.11",
-    "next": "16.1.6",
+    "next": "16.2.6",
     "ollama": "^0.6.3",
     "pdfkit": "^0.18.0",
     "postgres": "^3.4.8",
@@ -39,8 +39,13 @@
     "svg-to-pdfkit": "^0.1.8",
     "zod": "^4.3.6"
   },
+  "overrides": {
+    "protobufjs": "~7.5.5",
+    "esbuild": "~0.25.0",
+    "postcss": "~8.5.10"
+  },
   "devDependencies": {
-    "@anthropic-ai/claude-code": "^2.1.76",
+    "@anthropic-ai/claude-code": "^2.1.84",
     "@tailwindcss/postcss": "^4",
     "@types/dom-speech-recognition": "^0.0.7",
     "@types/node": "^20",
