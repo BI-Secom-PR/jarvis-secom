@@ -11,7 +11,7 @@ interface PdfInput {
 
 function fmtCell(v: unknown): string {
   if (v === null || v === undefined) return ''
-  if (v instanceof Date) return v.toISOString().slice(0, 10)
+  if (v instanceof Date) return v.toLocaleDateString('pt-BR')
   if (typeof v === 'number') {
     return Number.isInteger(v)
       ? v.toLocaleString('pt-BR')

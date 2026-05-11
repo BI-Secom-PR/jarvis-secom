@@ -4,9 +4,17 @@ const BOM = '﻿'
 function cell(v: unknown): string {
   if (v === null || v === undefined) return ''
   let s: string
-  if (v instanceof Date) s = v.toISOString()
-  else if (typeof v === 'object') s = JSON.stringify(v)
-  else s = String(v)
+  if (v instanceof Date) {
+    s = v.toLocaleDateString('pt-BR')
+  } else if (typeof v === 'number') {
+    s = Number.isInteger(v)
+      ? v.toLocaleString('pt-BR')
+      : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  } else if (typeof v === 'object') {
+    s = JSON.stringify(v)
+  } else {
+    s = String(v)
+  }
   if (s.includes(SEP) || s.includes('"') || s.includes('\n') || s.includes('\r')) {
     return `"${s.replace(/"/g, '""')}"`
   }

@@ -32,12 +32,14 @@ export async function generateXlsx(rows: Record<string, unknown>[], title?: stri
     ws.addRow(values)
   }
 
-  // Brazilian number formatting on numeric columns
+  // Column formatting
   columns.forEach((key, idx) => {
     const sample = rows.find((r) => r[key] !== null && r[key] !== undefined)?.[key]
+    const col = ws.getColumn(idx + 1)
     if (typeof sample === 'number') {
-      const col = ws.getColumn(idx + 1)
       col.numFmt = Number.isInteger(sample) ? '#,##0' : '#,##0.00'
+    } else if (sample instanceof Date) {
+      col.numFmt = 'dd/mm/yyyy'
     }
   })
 
