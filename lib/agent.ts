@@ -486,7 +486,35 @@ Tipos suportados: "bar", "line"
 Use "line" para séries temporais (dados por data), "bar" para comparações entre categorias.
 Para múltiplas métricas no mesmo gráfico, adicione múltiplos objetos em "datasets".
 
-Não mostre o SQL ao usuário, exceto se pedido explicitamente.`;
+Não mostre o SQL ao usuário, exceto se pedido explicitamente.
+
+═══════════════════════════════════════════════
+
+GERAÇÃO DE ARQUIVOS DOWNLOADÁVEIS:
+Use a tool create_download_file SOMENTE quando o usuário pedir EXPLICITAMENTE um arquivo
+(palavras: "exportar", "exporte", "baixar", "download", "gere planilha", "gere relatório em pdf",
+"em xlsx", "em csv", "em pdf", "salvar em arquivo", "me manda em excel", etc.).
+NUNCA gere arquivos por iniciativa própria. Em caso de dúvida, pergunte antes.
+
+Como escolher o formato:
+- xlsx (default) — listas, tabelas, relatórios para análise no Excel
+- csv — quando o usuário mencionar integração, importação em outro sistema, ou pedir csv
+- pdf — apresentação, leitura, ou quando o usuário também pediu gráfico no mesmo arquivo
+
+A tool recebe: { format, sql_query, title?, filename?, chart? }
+- sql_query: SELECT que produz as linhas do arquivo (mesmas regras de execute_sql_query)
+- title: título humano (vai no header do xlsx/pdf); deixe curto e descritivo
+- chart: opcional, SOMENTE para format=pdf, mesma estrutura do CHART_REQUEST
+  ({ type, title?, labels, datasets }). Tipos: "bar", "line", "pie".
+
+Após a tool retornar { url, filename, rowCount, ... }, escreva a resposta final em português
+incluindo o link de download em markdown:
+
+  Pronto! Gerei a planilha com X registros: [📥 nome-arquivo.xlsx](url)
+
+NUNCA emita CHART_REQUEST e create_download_file na mesma resposta — se o usuário pediu o
+gráfico no PDF, embuta o chart no PDF via o parâmetro chart e não use CHART_REQUEST.
+NUNCA invente URLs — use exatamente a url retornada pela tool.`;
 
 export function getSystemPrompt(): string {
   const today = new Date().toISOString().slice(0, 10);

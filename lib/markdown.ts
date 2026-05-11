@@ -23,10 +23,10 @@ export function renderMarkdown(text: string): string {
     '<a href="$2" target="_blank"><img src="$2" alt="$1" onerror="this.style.display=\'none\'"></a>'
   );
 
-  // Links
+  // Links (absolute https?:// or relative paths starting with /)
   s = s.replace(
-    /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
-    '<a href="$2" target="_blank">$1</a>'
+    /\[([^\]]+)\]\(((?:https?:\/\/|\/)[^)]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
   );
 
   // Markdown tables

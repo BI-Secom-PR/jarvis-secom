@@ -1,4 +1,8 @@
-import { pgTable, pgEnum, uuid, text, boolean, timestamp, json } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, uuid, text, boolean, timestamp, json, integer, customType } from 'drizzle-orm/pg-core'
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() { return 'bytea' },
+})
 
 export const roleEnum        = pgEnum('role',         ['ADMIN', 'USER'])
 export const messageRoleEnum = pgEnum('message_role', ['USER',  'AI'])
@@ -39,7 +43,20 @@ export const chatMessages = pgTable('chat_messages', {
   createdAt:     timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+export const fileExports = pgTable('file_exports', {
+  id:             uuid('id').primaryKey().defaultRandom(),
+  userId:         uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  chatSessionId:  uuid('chat_session_id').references(() => chatSessions.id, { onDelete: 'set null' }),
+  filename:       text('filename').notNull(),
+  mimeType:       text('mime_type').notNull(),
+  bytes:          bytea('bytes').notNull(),
+  sizeBytes:      integer('size_bytes').notNull(),
+  createdAt:      timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt:      timestamp('expires_at', { withTimezone: true }).notNull(),
+})
+
 export type User        = typeof users.$inferSelect
 export type Session     = typeof sessions.$inferSelect
 export type ChatSession = typeof chatSessions.$inferSelect
 export type ChatMessage = typeof chatMessages.$inferSelect
+export type FileExport  = typeof fileExports.$inferSelect

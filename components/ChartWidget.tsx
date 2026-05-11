@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -29,6 +30,9 @@ const COLORS = [
 const STROKE_COLORS = ["#78b4ff", "#78dc78", "#ffa03c", "#c850c8", "#50dcdc"];
 
 export default function ChartWidget({ chart }: Props) {
+  const captureRef = useRef<HTMLDivElement>(null);
+  const [busy, setBusy] = useState<null | "png" | "pdf">(null);
+
   const data = chart.labels.map((label, i) => {
     const row: Record<string, string | number> = { name: label };
     chart.datasets.forEach((ds) => {
@@ -47,56 +51,114 @@ export default function ChartWidget({ chart }: Props) {
   const axisStyle = { fill: "rgba(255,255,255,0.5)", fontSize: 11 };
   const legendStyle = { fontSize: 11, color: "rgba(255,255,255,0.5)" };
 
+  const capturePng = async (): Promise<string | null> => {
+    if (!captureRef.current) return null;
+    const { toPng } = await import("html-to-image");
+    return toPng(captureRef.current, {
+      backgroundColor: "#0d1018",
+      pixelRatio: 2,
+      cacheBust: true,
+    });
+  };
+
+  const handleDownloadPng = async () => {
+    if (busy) return;
+    setBusy("png");
+    try {
+      const dataUrl = await capturePng();
+      if (!dataUrl) return;
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `${(chart.title || "grafico").replace(/[^\w\-. ]+/g, "_").slice(0, 60)}.png`;
+      a.click();
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (busy) return;
+    setBusy("pdf");
+    try {
+      const dataUrl = await capturePng();
+      if (!dataUrl) return;
+      const res = await fetch("/api/exports/from-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ png: dataUrl, title: chart.title || "Gráfico" }),
+      });
+      if (!res.ok) return;
+      const { url } = (await res.json()) as { url: string };
+      window.open(url, "_blank");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const btn =
+    "px-2.5 py-1 text-[11px] rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white/95 transition disabled:opacity-50 disabled:cursor-not-allowed";
+
   return (
     <div className="mt-3 rounded-xl bg-black/40 border border-white/9 p-4">
-      {chart.title && (
-        <p className="text-[rgba(120,180,255,0.92)] text-[13px] font-semibold mb-3">
-          {chart.title}
-        </p>
-      )}
-      <ResponsiveContainer width="100%" height={240}>
-        {chart.type === "line" ? (
-          <LineChart data={data}>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="rgba(255,255,255,0.06)"
-            />
-            <XAxis dataKey="name" tick={axisStyle} />
-            <YAxis tick={axisStyle} />
-            <Tooltip contentStyle={tooltipStyle} />
-            <Legend wrapperStyle={legendStyle} />
-            {chart.datasets.map((ds, i) => (
-              <Line
-                key={ds.label}
-                type="monotone"
-                dataKey={ds.label}
-                stroke={STROKE_COLORS[i % STROKE_COLORS.length]}
-                strokeWidth={2}
-                dot={false}
-              />
-            ))}
-          </LineChart>
-        ) : (
-          <BarChart data={data}>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="rgba(255,255,255,0.06)"
-            />
-            <XAxis dataKey="name" tick={axisStyle} />
-            <YAxis tick={axisStyle} />
-            <Tooltip contentStyle={tooltipStyle} />
-            <Legend wrapperStyle={legendStyle} />
-            {chart.datasets.map((ds, i) => (
-              <Bar
-                key={ds.label}
-                dataKey={ds.label}
-                fill={COLORS[i % COLORS.length]}
-                radius={[4, 4, 0, 0]}
-              />
-            ))}
-          </BarChart>
+      <div ref={captureRef}>
+        {chart.title && (
+          <p className="text-[rgba(120,180,255,0.92)] text-[13px] font-semibold mb-3">
+            {chart.title}
+          </p>
         )}
-      </ResponsiveContainer>
+        <ResponsiveContainer width="100%" height={240}>
+          {chart.type === "line" ? (
+            <LineChart data={data}>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="rgba(255,255,255,0.06)"
+              />
+              <XAxis dataKey="name" tick={axisStyle} />
+              <YAxis tick={axisStyle} />
+              <Tooltip contentStyle={tooltipStyle} />
+              <Legend wrapperStyle={legendStyle} />
+              {chart.datasets.map((ds, i) => (
+                <Line
+                  key={ds.label}
+                  type="monotone"
+                  dataKey={ds.label}
+                  stroke={STROKE_COLORS[i % STROKE_COLORS.length]}
+                  strokeWidth={2}
+                  dot={false}
+                />
+              ))}
+            </LineChart>
+          ) : (
+            <BarChart data={data}>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="rgba(255,255,255,0.06)"
+              />
+              <XAxis dataKey="name" tick={axisStyle} />
+              <YAxis tick={axisStyle} />
+              <Tooltip contentStyle={tooltipStyle} />
+              <Legend wrapperStyle={legendStyle} />
+              {chart.datasets.map((ds, i) => (
+                <Bar
+                  key={ds.label}
+                  dataKey={ds.label}
+                  fill={COLORS[i % COLORS.length]}
+                  radius={[4, 4, 0, 0]}
+                />
+              ))}
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+
+      <div className="flex justify-end gap-2 mt-3">
+        <button type="button" className={btn} onClick={handleDownloadPng} disabled={busy !== null}>
+          {busy === "png" ? "Gerando…" : "↓ PNG"}
+        </button>
+        <button type="button" className={btn} onClick={handleDownloadPdf} disabled={busy !== null}>
+          {busy === "pdf" ? "Gerando…" : "↓ PDF"}
+        </button>
+      </div>
     </div>
   );
 }

@@ -18,6 +18,7 @@ async function callChatApi(
   text: string,
   history: Message[],
   model: ModelId,
+  chatSessionId: string | null,
 ): Promise<{ output: string; chartData: unknown }> {
   const conversationHistory = history.map((m) => ({
     role: m.role === "user" ? "user" : "assistant",
@@ -26,7 +27,7 @@ async function callChatApi(
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chatInput: text, messages: conversationHistory, model }),
+    body: JSON.stringify({ chatInput: text, messages: conversationHistory, model, chatSessionId }),
   });
   if (res.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
   const data = await res.json();
@@ -122,7 +123,7 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
       updateTitle(text);
 
       try {
-        const { output, chartData } = await callChatApi(text, messages, selectedModel);
+        const { output, chartData } = await callChatApi(text, messages, selectedModel, sessionIdRef.current);
         const aiMsg: Message = {
           id: (Date.now() + 1).toString(),
           role: "ai",
