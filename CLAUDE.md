@@ -198,9 +198,10 @@ Cada adserver pode usar um layout diferente de colunas no consolidado (posiçõe
 
 ### Amostragem de URLs para AI check
 - Parsers devolvem o pool completo de URLs indevidas (reservoir ≤ 500 por arquivo)
-- `engine.py` agrupa por categoria e amostra **5% por categoria indevida** (mín. 1), cap global 200
+- `engine.py` agrupa por categoria e amostra **30% por categoria indevida** (mín. 1), cap global 200
 - `route.ts` envia ao Ollama `gemma4:31b-cloud` em paralelo (máx 50 URLs, batches de 10)
 - Retorna `url_check_anomalies: [{url, categoria, reason}]` para a UI
+- Categoria `safeframe` é tratada como limitação técnica (não conteúdo indevido) — o prompt da IA instrui a classificá-la sempre como CORRETA
 - Usa `OLLAMA_BASE_URL` — se ausente, URL check é silenciosamente pulado
 - **Não duplo-amostrar**: parsers nunca fazem sub-amostragem própria
 

@@ -24,11 +24,14 @@ async function checkUrlCategory(item: UrlSampleItem): Promise<UrlAnomalyItem | n
       options: { num_predict: 80 },
       messages: [{ role: 'user', content: `Você é um classificador de brand safety. Dado uma URL e a categoria de conteúdo indevido atribuída a ela pelo adserver, determine se essa classificação é CORRETA ou INCORRETA.
 
+Contexto importante sobre categorias:
+- "safeframe": não é conteúdo indevido, mas uma limitação técnica de rastreamento. O Safeframe pode limitar o acesso à URL da página por privacidade, categorizando entregas em apps, programática ou iframes. Trate sempre como CORRETA.
+
 URL: ${item.url}
 Categoria atribuída: ${item.categoria}
 
 Responda com exatamente uma das opções:
-- "SIM" (a URL realmente contém esse tipo de conteúdo indevido)
+- "SIM" (a URL realmente contém esse tipo de conteúdo indevido, ou a categoria é uma limitação técnica como safeframe)
 - "NÃO: <uma frase explicando por que a classificação parece incorreta>"` }],
     });
 

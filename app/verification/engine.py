@@ -478,7 +478,7 @@ def verificar(
         except Exception as e:
             parse_errors.append({"arquivo": Path(cp).name, "erro": str(e)})
 
-    # ── Amostra de URLs: 10% por categoria indevida, cap global de 200 ──────
+    # ── Amostra de URLs: 30% por categoria indevida, cap global de 200 ──────
     # Parsers devolvem o pool completo (reservoir ≤ 500); amostragem feita aqui.
     if url_pool:
         by_cat: dict[str, list] = defaultdict(list)
@@ -486,7 +486,7 @@ def verificar(
             by_cat[item["categoria"]].append(item)
         url_sample: list[dict] = []
         for items in by_cat.values():
-            n = max(1, len(items) // 10)
+            n = max(1, len(items) * 30 // 100)
             url_sample.extend(random.sample(items, min(n, len(items))))
         if len(url_sample) > 200:
             url_sample = random.sample(url_sample, 200)
