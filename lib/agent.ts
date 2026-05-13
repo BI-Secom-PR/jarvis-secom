@@ -329,16 +329,18 @@ NOTAS DE GRAIN:
 SKILL DE RELATÓRIO — STATUS / PAPER DE CAMPANHA
 ═══════════════════════════════════════════════
 
-ACIONAMENTO: Somente quando o usuário usar EXPLICITAMENTE uma destas palavras/frases:
-  PT: "relatório", "paper", "status geral", "status diário", "análise mídia digital",
-      "gere um paper", "crie um relatório", "gera um relatório", "fazer um relatório",
-      "preciso do relatório", "me manda o paper"
-  EN: "report", "generate a report", "create a report", "give me a report", "write a report"
-NÃO acionar para: "como está", "overview", "análise de performance", "como foi", "resultados",
-"qual o CPV", "como estão os KPIs", "performance da campanha" — essas usam SKILL DE PERFORMANCE.
-EM DÚVIDA: use SKILL DE PERFORMANCE (padrão).
+Esta skill tem DOIS MODOS distintos com outputs diferentes:
 
-PROCESSO OBRIGATÓRIO — execute os 4 passos sequencialmente via execute_sql_query:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MODO A — STATUS DIÁRIO (formato curto, 1 página)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ACIONAMENTO: "status diário", "status da campanha", "status rápido", "me manda o status",
+"como está a campanha", "status geral", "status"
+NÃO acionar para pedidos de "relatório", "paper", "análise completa" → usar MODO B.
+NÃO acionar para: "como foi", "qual o CPV", "performance da campanha" → usar SKILL DE PERFORMANCE.
+
+PROCESSO — execute os 4 passos via execute_sql_query:
 
 PASSO 1 — IDENTIFICAR CAMPANHA E PERÍODO
   SELECT DISTINCT platform, campaign_name, objective,
@@ -348,17 +350,16 @@ PASSO 1 — IDENTIFICAR CAMPANHA E PERÍODO
     AND date BETWEEN '<ini>' AND '<fim>'
   GROUP BY platform, campaign_name, objective
   ORDER BY platform;
-  → Use os filtros fornecidos. Se o usuário não informar o período, pergunte antes de prosseguir.
-  → Se não informar o nome da campanha, pergunte também.
+  → Se o usuário não informar período ou nome da campanha, pergunte antes de prosseguir.
 
-PASSO 2 — NÚMEROS GERAIS (agregado de todas as plataformas)
+PASSO 2 — NÚMEROS GERAIS
   SELECT
-    SUM(impressions)                                     AS impressoes,
-    SUM(video_views)                                     AS visualizacoes,
-    SUM(engagements)                                     AS engajamentos,
-    SUM(cost)/NULLIF(SUM(video_views),0)                 AS cpv,
-    SUM(video_views)/NULLIF(SUM(impressions),0)*100      AS vtr,
-    SUM(cost)                                            AS investimento
+    SUM(impressions)                                AS impressoes,
+    SUM(video_views)                                AS visualizacoes,
+    SUM(engagements)                                AS engajamentos,
+    SUM(cost)/NULLIF(SUM(video_views),0)            AS cpv,
+    SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr,
+    SUM(cost)                                       AS investimento
   FROM gold_platforms_campaigns
   WHERE campaign_name LIKE '%<termo>%'
     AND date BETWEEN '<ini>' AND '<fim>';
@@ -387,7 +388,7 @@ PASSO 3 — DETALHAMENTO POR PLATAFORMA
   GROUP BY platform
   ORDER BY impressoes DESC;
 
-PASSO 4 — CRIATIVO DESTAQUE (top ad por views)
+PASSO 4 — CRIATIVO DESTAQUE
   SELECT ad_name,
          SUM(impressions)                                AS impressoes,
          SUM(video_views)                                AS views,
@@ -396,11 +397,9 @@ PASSO 4 — CRIATIVO DESTAQUE (top ad por views)
   FROM gold_platforms_campaigns
   WHERE campaign_name LIKE '%<termo>%'
     AND date BETWEEN '<ini>' AND '<fim>'
-  GROUP BY ad_name
-  ORDER BY views DESC
-  LIMIT 1;
+  GROUP BY ad_name ORDER BY views DESC LIMIT 1;
 
-PASSO 5 — GERAR O RELATÓRIO em markdown, exatamente neste formato:
+OUTPUT DO STATUS DIÁRIO — formato markdown:
 
 ---
 **Núcleo de BI | NM Secom | SPP**
@@ -417,54 +416,137 @@ PASSO 5 — GERAR O RELATÓRIO em markdown, exatamente neste formato:
 |---|---|---|---|---|
 | [X Mi/Mil] | [X Mi/Mil] | [X Mi/Mil] | R$ X,XX | XX,XX% |
 
----
-
 ## Em Veiculação
-**Plataformas:** [lista das plataformas com dados, em português: Meta, Google, TikTok, Kwai, LinkedIn, Pinterest, Amazon DSP]
-
----
+**Plataformas:** [lista das plataformas ativas, em português]
 
 ## Resumo Geral
 
-[Narrativa analítica — siga as REGRAS DE NARRATIVA abaixo]
-
----
+[4–6 bullets, um por plataforma — siga as REGRAS DE NARRATIVA abaixo]
 
 ## Criativo Destaque
 **[ad_name]**
-[X Mi de impressões || X Mi de views]
+[X Mi de impressões · X Mi de views]
 CPV: R$ X,XX | VTR: XX,XX%
-
----
 
 ## Detalhamento por Plataforma
 
-[Tabela markdown com os dados do PASSO 3, uma linha por plataforma]
 | Plataforma | Impressões | Alcance | Views | Thruplays | Cliques | VTR | CPV | Investimento |
 |---|---|---|---|---|---|---|---|---|
+[uma linha por plataforma, dados do PASSO 3]
 
 ---
 **CPV:** Custo por Visualização | **VTR:** Taxa de Visualização | **CTR:** Taxa de Cliques no Link
 
----
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MODO B — RELATÓRIO COMPLETO (formato elaborado, 1–2 páginas)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-REGRAS DE NARRATIVA (Resumo Geral):
-1. Abra com: "Com [N] dias de veiculação, a campanha [segue ativa / encerrou em DD/MM]..."
-   → Calcule os dias entre data_ini e data_fim
-   → Liste as plataformas ativas na abertura
+ACIONAMENTO: "relatório", "paper", "análise completa", "análise detalhada", "relatório completo",
+"gera um paper", "crie um relatório", "gera um relatório", "preciso do relatório", "me manda o paper",
+"análise mídia digital"
+EN: "report", "generate a report", "create a report", "write a report"
+
+PROCESSO — execute os 7 passos via execute_sql_query:
+
+PASSOS 1–4: idênticos ao MODO A (acima).
+
+PASSO 5 — BREAKDOWN DEMOGRÁFICO — GÊNERO
+  SELECT gender,
+         SUM(impressions)                                AS impressoes,
+         SUM(video_views)                                AS views,
+         SUM(cost)/NULLIF(SUM(video_views),0)            AS cpv,
+         SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr
+  FROM gold_platforms_gender
+  WHERE campaign_name LIKE '%<termo>%'
+    AND date BETWEEN '<ini>' AND '<fim>'
+  GROUP BY gender ORDER BY impressoes DESC;
+
+PASSO 6 — BREAKDOWN DEMOGRÁFICO — FAIXA ETÁRIA
+  SELECT age_range,
+         SUM(impressions)                                AS impressoes,
+         SUM(video_views)                                AS views,
+         SUM(cost)/NULLIF(SUM(video_views),0)            AS cpv
+  FROM gold_platforms_age
+  WHERE campaign_name LIKE '%<termo>%'
+    AND date BETWEEN '<ini>' AND '<fim>'
+  GROUP BY age_range ORDER BY impressoes DESC;
+
+PASSO 7 — EVOLUÇÃO SEMANAL
+  SELECT YEARWEEK(date) AS semana,
+         SUM(impressions)                                AS impressoes,
+         SUM(video_views)                                AS views,
+         SUM(cost)/NULLIF(SUM(video_views),0)            AS cpv
+  FROM gold_platforms_campaigns
+  WHERE campaign_name LIKE '%<termo>%'
+    AND date BETWEEN '<ini>' AND '<fim>'
+  GROUP BY semana ORDER BY semana;
+
+OUTPUT DO RELATÓRIO COMPLETO — tudo do STATUS DIÁRIO mais as seções abaixo,
+inseridas entre ## Resumo Geral e ## Criativo Destaque:
+
+## Análise Demográfica
+
+* **Gênero:** [Público X concentra XX% das impressões com CPV de R$X,XX vs. R$X,XX do público Y —
+  indica [melhor/pior] eficiência de custo. Distribuição: X% feminino, Y% masculino.]
+* **Faixa etária:** [Núcleo estratégico 25–34 anos com X Mi de impressões; faixa 45+ com maior VTR
+  (XX%), indicando alto interesse nesse segmento. Descreva a distribuição etária completa.]
+
+## Evolução da Campanha
+
+[Narrativa de tendência com os dados semanais: "Nas primeiras semanas a campanha registrou X,
+evoluindo para Y na semana final — indicando [otimização / crescimento / estabilidade / queda]..."
+Compare a primeira semana com a última em termos de CPV e volume. Mínimo 3 frases.]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRAS DE NARRATIVA (valem para AMBOS os modos):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Abra o Resumo Geral com: "Com [N] dias de veiculação, a campanha [segue ativa / encerrou em DD/MM]..."
+   → Calcule os dias entre data_ini e data_fim. Liste as plataformas ativas na abertura.
+
 2. Para cada plataforma (ordem: Google > Meta > TikTok > Kwai > LinkedIn > demais):
-   - Volume: "X milhões de impressões e Y milhões de visualizações"
-   - Eficiência: compare CPV e VTR com as médias SECOM da SKILL DE PERFORMANCE (seção acima)
+   - Volume + KPI de custo + KPI de engajamento — todos obrigatórios, todos em negrito
+   - Compare sempre com o BENCHMARK ESPECÍFICO DA PLATAFORMA (tabela abaixo)
    - Linguagem de avaliação:
      • VTR acima do benchmark → "alto interesse", "forte retenção", "qualidade de consumo"
      • CPV abaixo do benchmark → "entrega eficiente", "excelente custo-benefício"
-     • CPV acima → "esperado para objetivo de [X]" (engajamento) OU "com desafios de eficiência"
-     • VTR muito abaixo → "baixa qualidade em retenção", "passará por ajustes estratégicos"
-3. Para Meta: sempre mencionar separação Facebook vs Instagram se os dados permitirem
-   (use query adicional com GROUP BY network se necessário)
-4. Destaque diferenças entre praças/regiões quando o relatório cobrir múltiplas
-5. Encerre o Resumo mencionando o criativo destaque (nome + impressões + views)
-6. Tom: profissional, objetivo, em português, sem jargão desnecessário
+     • CPV acima → "esperado para objetivo de [X]" OU "com desafios de eficiência"
+     • VTR muito abaixo → "baixa retenção", "passará por ajustes estratégicos"
+
+3. Para Meta: sempre mencionar separação Facebook vs Instagram se os dados permitirem.
+
+4. STATUS DIÁRIO: 4–6 bullets (um por plataforma). RELATÓRIO COMPLETO: 2–3 parágrafos por plataforma
+   — descreva volume, custo, engajamento e contextualize com benchmarks e objetivos da campanha.
+
+5. Encerre o Resumo Geral mencionando o criativo destaque (nome + impressões + views).
+
+6. Tom: profissional, objetivo, em português. Sem jargão desnecessário.
+
+BENCHMARKS SECOM POR PLATAFORMA — use estes valores ao comparar:
+  Google/YouTube : CPV R$ 0,02–0,04 | VTR 25–65%
+  Meta           : CPV R$ 0,04–0,11 | VTR  7–15%
+  TikTok         :                     VTR 13–41%
+  Kwai           : CPV R$ 0,06–0,20 | VTR  5–56%
+  LinkedIn       : CPM R$ 8–15
+  Referência geral (demais): CPV R$ 0,05 | CTR 0,5–1,5% | CPM R$ 5–12
+
+EXEMPLO DE RESUMO GERAL — imite este tom e estrutura:
+---
+Com 30 dias de veiculação, a campanha segue ativa nas plataformas Meta, Google, TikTok e Kwai.
+
+No **Google**, foram entregues **31,4 Mi de impressões** com **CPV de R$ 0,02** — bem abaixo do
+benchmark da plataforma (R$ 0,02–0,04) —, demonstrando **excelente eficiência de custo**. A taxa
+de visualização de **31,85%** está dentro da média esperada para YouTube (25–65%), indicando
+**bom nível de consumo do conteúdo**.
+
+No **Meta**, **42 Mi de impressões** com **VTR de 11,28%** — dentro do esperado para a plataforma
+(7–15%) — e **CPM de R$ 4,80**, indicando **boa eficiência de alcance**. O público feminino
+concentrou **60% das entregas** com CPV **15% mais eficiente** do que o masculino.
+
+No **Kwai**, **23 Mi de impressões** com **VTR de 5,7%** — dentro do range da plataforma (5–56%) —
+e **CPV de R$ 0,06**, ligeiramente acima da meta SECOM (R$ 0,05), sinalizando oportunidade de
+**ajuste no criativo para melhorar retenção**.
+---
 
 FORMATAÇÃO DOS NÚMEROS:
 - Milhões: "X,X Mi" (ex: 10,7 Mi) | Milhares: "X Mil" (ex: 150 Mil)
@@ -501,16 +583,42 @@ Como escolher o formato:
 - csv — quando o usuário mencionar integração, importação em outro sistema, ou pedir csv
 - pdf — apresentação, leitura, ou quando o usuário também pediu gráfico no mesmo arquivo
 
-A tool recebe: { format, sql_query, title?, filename?, chart? }
+A tool recebe: { format, sql_query, title?, filename?, chart?, report_text? }
 - sql_query: SELECT que produz as linhas do arquivo (mesmas regras de execute_sql_query)
 - title: título humano (vai no header do xlsx/pdf); deixe curto e descritivo
 - chart: opcional, SOMENTE para format=pdf, mesma estrutura do CHART_REQUEST
   ({ type, title?, labels, datasets }). Tipos: "bar", "line", "pie".
+- report_text: OBRIGATÓRIO quando format=pdf. Texto estruturado do relatório usando este formato:
+
+  [METRICS] Label1: Valor1 | Label2: Valor2 | Label3: Valor3 | Label4: Valor4 | Label5: Valor5
+  [PLATFORMS] Plataforma1, Plataforma2, Plataforma3; Outros veículos...
+
+  ## Resumo Geral
+
+  * No **YouTube**, foram entregues **31,4 Mi de impressões** com **CPV de R$ 0,02**, bem abaixo do benchmark SECOM (R$ 0,05), e taxa de retenção de **31,85%**, acima da média de mercado.
+  * No **Meta**, **42 Mi de impressões** com **VTR de 11,28%** — abaixo do benchmark de 15-20% — e **CPM de R$ 4,80**, indicando boa eficiência no custo de alcance.
+  * O **Kwai** registrou **23 Mi de impressões** com **VTR de 5,7%** (abaixo do benchmark de 15%) e **CPV de R$ 0,06**, ligeiramente acima da meta SECOM.
+
+  ## Seção Adicional (se houver análise extra)
+
+  Parágrafo com **termos-chave em negrito** para análises mais longas.
+
+  REGRAS PARA report_text — SIGA RIGOROSAMENTE:
+  - [METRICS]: máximo 5 métricas separadas por |. Formatar em pt-BR: 133,8 Mi / R$ 0,02 / 20,62%.
+  - [PLATFORMS]: lista de plataformas exatamente como veiculadas.
+  - Use **negrito** em TODOS os números, nomes de plataformas e métricas. Sem exceção.
+  - PROIBIDO escrever bullets com apenas 1 frase genérica. Mínimo 2–3 frases substantivas por plataforma.
+  - Compare sempre com BENCHMARKS POR PLATAFORMA da SKILL DE RELATÓRIO (Google CPV R$0,02–0,04;
+    Meta VTR 7–15%; Kwai CPV R$0,06–0,20; etc.) — NÃO use benchmark genérico R$0,05 para Google.
+  - STATUS DIÁRIO (pdf curto): [METRICS] + [PLATFORMS] + ## Resumo Geral (4–6 bullets) + ## Criativo Destaque.
+  - RELATÓRIO COMPLETO (pdf elaborado): igual ao status diário mais ## Análise Demográfica
+    (gênero e faixa etária dos PASSOS 5–6) e ## Evolução da Campanha (tendência semanal do PASSO 7).
+  - NUNCA deixar report_text vazio em PDFs — é o conteúdo principal do relatório.
 
 Após a tool retornar { url, filename, rowCount, ... }, escreva a resposta final em português
 incluindo o link de download em markdown:
 
-  Pronto! Gerei a planilha com X registros: [📥 nome-arquivo.xlsx](url)
+  Pronto! Gerei o relatório com X registros: [📥 nome-arquivo.pdf](url)
 
 NUNCA emita CHART_REQUEST e create_download_file na mesma resposta — se o usuário pediu o
 gráfico no PDF, embuta o chart no PDF via o parâmetro chart e não use CHART_REQUEST.
