@@ -48,6 +48,7 @@ interface CreateDownloadArgs {
   title?: string;
   filename?: string;
   chart?: ChartSpec;
+  report_text?: string;
 }
 
 interface CreateDownloadCtx {
@@ -67,6 +68,7 @@ async function createDownloadFile(args: CreateDownloadArgs, ctx: CreateDownloadC
     title: args.title,
     filename: args.filename,
     chart: args.chart,
+    report_text: args.report_text,
   });
 
   const expiresAt = new Date(Date.now() + EXPORT_TTL_DAYS * 24 * 60 * 60 * 1000);
@@ -138,6 +140,10 @@ const OLLAMA_TOOL_DEFS = ([
             },
             required: ['type', 'labels', 'datasets'],
           },
+          report_text: {
+            type: 'string',
+            description: 'Structured report content for PDF. Use markers: [METRICS] Label: Valor | ... then [PLATFORMS] lista, then ## sections with * bullets using **negrito**.',
+          },
         },
         required: ['format', 'sql_query'],
       },
@@ -183,6 +189,7 @@ async function runOllamaChat(
           result = { error: `Unknown tool: ${name}` };
         }
       } catch (e) {
+        console.error(`[${name}] error:`, e);
         result = { error: e instanceof Error ? e.message : String(e) };
       }
       conv.push({ role: 'tool', content: JSON.stringify(result) });
@@ -244,8 +251,16 @@ export async function POST(req: NextRequest) {
               title: z.string().optional(),
               filename: z.string().optional(),
               chart: CHART_SPEC_SCHEMA.optional().describe('Optional chart embedded in PDF only.'),
+              report_text: z.string().optional().describe('Structured report content for PDF: [METRICS] blocks, [PLATFORMS] block, ## sections, * bullets with **negrito**.'),
             }),
-            execute: async (args) => createDownloadFile(args as CreateDownloadArgs, ctx),
+            execute: async (args) => {
+              try {
+                return await createDownloadFile(args as CreateDownloadArgs, ctx);
+              } catch (e) {
+                console.error('[create_download_file] error:', e);
+                throw e;
+              }
+            },
           }),
         },
       });
@@ -255,6 +270,7 @@ export async function POST(req: NextRequest) {
     const { cleanText, chartData } = parseChartRequest(text);
     return NextResponse.json({ output: cleanText, chartData });
   } catch (err) {
+    console.error('[POST /api/chat] error:', err);
     const message = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });
   }

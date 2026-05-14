@@ -13,6 +13,7 @@ export interface GenerateInput {
   title?: string
   filename?: string
   chart?: ChartSpec
+  report_text?: string
 }
 
 export interface GenerateOutput {

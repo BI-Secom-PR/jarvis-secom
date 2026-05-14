@@ -4,6 +4,7 @@ const isDev = process.env.NODE_ENV === 'development';
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  serverExternalPackages: ['pdfkit', 'svg-to-pdfkit', 'exceljs'],
   experimental: {
     serverActions: {
       bodySizeLimit: '50mb',
