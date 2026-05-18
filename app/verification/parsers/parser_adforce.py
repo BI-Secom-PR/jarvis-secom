@@ -117,9 +117,11 @@ def parse_comprovante(
                               "Entregues/Impressões", "Entregues/Impressoes")
     if i_impressoes is None:
         i_impressoes = col_index(header, "Entregues", "Entregue")
-    i_cliques    = col_index(header, "Cliques", "Clicks", "Cliques Únicos")
-    i_views50    = col_index(header, "100%")
-    i_viewable   = col_index(header, "Viewable", "Viewables")
+    i_cliques      = col_index(header, "Cliques", "Clicks", "Cliques Únicos")
+    i_views_start  = col_index(header, "0%")
+    i_views_50     = col_index(header, "50%")
+    i_views50      = col_index(header, "100%")   # alias histórico → views_100
+    i_viewable     = col_index(header, "Viewable", "Viewables")
     i_viewability= col_index(header, "VA%", "Viewability", "VA %", "View%",
                               "Viewability (IAB)", "VA (IAB)")
     i_contratado = col_index(header, "Contratado", "Contracted")
@@ -132,10 +134,12 @@ def parse_comprovante(
     # Arquivo de veículo único: infere nome do veículo pelo nome do arquivo.
     single_vehicle = vehicle_from_filename(filepath)
 
-    entregue:   dict[str, int]   = defaultdict(int)
-    cliques:    dict[str, int]   = defaultdict(int)
-    views50:    dict[str, int]   = defaultdict(int)
-    viewables:  dict[str, int]   = defaultdict(int)
+    entregue:    dict[str, int]   = defaultdict(int)
+    cliques:     dict[str, int]   = defaultdict(int)
+    views_start: dict[str, int]   = defaultdict(int)
+    views_50:    dict[str, int]   = defaultdict(int)
+    views50:     dict[str, int]   = defaultdict(int)
+    viewables:   dict[str, int]   = defaultdict(int)
     contratado: dict[str, int]   = {}
     viewability:dict[str, float] = {}
     va_wsum:    dict[str, float] = defaultdict(float)
@@ -167,19 +171,23 @@ def parse_comprovante(
             if data_fim and d > data_fim:
                 continue
 
-        imp      = to_int(row[i_impressoes] if i_impressoes < len(row) else None)
-        cliq_val = to_int(row[i_cliques]   if i_cliques  is not None and i_cliques  < len(row) else None)
-        v50_val  = to_int(row[i_views50]   if i_views50  is not None and i_views50  < len(row) else None)
-        va_val   = to_int(row[i_viewable]  if i_viewable is not None and i_viewable < len(row) else None)
+        imp      = to_int(row[i_impressoes]   if i_impressoes < len(row) else None)
+        cliq_val = to_int(row[i_cliques]      if i_cliques      is not None and i_cliques      < len(row) else None)
+        vs_val   = to_int(row[i_views_start]  if i_views_start  is not None and i_views_start  < len(row) else None)
+        v50p_val = to_int(row[i_views_50]     if i_views_50     is not None and i_views_50     < len(row) else None)
+        v50_val  = to_int(row[i_views50]      if i_views50      is not None and i_views50      < len(row) else None)
+        va_val   = to_int(row[i_viewable]     if i_viewable     is not None and i_viewable     < len(row) else None)
 
         if imp == 0 and cliq_val == 0 and v50_val == 0 and va_val == 0:
             continue
 
         if imp:
             entregue[vname] += imp
-        cliques[vname]  += cliq_val
-        views50[vname]  += v50_val
-        viewables[vname] += va_val
+        cliques[vname]      += cliq_val
+        views_start[vname]  += vs_val
+        views_50[vname]     += v50p_val
+        views50[vname]      += v50_val
+        viewables[vname]    += va_val
         if i_viewability is not None and i_viewability < len(row) and imp > 0:
             va = _normalize_va(row[i_viewability])
             if va is not None:
@@ -208,8 +216,11 @@ def parse_comprovante(
             "contratado":        contratado.get(vname),
             "entregue":          imp,
             "cliques":           cliques[vname] or None,
-            "views":             views50[vname] or None,
-            "viewables":         viewables[vname] or None,
+            "views_start":       views_start[vname] or None if i_views_start is not None else None,
+            "views_50":          views_50[vname]    or None if i_views_50    is not None else None,
+            "views_100":         views50[vname]     or None if i_views50     is not None else None,
+            "views":             views50[vname]     or None,
+            "viewables":         viewables[vname]   or None,
             "viewability":       viewability.get(vname),
             "indevidas":         {},
             "url_sample":        [],

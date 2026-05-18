@@ -92,8 +92,11 @@ def _detect_consolidado_cols(ws) -> dict:
     Fallback para os valores hardcoded quando uma coluna não é encontrada.
     """
     indevidas: dict[str, int] = {}
-    devolutiva_bi = COL_DEVOLUTIVA_BI
-    url_info = COL_URL_INFO
+    devolutiva_bi  = COL_DEVOLUTIVA_BI
+    url_info       = COL_URL_INFO
+    col_views_start: int | None = None
+    col_views_50:    int | None = None
+    col_views_100:   int | None = None
 
     for c in range(1, 36):
         raw = _cell_value(ws, HEADER_ROW, c)
@@ -110,11 +113,20 @@ def _detect_consolidado_cols(ws) -> dict:
             devolutiva_bi = c
         elif "url info" in tl:
             url_info = c
+        elif tl in ("views start", "views 0%"):
+            col_views_start = c
+        elif tl in ("views 50%", "views50%"):
+            col_views_50 = c
+        elif tl in ("views 100%", "views100%"):
+            col_views_100 = c
 
     return {
-        "indevidas":    indevidas if indevidas else dict(COL_INDEVIDAS),
-        "devolutiva_bi": devolutiva_bi,
-        "url_info":      url_info,
+        "indevidas":       indevidas if indevidas else dict(COL_INDEVIDAS),
+        "devolutiva_bi":   devolutiva_bi,
+        "url_info":        url_info,
+        "col_views_start": col_views_start,
+        "col_views_50":    col_views_50,
+        "col_views_100":   col_views_100,
     }
 
 
@@ -181,6 +193,9 @@ def _read_consolidado(ws) -> tuple[list[dict], int]:
     detected = _detect_consolidado_cols(ws)
     col_indevidas  = detected["indevidas"]
     col_dev_bi     = detected["devolutiva_bi"]
+    col_vs         = detected["col_views_start"]
+    col_v50        = detected["col_views_50"]
+    col_v100       = detected["col_views_100"]
 
     rows = []
     for row_idx in range(DATA_START_ROW, ws.max_row + 1):
@@ -210,6 +225,9 @@ def _read_consolidado(ws) -> tuple[list[dict], int]:
             "contratado":    _to_int_safe(_cell_value(ws, row_idx, COL_CONTRATADO)),
             "entregue":      entregue,
             "views":         views,
+            "views_start":   _to_int_safe(_cell_value(ws, row_idx, col_vs))  if col_vs  else None,
+            "views_50":      _to_int_safe(_cell_value(ws, row_idx, col_v50)) if col_v50 else None,
+            "views_100":     _to_int_safe(_cell_value(ws, row_idx, col_v100))if col_v100 else None,
             "cliques":       _to_int_safe(_cell_value(ws, row_idx, COL_CLIQUES)),
             "viewables":     _to_int_safe(_cell_value(ws, row_idx, COL_VIEWABLES)),
             "viewability":   viewability_val,
@@ -253,9 +271,12 @@ def _merge_by_veiculo(results: list[dict]) -> dict[str, dict]:
             merged[key]["indevidas"] = dict(r.get("indevidas", {}))
         else:
             m = merged[key]
-            m["entregue"]  = (m.get("entregue") or 0) + (r.get("entregue") or 0)
-            m["cliques"]   = _add_optional(m.get("cliques"),   r.get("cliques"))
-            m["viewables"] = _add_optional(m.get("viewables"), r.get("viewables"))
+            m["entregue"]    = (m.get("entregue") or 0) + (r.get("entregue") or 0)
+            m["cliques"]     = _add_optional(m.get("cliques"),      r.get("cliques"))
+            m["viewables"]   = _add_optional(m.get("viewables"),    r.get("viewables"))
+            m["views_start"] = _add_optional(m.get("views_start"),  r.get("views_start"))
+            m["views_50"]    = _add_optional(m.get("views_50"),     r.get("views_50"))
+            m["views_100"]   = _add_optional(m.get("views_100"),    r.get("views_100"))
             for cat, val in r.get("indevidas", {}).items():
                 m["indevidas"][cat] = m["indevidas"].get(cat, 0) + val
     return merged
@@ -283,7 +304,16 @@ def _compare(
 
     # ── Campos do comprovante ─────────────────────────────────────────────────
     if comp_result is not None:
-        for campo in ("entregue", "cliques", "views", "viewables"):
+        # Usar breakdown granular (views_start/50/100) quando o consolidado tiver essas colunas;
+        # caso contrário, cair de volta no campo legado "views".
+        _VIEW_BREAKDOWN = ("views_start", "views_50", "views_100")
+        has_breakdown = any(consol_row.get(k) for k in _VIEW_BREAKDOWN)
+        campos_views = (
+            [k for k in _VIEW_BREAKDOWN if consol_row.get(k) or comp_result.get(k)]
+            if has_breakdown else ["views"]
+        )
+
+        for campo in ("entregue", "cliques", *campos_views, "viewables"):
             comp_val   = comp_result.get(campo) or 0
             consol_val = consol_row.get(campo)  or 0
             if comp_val == 0:
@@ -357,7 +387,11 @@ def _compare(
         linhas.append(f"OK cliques: {_fmt_num(cliques_c)}")
     if impressoes_c and cliques_c:
         linhas.append(f"OK CTR: {cliques_c / impressoes_c * 100:.2f}%")
-    if "views" not in reported and views_c:
+    for _vf in ("views_start", "views_50", "views_100"):
+        _vv = consol_row.get(_vf) or 0
+        if _vf not in reported and _vv:
+            linhas.append(f"OK {_vf}: {_fmt_num(_vv)}")
+    if "views" not in reported and views_c and not any(consol_row.get(k) for k in ("views_start", "views_50", "views_100")):
         linhas.append(f"OK views: {_fmt_num(views_c)}")
     if impressoes_c and views_c:
         linhas.append(f"OK VTR: {views_c / impressoes_c * 100:.2f}%")
