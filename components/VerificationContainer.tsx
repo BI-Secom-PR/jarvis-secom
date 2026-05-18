@@ -30,6 +30,14 @@ type VerificationResult = {
   url_check_anomalies: UrlAnomaly[];
 };
 
+type ViewRule = { veiculo: string; criterio: "start" | "50" | "100"; secundagem: string };
+
+const CRITERIO_OPTIONS: { value: ViewRule["criterio"]; label: string }[] = [
+  { value: "start", label: "Start do vídeo (0%)" },
+  { value: "50",    label: "50% visualizado" },
+  { value: "100",   label: "100% completo" },
+];
+
 const STATUS_COLORS: Record<string, string> = {
   OK: "text-emerald-400",
   DIVERGENCIA: "text-rose-400",
@@ -228,6 +236,9 @@ export default function VerificationContainer() {
   const [fim, setFim] = useState("");
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const [urlSamplePct, setUrlSamplePct] = useState(10);
+  const [viewRules, setViewRules] = useState<ViewRule[]>([]);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [anomaliesOpen, setAnomaliesOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
@@ -300,6 +311,8 @@ export default function VerificationContainer() {
       for (const f of verifs)       form.append("verif", f);
       if (ini) form.append("ini", ini);
       if (fim) form.append("fim", fim);
+      form.append("url_sample_pct", String(urlSamplePct));
+      if (viewRules.length > 0) form.append("view_rules", JSON.stringify(viewRules));
 
       const res = await fetch("/api/verification/run", {
         method: "POST",
@@ -340,6 +353,8 @@ export default function VerificationContainer() {
     setFim("");
     setSelectedYear(currentYear);
     setSelectedMonth(null);
+    setUrlSamplePct(10);
+    setViewRules([]);
     setResult(null);
     setError(null);
   }
@@ -415,6 +430,84 @@ export default function VerificationContainer() {
               onChange={setVerifs}
               files={verifs}
             />
+          </div>
+
+          {/* % de URLs analisadas */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-white/40 font-medium uppercase tracking-wider shrink-0">
+              % URLs analisadas por IA
+            </span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={urlSamplePct}
+              onChange={(e) => setUrlSamplePct(Math.max(0, Math.min(100, Number(e.target.value))))}
+              className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-white/30 w-20 text-center"
+            />
+            <span className="text-xs text-white/30">
+              {urlSamplePct === 0 ? "todas as URLs" : `${urlSamplePct}% por categoria`}
+            </span>
+          </div>
+
+          {/* Regras de Visualização */}
+          <div className="space-y-2">
+            <button
+              onClick={() => setRulesOpen((o) => !o)}
+              className="flex items-center gap-2 text-xs text-white/40 hover:text-white/60 transition-colors font-medium uppercase tracking-wider"
+            >
+              <span>{rulesOpen ? "▾" : "▸"}</span>
+              Regras de Visualização
+              {viewRules.length > 0 && (
+                <span className="bg-[rgba(120,180,255,0.2)] text-[rgba(120,180,255,0.8)] rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
+                  {viewRules.length}
+                </span>
+              )}
+            </button>
+            {rulesOpen && (
+              <div className="space-y-2 pl-4 border-l border-white/10">
+                {viewRules.map((rule, idx) => (
+                  <div key={idx} className="flex items-center gap-2 flex-wrap">
+                    <input
+                      type="text"
+                      placeholder="Veículo"
+                      value={rule.veiculo}
+                      onChange={(e) => setViewRules((rs) => rs.map((r, i) => i === idx ? { ...r, veiculo: e.target.value } : r))}
+                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/70 placeholder:text-white/25 focus:outline-none focus:border-white/30 w-40"
+                    />
+                    <select
+                      value={rule.criterio}
+                      onChange={(e) => setViewRules((rs) => rs.map((r, i) => i === idx ? { ...r, criterio: e.target.value as ViewRule["criterio"] } : r))}
+                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/70 focus:outline-none focus:border-white/30"
+                    >
+                      {CRITERIO_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value} className="bg-[#1a1a2e]">{o.label}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      placeholder="Seg. (ex: 60)"
+                      value={rule.secundagem}
+                      onChange={(e) => setViewRules((rs) => rs.map((r, i) => i === idx ? { ...r, secundagem: e.target.value } : r))}
+                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/70 placeholder:text-white/25 focus:outline-none focus:border-white/30 w-32"
+                    />
+                    <button
+                      onClick={() => setViewRules((rs) => rs.filter((_, i) => i !== idx))}
+                      className="text-white/30 hover:text-rose-400 transition-colors text-sm px-1"
+                      title="Remover regra"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => setViewRules((rs) => [...rs, { veiculo: "", criterio: "100", secundagem: "" }])}
+                  className="text-xs text-[rgba(120,180,255,0.6)] hover:text-[rgba(120,180,255,0.9)] transition-colors"
+                >
+                  + Adicionar regra
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Filtro de período (opcional) */}

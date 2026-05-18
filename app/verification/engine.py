@@ -94,9 +94,11 @@ def _detect_consolidado_cols(ws) -> dict:
     indevidas: dict[str, int] = {}
     devolutiva_bi  = COL_DEVOLUTIVA_BI
     url_info       = COL_URL_INFO
-    col_views_start: int | None = None
-    col_views_50:    int | None = None
-    col_views_100:   int | None = None
+    col_views_start:  int | None = None
+    col_views_50:     int | None = None
+    col_views_100:    int | None = None
+    col_viewables:    int | None = None
+    col_viewability:  int | None = None
 
     for c in range(1, 36):
         raw = _cell_value(ws, HEADER_ROW, c)
@@ -119,6 +121,10 @@ def _detect_consolidado_cols(ws) -> dict:
             col_views_50 = c
         elif tl in ("views 100%", "views100%"):
             col_views_100 = c
+        elif tl in ("va", "viewables", "viewable impressions", "impressões viewáveis", "impressoes viewaveis"):
+            col_viewables = c
+        elif tl in ("va%", "viewability", "viewability%", "taxa de viewability"):
+            col_viewability = c
 
     return {
         "indevidas":       indevidas if indevidas else dict(COL_INDEVIDAS),
@@ -127,6 +133,8 @@ def _detect_consolidado_cols(ws) -> dict:
         "col_views_start": col_views_start,
         "col_views_50":    col_views_50,
         "col_views_100":   col_views_100,
+        "col_viewables":   col_viewables,
+        "col_viewability": col_viewability,
     }
 
 
@@ -191,11 +199,13 @@ def _read_consolidado(ws) -> tuple[list[dict], int]:
     adserver-específicos sem branches por adserver.
     """
     detected = _detect_consolidado_cols(ws)
-    col_indevidas  = detected["indevidas"]
-    col_dev_bi     = detected["devolutiva_bi"]
-    col_vs         = detected["col_views_start"]
-    col_v50        = detected["col_views_50"]
-    col_v100       = detected["col_views_100"]
+    col_indevidas    = detected["indevidas"]
+    col_dev_bi       = detected["devolutiva_bi"]
+    col_vs           = detected["col_views_start"]
+    col_v50          = detected["col_views_50"]
+    col_v100         = detected["col_views_100"]
+    col_va           = detected["col_viewables"]   or COL_VIEWABLES
+    col_va_pct       = detected["col_viewability"] or COL_VIEWABILITY
 
     rows = []
     for row_idx in range(DATA_START_ROW, ws.max_row + 1):
@@ -213,7 +223,7 @@ def _read_consolidado(ws) -> tuple[list[dict], int]:
         }
 
         # Normaliza viewability do consolidado: Excel armazena como decimal (0.7166 = 71.66%)
-        va_raw = _to_float_safe(_cell_value(ws, row_idx, COL_VIEWABILITY))
+        va_raw = _to_float_safe(_cell_value(ws, row_idx, col_va_pct))
         if va_raw is not None:
             viewability_val = round(va_raw * 100, 2) if va_raw <= 1.0 else round(va_raw, 2)
         else:
@@ -225,11 +235,11 @@ def _read_consolidado(ws) -> tuple[list[dict], int]:
             "contratado":    _to_int_safe(_cell_value(ws, row_idx, COL_CONTRATADO)),
             "entregue":      entregue,
             "views":         views,
-            "views_start":   _to_int_safe(_cell_value(ws, row_idx, col_vs))  if col_vs  else None,
-            "views_50":      _to_int_safe(_cell_value(ws, row_idx, col_v50)) if col_v50 else None,
-            "views_100":     _to_int_safe(_cell_value(ws, row_idx, col_v100))if col_v100 else None,
+            "views_start":   _to_int_safe(_cell_value(ws, row_idx, col_vs))   if col_vs  else None,
+            "views_50":      _to_int_safe(_cell_value(ws, row_idx, col_v50))  if col_v50 else None,
+            "views_100":     _to_int_safe(_cell_value(ws, row_idx, col_v100)) if col_v100 else None,
             "cliques":       _to_int_safe(_cell_value(ws, row_idx, COL_CLIQUES)),
-            "viewables":     _to_int_safe(_cell_value(ws, row_idx, COL_VIEWABLES)),
+            "viewables":     _to_int_safe(_cell_value(ws, row_idx, col_va)),
             "viewability":   viewability_val,
             "indevidas":     indevidas,
         })
@@ -291,6 +301,7 @@ def _compare(
     consol_row: dict,
     comp_result: dict | None,
     verif_result: dict | None,
+    view_rule: str | None = None,
 ) -> tuple[str, list[str]]:
     """
     Compara métricas de uma linha do consolidado com comprovante e verification.
@@ -312,6 +323,10 @@ def _compare(
             [k for k in _VIEW_BREAKDOWN if consol_row.get(k) or comp_result.get(k)]
             if has_breakdown else ["views"]
         )
+        if view_rule is not None:
+            _rule_field = {"start": "views_start", "50": "views_50", "100": "views_100"}.get(view_rule)
+            if _rule_field:
+                campos_views = [_rule_field]
 
         for campo in ("entregue", "cliques", *campos_views, "viewables"):
             comp_val   = comp_result.get(campo) or 0
@@ -449,6 +464,8 @@ def verificar(
     data_ini: date | None = None,
     data_fim: date | None = None,
     output_path: str | None = None,
+    url_sample_pct: int = 10,
+    view_rules: list[dict] | None = None,
 ) -> dict:
     """
     Verifica um consolidado contra comprovantes e arquivos de verification.
@@ -512,18 +529,19 @@ def verificar(
         except Exception as e:
             parse_errors.append({"arquivo": Path(cp).name, "erro": str(e)})
 
-    # ── Amostra de URLs: 30% por categoria indevida, cap global de 200 ──────
+    # ── Amostra de URLs: pct% por categoria indevida (0 = todas) ──────────────
     # Parsers devolvem o pool completo (reservoir ≤ 500); amostragem feita aqui.
     if url_pool:
-        by_cat: dict[str, list] = defaultdict(list)
-        for item in url_pool:
-            by_cat[item["categoria"]].append(item)
-        url_sample: list[dict] = []
-        for items in by_cat.values():
-            n = max(1, len(items) * 30 // 100)
-            url_sample.extend(random.sample(items, min(n, len(items))))
-        if len(url_sample) > 200:
-            url_sample = random.sample(url_sample, 200)
+        if url_sample_pct == 0:
+            url_sample: list[dict] = list(url_pool)
+        else:
+            by_cat: dict[str, list] = defaultdict(list)
+            for item in url_pool:
+                by_cat[item["categoria"]].append(item)
+            url_sample = []
+            for items in by_cat.values():
+                n = max(1, len(items) * url_sample_pct // 100)
+                url_sample.extend(random.sample(items, min(n, len(items))))
     else:
         url_sample = []
 
@@ -532,6 +550,12 @@ def verificar(
     comp_norm   = _merge_by_veiculo(comp_raw)
     verif_names = list(verif_norm.keys())
     comp_names  = list(comp_norm.keys())
+
+    # ── Mapa de regras de visualização: (veiculo_norm, duracao | None) → criterio
+    rule_map: dict[tuple, str] = {}
+    for r in (view_rules or []):
+        dur = int(r["secundagem"]) if r.get("secundagem") else None
+        rule_map[(_normalize(r["veiculo"]), dur)] = r["criterio"]
 
     # ── Ler consolidado ───────────────────────────────────────────────────────
     wb = openpyxl.load_workbook(consolidado_path)
@@ -561,7 +585,14 @@ def verificar(
                 match_name = None
                 score = 0
             else:
-                status, linhas = _compare(crow, comp_match, verif_match)
+                # Resolve view rule: match on (vehicle, duration), fallback to (vehicle, any)
+                if comp_match and rule_map:
+                    vk  = _normalize(comp_match["veiculo"])
+                    dur = comp_match.get("duracao_segundos")
+                    view_rule = rule_map.get((vk, dur)) or rule_map.get((vk, None))
+                else:
+                    view_rule = None
+                status, linhas = _compare(crow, comp_match, verif_match, view_rule=view_rule)
                 devolutiva = "\n".join(linhas)
                 match_name = (verif_match or comp_match or {}).get("veiculo")
                 score = verif_score or comp_score
@@ -630,6 +661,10 @@ if __name__ == "__main__":
     ap.add_argument("--fim", default=None, metavar="DD/MM/YYYY")
     ap.add_argument("--output", default=None, metavar="PATH",
                     help="Caminho de saída (padrão: <consolidado>_verificado.xlsx)")
+    ap.add_argument("--url-pct", type=int, default=10, metavar="PCT",
+                    help="% de URLs indevidas a analisar via IA (0 = todas)")
+    ap.add_argument("--view-rules", default=None,
+                    help="JSON array de regras de visualização por veículo")
     args = ap.parse_args()
 
     from parser_utils import cli_date  # noqa: E402
@@ -643,6 +678,8 @@ if __name__ == "__main__":
             data_ini=cli_date(args.ini),
             data_fim=cli_date(args.fim),
             output_path=args.output,
+            url_sample_pct=args.url_pct,
+            view_rules=json.loads(args.view_rules) if args.view_rules else None,
         )
         # Resumo legível → stderr (não polui o JSON que o Node.js consome)
         print(f"\nArquivo gerado: {resultado['output']}", file=sys.stderr)

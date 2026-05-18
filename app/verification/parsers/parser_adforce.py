@@ -52,6 +52,17 @@ def _load_workbook_safe(path: str, read_only: bool = False) -> openpyxl.Workbook
     return openpyxl.load_workbook(buf, read_only=read_only, data_only=True)
 
 
+_DURACAO_RE = re.compile(r'(\d+)\s*["\″\']')
+
+
+def _extract_duracao(text: str | None) -> int | None:
+    """Extrai duração em segundos de strings como 'Filme de 60\"' ou 'Filme 30\''."""
+    if not text:
+        return None
+    m = _DURACAO_RE.search(str(text))
+    return int(m.group(1)) if m else None
+
+
 def _normalize_va(v) -> float | None:
     """Decimal (0.622) → percentagem (62.2). Mantém se já > 1."""
     f = to_float(v)
@@ -124,8 +135,9 @@ def parse_comprovante(
     i_viewable     = col_index(header, "Viewable", "Viewables")
     i_viewability= col_index(header, "VA%", "Viewability", "VA %", "View%",
                               "Viewability (IAB)", "VA (IAB)")
-    i_contratado = col_index(header, "Contratado", "Contracted")
-    i_data       = col_index(header, "Data", "Date")
+    i_contratado     = col_index(header, "Contratado", "Contracted")
+    i_data           = col_index(header, "Data", "Date")
+    i_linha_criativa = col_index(header, "Linha Criativa", "Criativo", "Creative", "Criatividade")
 
     if i_impressoes is None:
         wb.close()
@@ -144,6 +156,7 @@ def parse_comprovante(
     viewability:dict[str, float] = {}
     va_wsum:    dict[str, float] = defaultdict(float)
     va_weight:  dict[str, int]   = defaultdict(int)
+    duracoes:   dict[str, set]   = defaultdict(set)
 
     for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
         if all(v is None for v in row):
@@ -199,6 +212,11 @@ def parse_comprovante(
             if c > 0 and vname not in contratado:
                 contratado[vname] = c
 
+        if i_linha_criativa is not None and i_linha_criativa < len(row):
+            dur = _extract_duracao(row[i_linha_criativa])
+            if dur is not None:
+                duracoes[vname].add(dur)
+
     wb.close()
 
     if not entregue:
@@ -222,6 +240,7 @@ def parse_comprovante(
             "views":             views50[vname]     or None,
             "viewables":         viewables[vname]   or None,
             "viewability":       viewability.get(vname),
+            "duracao_segundos":  next(iter(duracoes[vname])) if len(duracoes[vname]) == 1 else None,
             "indevidas":         {},
             "url_sample":        [],
             "formato_detectado": "adforce_comprovante",
