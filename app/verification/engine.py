@@ -301,7 +301,6 @@ def _compare(
     consol_row: dict,
     comp_result: dict | None,
     verif_result: dict | None,
-    view_rule: str | None = None,
 ) -> tuple[str, list[str]]:
     """
     Compara métricas de uma linha do consolidado com comprovante e verification.
@@ -323,10 +322,6 @@ def _compare(
             [k for k in _VIEW_BREAKDOWN if consol_row.get(k) or comp_result.get(k)]
             if has_breakdown else ["views"]
         )
-        if view_rule is not None:
-            _rule_field = {"start": "views_start", "50": "views_50", "100": "views_100"}.get(view_rule)
-            if _rule_field:
-                campos_views = [_rule_field]
 
         for campo in ("entregue", "cliques", *campos_views, "viewables"):
             comp_val   = comp_result.get(campo) or 0
@@ -557,6 +552,30 @@ def verificar(
         dur = int(r["secundagem"]) if r.get("secundagem") else None
         rule_map[(_normalize(r["veiculo"]), dur)] = r["criterio"]
 
+    # ── Aplica regras de visualização: reconstrói campos de views em comp_norm ──
+    # comp_raw tem entradas separadas por (veiculo, duracao); comp_norm as fundiu.
+    # Para veículos com regras, zera os campos de views e reconstrói somando apenas
+    # o campo correto de cada entrada por duração.
+    if rule_map:
+        _vf_map = {"start": "views_start", "50": "views_50", "100": "views_100"}
+        _view_fields = set(_vf_map.values()) | {"views"}
+        vehicles_with_rules = {vk for (vk, _) in rule_map}
+        for vk in vehicles_with_rules:
+            if vk in comp_norm:
+                for f in _view_fields:
+                    comp_norm[vk][f] = None
+        for r in comp_raw:
+            vk = _normalize(r["veiculo"])
+            if vk not in vehicles_with_rules or vk not in comp_norm:
+                continue
+            dur = r.get("duracao_segundos")
+            rule = rule_map.get((vk, dur)) or rule_map.get((vk, None))
+            if rule is None:
+                continue
+            field = _vf_map[rule]
+            val = r.get(field) or 0
+            comp_norm[vk][field] = (comp_norm[vk].get(field) or 0) + val
+
     # ── Ler consolidado ───────────────────────────────────────────────────────
     wb = openpyxl.load_workbook(consolidado_path)
     ws = wb.active
@@ -585,14 +604,7 @@ def verificar(
                 match_name = None
                 score = 0
             else:
-                # Resolve view rule: match on (vehicle, duration), fallback to (vehicle, any)
-                if comp_match and rule_map:
-                    vk  = _normalize(comp_match["veiculo"])
-                    dur = comp_match.get("duracao_segundos")
-                    view_rule = rule_map.get((vk, dur)) or rule_map.get((vk, None))
-                else:
-                    view_rule = None
-                status, linhas = _compare(crow, comp_match, verif_match, view_rule=view_rule)
+                status, linhas = _compare(crow, comp_match, verif_match)
                 devolutiva = "\n".join(linhas)
                 match_name = (verif_match or comp_match or {}).get("veiculo")
                 score = verif_score or comp_score

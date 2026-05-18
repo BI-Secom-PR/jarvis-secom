@@ -146,17 +146,17 @@ def parse_comprovante(
     # Arquivo de veículo único: infere nome do veículo pelo nome do arquivo.
     single_vehicle = vehicle_from_filename(filepath)
 
-    entregue:    dict[str, int]   = defaultdict(int)
-    cliques:     dict[str, int]   = defaultdict(int)
-    views_start: dict[str, int]   = defaultdict(int)
-    views_50:    dict[str, int]   = defaultdict(int)
-    views50:     dict[str, int]   = defaultdict(int)
-    viewables:   dict[str, int]   = defaultdict(int)
+    # Keyed by (vname, duracao) to keep per-duration view totals separate
+    entregue:    dict[tuple, int]   = defaultdict(int)
+    cliques:     dict[tuple, int]   = defaultdict(int)
+    views_start: dict[tuple, int]   = defaultdict(int)
+    views_50:    dict[tuple, int]   = defaultdict(int)
+    views50:     dict[tuple, int]   = defaultdict(int)
+    viewables:   dict[tuple, int]   = defaultdict(int)
+    # Keyed by vname only (vehicle-level fields)
     contratado: dict[str, int]   = {}
-    viewability:dict[str, float] = {}
     va_wsum:    dict[str, float] = defaultdict(float)
     va_weight:  dict[str, int]   = defaultdict(int)
-    duracoes:   dict[str, set]   = defaultdict(set)
 
     for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
         if all(v is None for v in row):
@@ -184,6 +184,13 @@ def parse_comprovante(
             if data_fim and d > data_fim:
                 continue
 
+        # Extract duration from Linha Criativa for this row
+        dur_val: int | None = None
+        if i_linha_criativa is not None and i_linha_criativa < len(row):
+            dur_val = _extract_duracao(row[i_linha_criativa])
+
+        key = (vname, dur_val)
+
         imp      = to_int(row[i_impressoes]   if i_impressoes < len(row) else None)
         cliq_val = to_int(row[i_cliques]      if i_cliques      is not None and i_cliques      < len(row) else None)
         vs_val   = to_int(row[i_views_start]  if i_views_start  is not None and i_views_start  < len(row) else None)
@@ -195,12 +202,12 @@ def parse_comprovante(
             continue
 
         if imp:
-            entregue[vname] += imp
-        cliques[vname]      += cliq_val
-        views_start[vname]  += vs_val
-        views_50[vname]     += v50p_val
-        views50[vname]      += v50_val
-        viewables[vname]    += va_val
+            entregue[key] += imp
+        cliques[key]      += cliq_val
+        views_start[key]  += vs_val
+        views_50[key]     += v50p_val
+        views50[key]      += v50_val
+        viewables[key]    += va_val
         if i_viewability is not None and i_viewability < len(row) and imp > 0:
             va = _normalize_va(row[i_viewability])
             if va is not None:
@@ -212,19 +219,16 @@ def parse_comprovante(
             if c > 0 and vname not in contratado:
                 contratado[vname] = c
 
-        if i_linha_criativa is not None and i_linha_criativa < len(row):
-            dur = _extract_duracao(row[i_linha_criativa])
-            if dur is not None:
-                duracoes[vname].add(dur)
-
     wb.close()
 
     if not entregue:
         return []
 
-    # Viewability: média ponderada (sem linhas #TOTAL no ADFORCE)
-    for vname in entregue:
-        if vname not in viewability and va_weight[vname] > 0:
+    # Viewability: média ponderada por veículo (independente de duração)
+    viewability: dict[str, float] = {}
+    seen_vnames = {vname for (vname, _) in entregue}
+    for vname in seen_vnames:
+        if va_weight[vname] > 0:
             viewability[vname] = round(va_wsum[vname] / va_weight[vname], 2)
 
     return [
@@ -233,19 +237,20 @@ def parse_comprovante(
             "tipo_compra":       None,
             "contratado":        contratado.get(vname),
             "entregue":          imp,
-            "cliques":           cliques[vname] or None,
-            "views_start":       views_start[vname] or None if i_views_start is not None else None,
-            "views_50":          views_50[vname]    or None if i_views_50    is not None else None,
-            "views_100":         views50[vname]     or None if i_views50     is not None else None,
-            "views":             views50[vname]     or None,
-            "viewables":         viewables[vname]   or None,
+            "cliques":           cliques[key] or None,
+            "views_start":       views_start[key] or None if i_views_start is not None else None,
+            "views_50":          views_50[key]    or None if i_views_50    is not None else None,
+            "views_100":         views50[key]     or None if i_views50     is not None else None,
+            "views":             views50[key]     or None,
+            "viewables":         viewables[key]   or None,
             "viewability":       viewability.get(vname),
-            "duracao_segundos":  next(iter(duracoes[vname])) if len(duracoes[vname]) == 1 else None,
+            "duracao_segundos":  dur,
             "indevidas":         {},
             "url_sample":        [],
             "formato_detectado": "adforce_comprovante",
         }
-        for vname, imp in entregue.items()
+        for (vname, dur), imp in entregue.items()
+        for key in [(vname, dur)]
     ]
 
 
