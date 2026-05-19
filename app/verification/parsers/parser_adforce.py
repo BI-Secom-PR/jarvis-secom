@@ -431,21 +431,26 @@ def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int
                     return 0
                 return to_int(row[i_col]) or 0
 
-            v_imp = _metric(i_imp)
+            v_imp      = _metric(i_imp)
+            v_cliques   = _metric(i_cliques)
+            v_vis       = _metric(i_vis)
+            v_vis_comp  = _metric(i_vis_comp)
 
-            veiculos_entregue[veiculo] += v_imp
+            total_val = v_imp + v_cliques + v_vis + v_vis_comp
+
+            veiculos_entregue[veiculo] += total_val
 
             cat_key = normaliza_categoria(categoria)
             if not cat_key:
                 continue
 
-            if v_imp > 0:
-                indev[veiculo][cat_key] += v_imp
+            if total_val > 0:
+                indev[veiculo][cat_key] += total_val
 
-            if url and v_imp > 0:
+            if url and total_val > 0:
                 pool_count += 1
                 entry = {"url": url, "categoria": categoria, "veiculo": veiculo,
-                         "impressoes": v_imp}
+                         "impressoes": total_val}
                 if len(url_pool) < MAX_POOL:
                     url_pool.append(entry)
                 else:
