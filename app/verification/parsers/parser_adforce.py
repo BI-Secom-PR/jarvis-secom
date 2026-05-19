@@ -52,6 +52,17 @@ def _load_workbook_safe(path: str, read_only: bool = False) -> openpyxl.Workbook
     return openpyxl.load_workbook(buf, read_only=read_only, data_only=True)
 
 
+_DURACAO_RE = re.compile(r'(\d+)\s*["\″\']')
+
+
+def _extract_duracao(text: str | None) -> int | None:
+    """Extrai duração em segundos de strings como 'Filme de 60\"' ou 'Filme 30\''."""
+    if not text:
+        return None
+    m = _DURACAO_RE.search(str(text))
+    return int(m.group(1)) if m else None
+
+
 def _normalize_va(v) -> float | None:
     """Decimal (0.622) → percentagem (62.2). Mantém se já > 1."""
     f = to_float(v)
@@ -117,13 +128,16 @@ def parse_comprovante(
                               "Entregues/Impressões", "Entregues/Impressoes")
     if i_impressoes is None:
         i_impressoes = col_index(header, "Entregues", "Entregue")
-    i_cliques    = col_index(header, "Cliques", "Clicks", "Cliques Únicos")
-    i_views50    = col_index(header, "100%")
-    i_viewable   = col_index(header, "Viewable", "Viewables")
+    i_cliques      = col_index(header, "Cliques", "Clicks", "Cliques Únicos")
+    i_views_start  = col_index(header, "0%")
+    i_views_50     = col_index(header, "50%")
+    i_views50      = col_index(header, "100%")   # alias histórico → views_100
+    i_viewable     = col_index(header, "Viewable", "Viewables")
     i_viewability= col_index(header, "VA%", "Viewability", "VA %", "View%",
                               "Viewability (IAB)", "VA (IAB)")
-    i_contratado = col_index(header, "Contratado", "Contracted")
-    i_data       = col_index(header, "Data", "Date")
+    i_contratado     = col_index(header, "Contratado", "Contracted")
+    i_data           = col_index(header, "Data", "Date")
+    i_linha_criativa = col_index(header, "Linha Criativa", "Criativo", "Creative", "Criatividade")
 
     if i_impressoes is None:
         wb.close()
@@ -132,12 +146,15 @@ def parse_comprovante(
     # Arquivo de veículo único: infere nome do veículo pelo nome do arquivo.
     single_vehicle = vehicle_from_filename(filepath)
 
-    entregue:   dict[str, int]   = defaultdict(int)
-    cliques:    dict[str, int]   = defaultdict(int)
-    views50:    dict[str, int]   = defaultdict(int)
-    viewables:  dict[str, int]   = defaultdict(int)
+    # Keyed by (vname, duracao) to keep per-duration view totals separate
+    entregue:    dict[tuple, int]   = defaultdict(int)
+    cliques:     dict[tuple, int]   = defaultdict(int)
+    views_start: dict[tuple, int]   = defaultdict(int)
+    views_50:    dict[tuple, int]   = defaultdict(int)
+    views50:     dict[tuple, int]   = defaultdict(int)
+    viewables:   dict[tuple, int]   = defaultdict(int)
+    # Keyed by vname only (vehicle-level fields)
     contratado: dict[str, int]   = {}
-    viewability:dict[str, float] = {}
     va_wsum:    dict[str, float] = defaultdict(float)
     va_weight:  dict[str, int]   = defaultdict(int)
 
@@ -167,19 +184,30 @@ def parse_comprovante(
             if data_fim and d > data_fim:
                 continue
 
-        imp      = to_int(row[i_impressoes] if i_impressoes < len(row) else None)
-        cliq_val = to_int(row[i_cliques]   if i_cliques  is not None and i_cliques  < len(row) else None)
-        v50_val  = to_int(row[i_views50]   if i_views50  is not None and i_views50  < len(row) else None)
-        va_val   = to_int(row[i_viewable]  if i_viewable is not None and i_viewable < len(row) else None)
+        # Extract duration from Linha Criativa for this row
+        dur_val: int | None = None
+        if i_linha_criativa is not None and i_linha_criativa < len(row):
+            dur_val = _extract_duracao(row[i_linha_criativa])
+
+        key = (vname, dur_val)
+
+        imp      = to_int(row[i_impressoes]   if i_impressoes < len(row) else None)
+        cliq_val = to_int(row[i_cliques]      if i_cliques      is not None and i_cliques      < len(row) else None)
+        vs_val   = to_int(row[i_views_start]  if i_views_start  is not None and i_views_start  < len(row) else None)
+        v50p_val = to_int(row[i_views_50]     if i_views_50     is not None and i_views_50     < len(row) else None)
+        v50_val  = to_int(row[i_views50]      if i_views50      is not None and i_views50      < len(row) else None)
+        va_val   = to_int(row[i_viewable]     if i_viewable     is not None and i_viewable     < len(row) else None)
 
         if imp == 0 and cliq_val == 0 and v50_val == 0 and va_val == 0:
             continue
 
         if imp:
-            entregue[vname] += imp
-        cliques[vname]  += cliq_val
-        views50[vname]  += v50_val
-        viewables[vname] += va_val
+            entregue[key] += imp
+        cliques[key]      += cliq_val
+        views_start[key]  += vs_val
+        views_50[key]     += v50p_val
+        views50[key]      += v50_val
+        viewables[key]    += va_val
         if i_viewability is not None and i_viewability < len(row) and imp > 0:
             va = _normalize_va(row[i_viewability])
             if va is not None:
@@ -196,9 +224,11 @@ def parse_comprovante(
     if not entregue:
         return []
 
-    # Viewability: média ponderada (sem linhas #TOTAL no ADFORCE)
-    for vname in entregue:
-        if vname not in viewability and va_weight[vname] > 0:
+    # Viewability: média ponderada por veículo (independente de duração)
+    viewability: dict[str, float] = {}
+    seen_vnames = {vname for (vname, _) in entregue}
+    for vname in seen_vnames:
+        if va_weight[vname] > 0:
             viewability[vname] = round(va_wsum[vname] / va_weight[vname], 2)
 
     return [
@@ -207,15 +237,20 @@ def parse_comprovante(
             "tipo_compra":       None,
             "contratado":        contratado.get(vname),
             "entregue":          imp,
-            "cliques":           cliques[vname] or None,
-            "views":             views50[vname] or None,
-            "viewables":         viewables[vname] or None,
+            "cliques":           cliques[key] or None,
+            "views_start":       views_start[key] or None if i_views_start is not None else None,
+            "views_50":          views_50[key]    or None if i_views_50    is not None else None,
+            "views_100":         views50[key]     or None if i_views50     is not None else None,
+            "views":             views50[key]     or None,
+            "viewables":         viewables[key]   or None,
             "viewability":       viewability.get(vname),
+            "duracao_segundos":  dur,
             "indevidas":         {},
             "url_sample":        [],
             "formato_detectado": "adforce_comprovante",
         }
-        for vname, imp in entregue.items()
+        for (vname, dur), imp in entregue.items()
+        for key in [(vname, dur)]
     ]
 
 
@@ -396,21 +431,26 @@ def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int
                     return 0
                 return to_int(row[i_col]) or 0
 
-            v_imp = _metric(i_imp)
+            v_imp      = _metric(i_imp)
+            v_cliques   = _metric(i_cliques)
+            v_vis       = _metric(i_vis)
+            v_vis_comp  = _metric(i_vis_comp)
 
-            veiculos_entregue[veiculo] += v_imp
+            total_val = v_imp + v_cliques + v_vis + v_vis_comp
+
+            veiculos_entregue[veiculo] += total_val
 
             cat_key = normaliza_categoria(categoria)
             if not cat_key:
                 continue
 
-            if v_imp > 0:
-                indev[veiculo][cat_key] += v_imp
+            if total_val > 0:
+                indev[veiculo][cat_key] += total_val
 
-            if url and v_imp > 0:
+            if url and total_val > 0:
                 pool_count += 1
                 entry = {"url": url, "categoria": categoria, "veiculo": veiculo,
-                         "impressoes": v_imp}
+                         "impressoes": total_val}
                 if len(url_pool) < MAX_POOL:
                     url_pool.append(entry)
                 else:

@@ -30,6 +30,18 @@ type VerificationResult = {
   url_check_anomalies: UrlAnomaly[];
 };
 
+type ViewRule = {
+  veiculo: string;
+  criterio: "start" | "50" | "100";
+  secundagem: string;
+};
+
+const CRITERIO_OPTIONS: { value: ViewRule["criterio"]; label: string }[] = [
+  { value: "start", label: "Start do vídeo (0%)" },
+  { value: "50", label: "50% visualizado" },
+  { value: "100", label: "100% completo" },
+];
+
 const STATUS_COLORS: Record<string, string> = {
   OK: "text-emerald-400",
   DIVERGENCIA: "text-rose-400",
@@ -151,7 +163,7 @@ function DevolutivaLines({ text }: { text: string }) {
         const m = line.match(DEVOLUTIVA_LINE_RE);
         if (m) {
           const [, prefix, campo, rest] = m;
-          const isOk  = prefix === "OK";
+          const isOk = prefix === "OK";
           const isDiv = prefix === "DIV";
           const isDif = prefix === "DIF";
           const pctMatch = rest.match(/\(([+-]?\d+(?:[.,]\d+)?)%\)/);
@@ -161,10 +173,10 @@ function DevolutivaLines({ text }: { text: string }) {
           const color = isOk
             ? "text-emerald-400"
             : isDiv
-            ? "text-rose-400"
-            : isDif
-            ? difColorByPct(pctValue)
-            : "text-amber-400/70";
+              ? "text-rose-400"
+              : isDif
+                ? difColorByPct(pctValue)
+                : "text-amber-400/70";
           return (
             <div key={i} className="text-xs leading-relaxed">
               <span className={`font-bold ${color}`}>{prefix}</span>{" "}
@@ -191,12 +203,12 @@ function DevolutivaLines({ text }: { text: string }) {
 }
 
 const ADSERVERS: { id: string; label: string; disabled?: boolean }[] = [
-  { id: "00px",     label: "00px" },
-  { id: "adforce",  label: "ADFORCE" },
+  { id: "00px", label: "00px" },
+  { id: "adforce", label: "ADFORCE" },
   { id: "admotion", label: "ADMOTION" },
-  { id: "ahead",    label: "AHEAD" },
-  { id: "metrike",  label: "METRIKE" },
-  { id: "brz",      label: "BRZ", disabled: true },
+  { id: "ahead", label: "AHEAD" },
+  { id: "metrike", label: "METRIKE" },
+  { id: "brz", label: "BRZ", disabled: true },
 ];
 
 const LOADING_STEPS = [
@@ -208,10 +220,18 @@ const LOADING_STEPS = [
 ];
 
 const MONTHS = [
-  { label: "Jan", num: 1 }, { label: "Fev", num: 2 }, { label: "Mar", num: 3 },
-  { label: "Abr", num: 4 }, { label: "Mai", num: 5 }, { label: "Jun", num: 6 },
-  { label: "Jul", num: 7 }, { label: "Ago", num: 8 }, { label: "Set", num: 9 },
-  { label: "Out", num: 10 }, { label: "Nov", num: 11 }, { label: "Dez", num: 12 },
+  { label: "Jan", num: 1 },
+  { label: "Fev", num: 2 },
+  { label: "Mar", num: 3 },
+  { label: "Abr", num: 4 },
+  { label: "Mai", num: 5 },
+  { label: "Jun", num: 6 },
+  { label: "Jul", num: 7 },
+  { label: "Ago", num: 8 },
+  { label: "Set", num: 9 },
+  { label: "Out", num: 10 },
+  { label: "Nov", num: 11 },
+  { label: "Dez", num: 12 },
 ];
 
 function lastDayOfMonth(year: number, month: number): number {
@@ -228,6 +248,9 @@ export default function VerificationContainer() {
   const [fim, setFim] = useState("");
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const [urlSamplePct, setUrlSamplePct] = useState(10);
+  const [viewRules, setViewRules] = useState<ViewRule[]>([]);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [anomaliesOpen, setAnomaliesOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
@@ -236,7 +259,9 @@ export default function VerificationContainer() {
 
   function formatInt(value?: number): string {
     if (typeof value !== "number" || !Number.isFinite(value)) return "—";
-    return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(value);
+    return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(
+      value,
+    );
   }
 
   function formatPct(value?: number): string {
@@ -278,7 +303,10 @@ export default function VerificationContainer() {
   }
 
   useEffect(() => {
-    if (!loading) { setLoadingStep(0); return; }
+    if (!loading) {
+      setLoadingStep(0);
+      return;
+    }
     const id = setInterval(() => {
       setLoadingStep((s) => (s + 1) % LOADING_STEPS.length);
     }, 3200);
@@ -297,9 +325,12 @@ export default function VerificationContainer() {
       form.append("adserver", adserver);
       form.append("consolidado", consolidado[0]);
       for (const f of comprovantes) form.append("comprovante", f);
-      for (const f of verifs)       form.append("verif", f);
+      for (const f of verifs) form.append("verif", f);
       if (ini) form.append("ini", ini);
       if (fim) form.append("fim", fim);
+      form.append("url_sample_pct", String(urlSamplePct));
+      if (viewRules.length > 0)
+        form.append("view_rules", JSON.stringify(viewRules));
 
       const res = await fetch("/api/verification/run", {
         method: "POST",
@@ -340,11 +371,14 @@ export default function VerificationContainer() {
     setFim("");
     setSelectedYear(currentYear);
     setSelectedMonth(null);
+    setUrlSamplePct(10);
+    setViewRules([]);
     setResult(null);
     setError(null);
   }
 
-  const canSubmit = !!adserver && consolidado.length > 0 && comprovantes.length > 0 && !loading;
+  const canSubmit =
+    !!adserver && consolidado.length > 0 && comprovantes.length > 0 && !loading;
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden relative nebula-bg">
@@ -376,17 +410,20 @@ export default function VerificationContainer() {
                 <button
                   key={a.id}
                   disabled={a.disabled}
-                  onClick={() => !a.disabled && setAdserver(a.id === adserver ? null : a.id)}
+                  onClick={() =>
+                    !a.disabled && setAdserver(a.id === adserver ? null : a.id)
+                  }
                   title={a.disabled ? "Em breve" : undefined}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${
                     a.disabled
                       ? "border-white/8 text-white/20 cursor-not-allowed"
                       : adserver === a.id
-                      ? "bg-[rgba(120,180,255,0.18)] border-[rgba(120,180,255,0.4)] text-[rgba(120,180,255,0.95)]"
-                      : "bg-white/4 border-white/10 text-white/50 hover:text-white/80 hover:border-white/25"
+                        ? "bg-[rgba(120,180,255,0.18)] border-[rgba(120,180,255,0.4)] text-[rgba(120,180,255,0.95)]"
+                        : "bg-white/4 border-white/10 text-white/50 hover:text-white/80 hover:border-white/25"
                   }`}
                 >
-                  {a.label}{a.disabled ? " ↗" : ""}
+                  {a.label}
+                  {a.disabled ? " ↗" : ""}
                 </button>
               ))}
             </div>
@@ -417,6 +454,129 @@ export default function VerificationContainer() {
             />
           </div>
 
+          {/* % de URLs analisadas */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-white/40 font-medium uppercase tracking-wider shrink-0">
+              % URLs analisadas por IA
+            </span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={urlSamplePct}
+              onChange={(e) =>
+                setUrlSamplePct(
+                  Math.max(0, Math.min(100, Number(e.target.value))),
+                )
+              }
+              className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-white/30 w-20 text-center"
+            />
+            <span className="text-xs text-white/30">
+              {urlSamplePct === 0
+                ? "todas as URLs"
+                : `${urlSamplePct}% por categoria`}
+            </span>
+          </div>
+
+          {/* Regras de Visualização */}
+          <div className="space-y-2">
+            <button
+              onClick={() => setRulesOpen((o) => !o)}
+              className="flex items-center gap-2 text-xs text-white/40 hover:text-white/60 transition-colors font-medium uppercase tracking-wider"
+            >
+              <span>{rulesOpen ? "▾" : "▸"}</span>
+              Regras de Visualização
+              {viewRules.length > 0 && (
+                <span className="bg-[rgba(120,180,255,0.2)] text-[rgba(120,180,255,0.8)] rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
+                  {viewRules.length}
+                </span>
+              )}
+            </button>
+            {rulesOpen && (
+              <div className="space-y-2 pl-4 border-l border-white/10">
+                {viewRules.map((rule, idx) => (
+                  <div key={idx} className="flex items-center gap-2 flex-wrap">
+                    <input
+                      type="text"
+                      placeholder="Veículo"
+                      value={rule.veiculo}
+                      onChange={(e) =>
+                        setViewRules((rs) =>
+                          rs.map((r, i) =>
+                            i === idx ? { ...r, veiculo: e.target.value } : r,
+                          ),
+                        )
+                      }
+                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/70 placeholder:text-white/25 focus:outline-none focus:border-white/30 w-40"
+                    />
+                    <select
+                      value={rule.criterio}
+                      onChange={(e) =>
+                        setViewRules((rs) =>
+                          rs.map((r, i) =>
+                            i === idx
+                              ? {
+                                  ...r,
+                                  criterio: e.target
+                                    .value as ViewRule["criterio"],
+                                }
+                              : r,
+                          ),
+                        )
+                      }
+                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/70 focus:outline-none focus:border-white/30"
+                    >
+                      {CRITERIO_OPTIONS.map((o) => (
+                        <option
+                          key={o.value}
+                          value={o.value}
+                          className="bg-[#1a1a2e]"
+                        >
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      placeholder="Seg. (ex: 60)"
+                      value={rule.secundagem}
+                      onChange={(e) =>
+                        setViewRules((rs) =>
+                          rs.map((r, i) =>
+                            i === idx
+                              ? { ...r, secundagem: e.target.value }
+                              : r,
+                          ),
+                        )
+                      }
+                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/70 placeholder:text-white/25 focus:outline-none focus:border-white/30 w-32"
+                    />
+                    <button
+                      onClick={() =>
+                        setViewRules((rs) => rs.filter((_, i) => i !== idx))
+                      }
+                      className="text-white/30 hover:text-rose-400 transition-colors text-sm px-1"
+                      title="Remover regra"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() =>
+                    setViewRules((rs) => [
+                      ...rs,
+                      { veiculo: "", criterio: "100", secundagem: "" },
+                    ])
+                  }
+                  className="text-xs text-[rgba(120,180,255,0.6)] hover:text-[rgba(120,180,255,0.9)] transition-colors"
+                >
+                  + Adicionar regra
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Filtro de período (opcional) */}
           <div className="space-y-3">
             {/* Chips de ano */}
@@ -424,7 +584,7 @@ export default function VerificationContainer() {
               <span className="text-xs text-white/40 font-medium uppercase tracking-wider shrink-0 mr-1">
                 Ano
               </span>
-              {[currentYear - 1, currentYear].map((y) => (
+              {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
                 <button
                   key={y}
                   onClick={() => selectYear(y)}
@@ -505,7 +665,9 @@ export default function VerificationContainer() {
                 <p className="text-sm text-[rgba(120,180,255,0.8)] font-medium animate-pulse">
                   {LOADING_STEPS[loadingStep]}
                 </p>
-                <p className="text-xs text-white/25">Isso pode levar alguns segundos...</p>
+                <p className="text-xs text-white/25">
+                  Isso pode levar alguns segundos...
+                </p>
               </div>
               {/* Indicador de progresso */}
               <div className="flex gap-1.5">
@@ -516,8 +678,8 @@ export default function VerificationContainer() {
                       i === loadingStep
                         ? "w-5 bg-[rgba(120,180,255,0.7)]"
                         : i < loadingStep
-                        ? "w-1.5 bg-[rgba(120,180,255,0.35)]"
-                        : "w-1.5 bg-white/10"
+                          ? "w-1.5 bg-[rgba(120,180,255,0.35)]"
+                          : "w-1.5 bg-white/10"
                     }`}
                   />
                 ))}
@@ -621,7 +783,9 @@ export default function VerificationContainer() {
                             : "border-white/5 hover:bg-white/2"
                         }`}
                       >
-                        <td className={`px-4 py-3 font-medium ${v.status === "DIVERGENCIA" ? "text-rose-300/90" : "text-white/80"}`}>
+                        <td
+                          className={`px-4 py-3 font-medium ${v.status === "DIVERGENCIA" ? "text-rose-300/90" : "text-white/80"}`}
+                        >
                           {v.veiculo}
                         </td>
                         <td className="px-4 py-3">
@@ -692,16 +856,29 @@ export default function VerificationContainer() {
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-white/10">
-                            <th className="text-left py-2 pr-4 text-white/40 font-medium">URL</th>
-                            <th className="text-left py-2 pr-4 text-white/40 font-medium whitespace-nowrap">Categoria</th>
-                            <th className="text-left py-2 pr-4 text-white/40 font-medium whitespace-nowrap">Impressões URL</th>
-                            <th className="text-left py-2 pr-4 text-white/40 font-medium whitespace-nowrap">% do total</th>
-                            <th className="text-left py-2 text-white/40 font-medium">Motivo</th>
+                            <th className="text-left py-2 pr-4 text-white/40 font-medium">
+                              URL
+                            </th>
+                            <th className="text-left py-2 pr-4 text-white/40 font-medium whitespace-nowrap">
+                              Categoria
+                            </th>
+                            <th className="text-left py-2 pr-4 text-white/40 font-medium whitespace-nowrap">
+                              Impressões URL
+                            </th>
+                            <th className="text-left py-2 pr-4 text-white/40 font-medium whitespace-nowrap">
+                              % do total
+                            </th>
+                            <th className="text-left py-2 text-white/40 font-medium">
+                              Motivo
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
                           {result.url_check_anomalies.map((a, i) => (
-                            <tr key={i} className="border-b border-white/5 last:border-0">
+                            <tr
+                              key={i}
+                              className="border-b border-white/5 last:border-0"
+                            >
                               <td className="py-2 pr-4 text-white/50 max-w-[260px] truncate">
                                 <a
                                   href={a.url}
@@ -713,9 +890,15 @@ export default function VerificationContainer() {
                                   {a.url}
                                 </a>
                               </td>
-                              <td className="py-2 pr-4 text-violet-300/70 whitespace-nowrap">{a.categoria}</td>
-                              <td className="py-2 pr-4 text-white/55 whitespace-nowrap">{formatInt(a.impressoes)}</td>
-                              <td className="py-2 pr-4 text-white/55 whitespace-nowrap">{formatPct(a.pct)}</td>
+                              <td className="py-2 pr-4 text-violet-300/70 whitespace-nowrap">
+                                {a.categoria}
+                              </td>
+                              <td className="py-2 pr-4 text-white/55 whitespace-nowrap">
+                                {formatInt(a.impressoes)}
+                              </td>
+                              <td className="py-2 pr-4 text-white/55 whitespace-nowrap">
+                                {formatPct(a.pct)}
+                              </td>
                               <td className="py-2 text-white/50">{a.reason}</td>
                             </tr>
                           ))}

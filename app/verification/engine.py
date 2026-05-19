@@ -92,8 +92,13 @@ def _detect_consolidado_cols(ws) -> dict:
     Fallback para os valores hardcoded quando uma coluna não é encontrada.
     """
     indevidas: dict[str, int] = {}
-    devolutiva_bi = COL_DEVOLUTIVA_BI
-    url_info = COL_URL_INFO
+    devolutiva_bi  = COL_DEVOLUTIVA_BI
+    url_info       = COL_URL_INFO
+    col_views_start:  int | None = None
+    col_views_50:     int | None = None
+    col_views_100:    int | None = None
+    col_viewables:    int | None = None
+    col_viewability:  int | None = None
 
     for c in range(1, 36):
         raw = _cell_value(ws, HEADER_ROW, c)
@@ -110,11 +115,26 @@ def _detect_consolidado_cols(ws) -> dict:
             devolutiva_bi = c
         elif "url info" in tl:
             url_info = c
+        elif tl in ("views start", "views 0%"):
+            col_views_start = c
+        elif tl in ("views 50%", "views50%"):
+            col_views_50 = c
+        elif tl in ("views 100%", "views100%"):
+            col_views_100 = c
+        elif tl in ("va", "viewables", "viewable impressions", "impressões viewáveis", "impressoes viewaveis"):
+            col_viewables = c
+        elif tl in ("va%", "viewability", "viewability%", "taxa de viewability"):
+            col_viewability = c
 
     return {
-        "indevidas":    indevidas if indevidas else dict(COL_INDEVIDAS),
-        "devolutiva_bi": devolutiva_bi,
-        "url_info":      url_info,
+        "indevidas":       indevidas if indevidas else dict(COL_INDEVIDAS),
+        "devolutiva_bi":   devolutiva_bi,
+        "url_info":        url_info,
+        "col_views_start": col_views_start,
+        "col_views_50":    col_views_50,
+        "col_views_100":   col_views_100,
+        "col_viewables":   col_viewables,
+        "col_viewability": col_viewability,
     }
 
 
@@ -179,8 +199,13 @@ def _read_consolidado(ws) -> tuple[list[dict], int]:
     adserver-específicos sem branches por adserver.
     """
     detected = _detect_consolidado_cols(ws)
-    col_indevidas  = detected["indevidas"]
-    col_dev_bi     = detected["devolutiva_bi"]
+    col_indevidas    = detected["indevidas"]
+    col_dev_bi       = detected["devolutiva_bi"]
+    col_vs           = detected["col_views_start"]
+    col_v50          = detected["col_views_50"]
+    col_v100         = detected["col_views_100"]
+    col_va           = detected["col_viewables"]   or COL_VIEWABLES
+    col_va_pct       = detected["col_viewability"] or COL_VIEWABILITY
 
     rows = []
     for row_idx in range(DATA_START_ROW, ws.max_row + 1):
@@ -198,7 +223,7 @@ def _read_consolidado(ws) -> tuple[list[dict], int]:
         }
 
         # Normaliza viewability do consolidado: Excel armazena como decimal (0.7166 = 71.66%)
-        va_raw = _to_float_safe(_cell_value(ws, row_idx, COL_VIEWABILITY))
+        va_raw = _to_float_safe(_cell_value(ws, row_idx, col_va_pct))
         if va_raw is not None:
             viewability_val = round(va_raw * 100, 2) if va_raw <= 1.0 else round(va_raw, 2)
         else:
@@ -210,8 +235,11 @@ def _read_consolidado(ws) -> tuple[list[dict], int]:
             "contratado":    _to_int_safe(_cell_value(ws, row_idx, COL_CONTRATADO)),
             "entregue":      entregue,
             "views":         views,
+            "views_start":   _to_int_safe(_cell_value(ws, row_idx, col_vs))   if col_vs  else None,
+            "views_50":      _to_int_safe(_cell_value(ws, row_idx, col_v50))  if col_v50 else None,
+            "views_100":     _to_int_safe(_cell_value(ws, row_idx, col_v100)) if col_v100 else None,
             "cliques":       _to_int_safe(_cell_value(ws, row_idx, COL_CLIQUES)),
-            "viewables":     _to_int_safe(_cell_value(ws, row_idx, COL_VIEWABLES)),
+            "viewables":     _to_int_safe(_cell_value(ws, row_idx, col_va)),
             "viewability":   viewability_val,
             "indevidas":     indevidas,
         })
@@ -253,9 +281,12 @@ def _merge_by_veiculo(results: list[dict]) -> dict[str, dict]:
             merged[key]["indevidas"] = dict(r.get("indevidas", {}))
         else:
             m = merged[key]
-            m["entregue"]  = (m.get("entregue") or 0) + (r.get("entregue") or 0)
-            m["cliques"]   = _add_optional(m.get("cliques"),   r.get("cliques"))
-            m["viewables"] = _add_optional(m.get("viewables"), r.get("viewables"))
+            m["entregue"]    = (m.get("entregue") or 0) + (r.get("entregue") or 0)
+            m["cliques"]     = _add_optional(m.get("cliques"),      r.get("cliques"))
+            m["viewables"]   = _add_optional(m.get("viewables"),    r.get("viewables"))
+            m["views_start"] = _add_optional(m.get("views_start"),  r.get("views_start"))
+            m["views_50"]    = _add_optional(m.get("views_50"),     r.get("views_50"))
+            m["views_100"]   = _add_optional(m.get("views_100"),    r.get("views_100"))
             for cat, val in r.get("indevidas", {}).items():
                 m["indevidas"][cat] = m["indevidas"].get(cat, 0) + val
     return merged
@@ -283,7 +314,16 @@ def _compare(
 
     # ── Campos do comprovante ─────────────────────────────────────────────────
     if comp_result is not None:
-        for campo in ("entregue", "cliques", "views", "viewables"):
+        # Usar breakdown granular (views_start/50/100) quando o consolidado tiver essas colunas;
+        # caso contrário, cair de volta no campo legado "views".
+        _VIEW_BREAKDOWN = ("views_start", "views_50", "views_100")
+        has_breakdown = any(consol_row.get(k) for k in _VIEW_BREAKDOWN)
+        campos_views = (
+            [k for k in _VIEW_BREAKDOWN if consol_row.get(k) or comp_result.get(k)]
+            if has_breakdown else ["views"]
+        )
+
+        for campo in ("entregue", "cliques", *campos_views, "viewables"):
             comp_val   = comp_result.get(campo) or 0
             consol_val = consol_row.get(campo)  or 0
             if comp_val == 0:
@@ -357,7 +397,11 @@ def _compare(
         linhas.append(f"OK cliques: {_fmt_num(cliques_c)}")
     if impressoes_c and cliques_c:
         linhas.append(f"OK CTR: {cliques_c / impressoes_c * 100:.2f}%")
-    if "views" not in reported and views_c:
+    for _vf in ("views_start", "views_50", "views_100"):
+        _vv = consol_row.get(_vf) or 0
+        if _vf not in reported and _vv:
+            linhas.append(f"OK {_vf}: {_fmt_num(_vv)}")
+    if "views" not in reported and views_c and not any(consol_row.get(k) for k in ("views_start", "views_50", "views_100")):
         linhas.append(f"OK views: {_fmt_num(views_c)}")
     if impressoes_c and views_c:
         linhas.append(f"OK VTR: {views_c / impressoes_c * 100:.2f}%")
@@ -415,6 +459,8 @@ def verificar(
     data_ini: date | None = None,
     data_fim: date | None = None,
     output_path: str | None = None,
+    url_sample_pct: int = 10,
+    view_rules: list[dict] | None = None,
 ) -> dict:
     """
     Verifica um consolidado contra comprovantes e arquivos de verification.
@@ -478,18 +524,19 @@ def verificar(
         except Exception as e:
             parse_errors.append({"arquivo": Path(cp).name, "erro": str(e)})
 
-    # ── Amostra de URLs: 30% por categoria indevida, cap global de 200 ──────
+    # ── Amostra de URLs: pct% por categoria indevida (0 = todas) ──────────────
     # Parsers devolvem o pool completo (reservoir ≤ 500); amostragem feita aqui.
     if url_pool:
-        by_cat: dict[str, list] = defaultdict(list)
-        for item in url_pool:
-            by_cat[item["categoria"]].append(item)
-        url_sample: list[dict] = []
-        for items in by_cat.values():
-            n = max(1, len(items) * 30 // 100)
-            url_sample.extend(random.sample(items, min(n, len(items))))
-        if len(url_sample) > 200:
-            url_sample = random.sample(url_sample, 200)
+        if url_sample_pct == 0:
+            url_sample: list[dict] = list(url_pool)
+        else:
+            by_cat: dict[str, list] = defaultdict(list)
+            for item in url_pool:
+                by_cat[item["categoria"]].append(item)
+            url_sample = []
+            for items in by_cat.values():
+                n = max(1, len(items) * url_sample_pct // 100)
+                url_sample.extend(random.sample(items, min(n, len(items))))
     else:
         url_sample = []
 
@@ -498,6 +545,36 @@ def verificar(
     comp_norm   = _merge_by_veiculo(comp_raw)
     verif_names = list(verif_norm.keys())
     comp_names  = list(comp_norm.keys())
+
+    # ── Mapa de regras de visualização: (veiculo_norm, duracao | None) → criterio
+    rule_map: dict[tuple, str] = {}
+    for r in (view_rules or []):
+        dur = int(r["secundagem"]) if r.get("secundagem") else None
+        rule_map[(_normalize(r["veiculo"]), dur)] = r["criterio"]
+
+    # ── Aplica regras de visualização: reconstrói campos de views em comp_norm ──
+    # comp_raw tem entradas separadas por (veiculo, duracao); comp_norm as fundiu.
+    # Para veículos com regras, zera os campos de views e reconstrói somando apenas
+    # o campo correto de cada entrada por duração.
+    if rule_map:
+        _vf_map = {"start": "views_start", "50": "views_50", "100": "views_100"}
+        _view_fields = set(_vf_map.values()) | {"views"}
+        vehicles_with_rules = {vk for (vk, _) in rule_map}
+        for vk in vehicles_with_rules:
+            if vk in comp_norm:
+                for f in _view_fields:
+                    comp_norm[vk][f] = None
+        for r in comp_raw:
+            vk = _normalize(r["veiculo"])
+            if vk not in vehicles_with_rules or vk not in comp_norm:
+                continue
+            dur = r.get("duracao_segundos")
+            rule = rule_map.get((vk, dur)) or rule_map.get((vk, None))
+            if rule is None:
+                continue
+            field = _vf_map[rule]
+            val = r.get(field) or 0
+            comp_norm[vk][field] = (comp_norm[vk].get(field) or 0) + val
 
     # ── Ler consolidado ───────────────────────────────────────────────────────
     wb = openpyxl.load_workbook(consolidado_path)
@@ -596,6 +673,10 @@ if __name__ == "__main__":
     ap.add_argument("--fim", default=None, metavar="DD/MM/YYYY")
     ap.add_argument("--output", default=None, metavar="PATH",
                     help="Caminho de saída (padrão: <consolidado>_verificado.xlsx)")
+    ap.add_argument("--url-pct", type=int, default=10, metavar="PCT",
+                    help="% de URLs indevidas a analisar via IA (0 = todas)")
+    ap.add_argument("--view-rules", default=None,
+                    help="JSON array de regras de visualização por veículo")
     args = ap.parse_args()
 
     from parser_utils import cli_date  # noqa: E402
@@ -609,6 +690,8 @@ if __name__ == "__main__":
             data_ini=cli_date(args.ini),
             data_fim=cli_date(args.fim),
             output_path=args.output,
+            url_sample_pct=args.url_pct,
+            view_rules=json.loads(args.view_rules) if args.view_rules else None,
         )
         # Resumo legível → stderr (não polui o JSON que o Node.js consome)
         print(f"\nArquivo gerado: {resultado['output']}", file=sys.stderr)

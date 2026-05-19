@@ -100,6 +100,8 @@ export async function POST(req: NextRequest) {
   const verifFiles = form.getAll('verif') as File[];
   const ini = form.get('ini') as string | null;
   const fim = form.get('fim') as string | null;
+  const urlSamplePct = Number(form.get('url_sample_pct') ?? 10);
+  const viewRulesRaw = form.get('view_rules') as string | null;
 
   // ── Executar engine ────────────────────────────────────────────────────────
   let engineResult: Record<string, unknown>;
@@ -118,8 +120,10 @@ export async function POST(req: NextRequest) {
       comp_files: await Promise.all(compFiles.map(async (f) => ({ name: f.name, b64: await toB64(f) }))),
       verif_files: await Promise.all(verifFiles.map(async (f) => ({ name: f.name, b64: await toB64(f) }))),
       adserver,
+      url_sample_pct: urlSamplePct,
       ...(ini ? { ini } : {}),
       ...(fim ? { fim } : {}),
+      ...(viewRulesRaw ? { view_rules: viewRulesRaw } : {}),
     };
 
     let pyResp: Response;
@@ -179,6 +183,8 @@ export async function POST(req: NextRequest) {
       if (verifPaths.length > 0) args.push('--verif', ...verifPaths);
       if (ini) args.push('--ini', ini);
       if (fim) args.push('--fim', fim);
+      args.push('--url-pct', String(urlSamplePct));
+      if (viewRulesRaw) args.push('--view-rules', viewRulesRaw);
 
       const stdout = await runEngine(args);
       engineResult = JSON.parse(stdout.trim()) as Record<string, unknown>;
@@ -204,22 +210,21 @@ export async function POST(req: NextRequest) {
     ? (engineResult.output_name as string)
     : outputPath ? path.basename(outputPath) : 'verificado.xlsx';
 
-  // ── AI URL check (10%, máx 50 URLs, 10 por vez para evitar rate limit) ─────
+  // ── AI URL check (pct controlado pelo engine, 10 por vez para evitar rate limit) ─────
   let urlCheckAnomalies: UrlAnomalyItem[] = [];
   const urlSample: UrlSampleItem[] = (engineResult.url_sample as UrlSampleItem[]) ?? [];
   if (urlSample.length > 0 && process.env.OLLAMA_BASE_URL) {
-    const capped = urlSample.slice(0, 50);
     const BATCH = 10;
-    for (let i = 0; i < capped.length; i += BATCH) {
+    for (let i = 0; i < urlSample.length; i += BATCH) {
       const settled = await Promise.allSettled(
-        capped.slice(i, i + BATCH).map(checkUrlCategory)
+        urlSample.slice(i, i + BATCH).map(checkUrlCategory)
       );
       urlCheckAnomalies.push(
         ...settled
           .filter((r): r is PromiseFulfilledResult<UrlAnomalyItem> =>
             r.status === 'fulfilled' && r.value !== null
           )
-          .map((r) => r.value)
+          .map((r) => r.value as UrlAnomalyItem)
       );
     }
   }
