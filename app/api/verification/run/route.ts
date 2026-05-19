@@ -161,7 +161,7 @@ export async function POST(req: NextRequest) {
     await fs.mkdir(tmpDir, { recursive: true });
 
     try {
-      const consolidadoPath = path.join(tmpDir, 'consolidado.xlsx');
+      const consolidadoPath = path.join(tmpDir, consolidadoFile.name);
       await fs.writeFile(consolidadoPath, Buffer.from(await consolidadoFile.arrayBuffer()));
 
       const compPaths: string[] = [];
