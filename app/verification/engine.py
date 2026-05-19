@@ -11,7 +11,7 @@ Fluxo:
        - entregue/cliques/viewables → vs comprovante
        - categorias indevidas       → vs verification
   5. Escreve devolutiva na coluna 28 (Devolutiva BI SECOM) do consolidado
-  6. Salva como <nome>_verificado.xlsx (não sobrescreve o original)
+  6. Salva como <nome> - Verificado.xlsx (não sobrescreve o original)
 
 Regras de divergência:
   - Entregue: |comp − consol| / consol > 2% → flaggar
@@ -470,7 +470,7 @@ def verificar(
     comp_paths       — arquivos de comprovante de entrega
     verif_paths      — arquivos de verification de URL (opcional)
     data_ini / data_fim — filtro de período (opcional)
-    output_path      — caminho de saída; padrão: <nome>_verificado.xlsx
+    output_path      — caminho de saída; padrão: <nome> - Verificado.xlsx
 
     Retorna dict com:
       {
@@ -640,7 +640,7 @@ def verificar(
         # ── Salvar arquivo verificado ─────────────────────────────────────────
         if output_path is None:
             p = Path(consolidado_path)
-            output_path = str(p.parent / (p.stem + "_verificado" + p.suffix))
+            output_path = str(p.parent / (p.stem + " - Verificado" + p.suffix))
 
         wb.save(output_path)
     finally:
@@ -672,7 +672,7 @@ if __name__ == "__main__":
     ap.add_argument("--ini", default=None, metavar="DD/MM/YYYY")
     ap.add_argument("--fim", default=None, metavar="DD/MM/YYYY")
     ap.add_argument("--output", default=None, metavar="PATH",
-                    help="Caminho de saída (padrão: <consolidado>_verificado.xlsx)")
+                    help="Caminho de saída (padrão: <consolidado> - Verificado.xlsx)")
     ap.add_argument("--url-pct", type=int, default=10, metavar="PCT",
                     help="% de URLs indevidas a analisar via IA (0 = todas)")
     ap.add_argument("--view-rules", default=None,
