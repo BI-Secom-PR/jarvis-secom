@@ -75,13 +75,17 @@ function FileDrop({
     if (picked.length) onChange(multiple ? picked : [picked[0]]);
   }
 
+  const hasFiles = files.length > 0;
+
   return (
     <div
-      className={`relative border border-dashed rounded-xl p-4 transition-colors select-none
+      className={`relative rounded-xl transition-all select-none overflow-hidden
         ${
           dragging
-            ? "border-white/50 bg-white/6"
-            : "border-white/20 bg-white/2 hover:border-white/40 hover:bg-white/4"
+            ? "border border-[rgba(120,180,255,0.5)] bg-[rgba(120,180,255,0.06)] shadow-[0_0_0_1px_rgba(120,180,255,0.15)]"
+            : hasFiles
+              ? "border border-[rgba(120,180,255,0.2)] bg-white/[0.03] hover:border-[rgba(120,180,255,0.32)]"
+              : "border border-dashed border-white/15 bg-white/[0.02] hover:border-white/30 hover:bg-white/[0.03]"
         }`}
     >
       {/* Input transparente cobre toda a área — clique + drag handlers direto no input */}
@@ -115,29 +119,47 @@ function FileDrop({
           handleFiles(e.dataTransfer.files);
         }}
       />
-      <p className="text-xs text-white/40 mb-2 font-medium uppercase tracking-wider">
-        {label}
-      </p>
-      {files.length === 0 ? (
-        <p className="text-sm text-white/30">
-          Clique ou arraste {multiple ? "arquivos" : "o arquivo"} .xlsx aqui
+
+      {/* Label strip */}
+      <div className={`px-4 pt-3 pb-2 border-b ${hasFiles ? "border-white/[0.06]" : "border-transparent"}`}>
+        <p className="text-[10px] text-white/55 font-semibold uppercase tracking-widest">
+          {label}
         </p>
-      ) : (
-        <ul className="space-y-1">
-          {files.map((f, i) => (
-            <li
-              key={`${i}-${f.name}`}
-              className="text-sm text-white/70 flex items-center gap-2"
-            >
-              <span className="text-white/30">•</span>
-              <span className="truncate max-w-[320px]">{f.name}</span>
-              <span className="text-white/30 text-xs ml-auto shrink-0">
-                {(f.size / 1024).toFixed(0)} KB
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      </div>
+
+      {/* Body */}
+      <div className="px-4 py-3">
+        {!hasFiles ? (
+          <div className="flex items-center gap-3">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="shrink-0 text-white/35">
+              <path d="M9 11.5V4M6 6.5 9 3.5l3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M3 12.5v1A1.5 1.5 0 0 0 4.5 15h9a1.5 1.5 0 0 0 1.5-1.5v-1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+            <p className="text-sm text-white/45">
+              {multiple ? "Arraste arquivos" : "Arraste o arquivo"}{" "}
+              <span className="text-white/58">ou clique</span>
+            </p>
+          </div>
+        ) : (
+          <ul className="space-y-1.5">
+            {files.map((f, i) => (
+              <li
+                key={`${i}-${f.name}`}
+                className="flex items-center gap-2"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0 text-[rgba(120,180,255,0.5)]">
+                  <path d="M7 1H3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4L7 1Z" stroke="currentColor" strokeWidth="1" strokeLinejoin="round"/>
+                  <path d="M7 1v3h3" stroke="currentColor" strokeWidth="1" strokeLinejoin="round"/>
+                </svg>
+                <span className="text-sm text-white/85 truncate">{f.name}</span>
+                <span className="text-[10px] text-white/42 ml-auto shrink-0 tabular-nums">
+                  {(f.size / 1024).toFixed(0)} KB
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
@@ -181,7 +203,7 @@ function DevolutivaLines({ text }: { text: string }) {
             <div key={i} className="text-xs leading-relaxed">
               <span className={`font-bold ${color}`}>{prefix}</span>{" "}
               <span className={`font-semibold ${color}`}>{campo.trim()}:</span>
-              <span className="text-white/50">{rest}</span>
+              <span className="text-white/68">{rest}</span>
             </div>
           );
         }
@@ -191,7 +213,7 @@ function DevolutivaLines({ text }: { text: string }) {
           <div
             key={i}
             className={`text-xs leading-relaxed ${
-              isPendente ? "text-amber-400 font-medium" : "text-white/40 italic"
+              isPendente ? "text-amber-400 font-medium" : "text-white/58 italic"
             }`}
           >
             {line}
@@ -383,26 +405,24 @@ export default function VerificationContainer() {
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden relative nebula-bg">
       {/* Header */}
-      <header className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-white/10">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/"
-            className="text-xs text-white/40 hover:text-white/70 transition-colors"
-          >
-            ← Início
-          </Link>
-          <span className="text-white/20">|</span>
-          <h1 className="text-sm font-semibold text-white/80 tracking-wide">
-            Verificação de Consolidados
-          </h1>
-        </div>
+      <header className="shrink-0 flex items-center gap-2.5 px-6 py-4 border-b border-white/[0.07]">
+        <Link
+          href="/"
+          className="text-xs text-white/52 hover:text-white/75 transition-colors"
+        >
+          Início
+        </Link>
+        <span className="text-white/28 text-xs">›</span>
+        <h1 className="text-xs font-semibold text-white/82 tracking-wide">
+          Verificação de Consolidados
+        </h1>
       </header>
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
           {/* Seletor de Adserver */}
           <div className="space-y-2">
-            <span className="text-xs text-white/40 font-medium uppercase tracking-wider">
+            <span className="text-xs text-white/62 font-medium uppercase tracking-wider">
               Adserver
             </span>
             <div className="flex items-center gap-2 flex-wrap">
@@ -419,7 +439,7 @@ export default function VerificationContainer() {
                       ? "border-white/8 text-white/20 cursor-not-allowed"
                       : adserver === a.id
                         ? "bg-[rgba(120,180,255,0.18)] border-[rgba(120,180,255,0.4)] text-[rgba(120,180,255,0.95)]"
-                        : "bg-white/4 border-white/10 text-white/50 hover:text-white/80 hover:border-white/25"
+                        : "bg-white/4 border-white/10 text-white/65 hover:text-white/90 hover:border-white/28"
                   }`}
                 >
                   {a.label}
@@ -455,34 +475,53 @@ export default function VerificationContainer() {
           </div>
 
           {/* % de URLs analisadas */}
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-white/40 font-medium uppercase tracking-wider shrink-0">
+          <div className="flex items-center gap-4 flex-wrap">
+            <span className="text-xs text-white/62 font-medium uppercase tracking-wider shrink-0">
               % URLs analisadas por IA
             </span>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={urlSamplePct}
-              onChange={(e) =>
-                setUrlSamplePct(
-                  Math.max(0, Math.min(100, Number(e.target.value))),
-                )
-              }
-              className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-white/30 w-20 text-center"
-            />
-            <span className="text-xs text-white/30">
-              {urlSamplePct === 0
-                ? "todas as URLs"
-                : `${urlSamplePct}% por categoria`}
+            <div className="flex items-center gap-1">
+              <button
+                id="decreaseButton"
+                type="button"
+                onClick={() => setUrlSamplePct((v) => Math.max(0, v - 5))}
+                className="w-7 h-7 flex items-center justify-center rounded-md bg-white/4 border border-white/10 text-white/65 hover:bg-white/8 hover:text-white/92 hover:border-white/25 active:bg-white/12 transition-all disabled:opacity-30"
+                disabled={urlSamplePct === 0}
+              >
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                  <path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z" />
+                </svg>
+              </button>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={urlSamplePct}
+                onChange={(e) =>
+                  setUrlSamplePct(Math.max(0, Math.min(100, Number(e.target.value))))
+                }
+                className="w-14 bg-white/5 border border-white/15 rounded-md py-1 text-sm text-white/88 text-center focus:outline-none focus:border-white/35 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <button
+                id="increaseButton"
+                type="button"
+                onClick={() => setUrlSamplePct((v) => Math.min(100, v + 5))}
+                className="w-7 h-7 flex items-center justify-center rounded-md bg-white/4 border border-white/10 text-white/65 hover:bg-white/8 hover:text-white/92 hover:border-white/25 active:bg-white/12 transition-all disabled:opacity-30"
+                disabled={urlSamplePct === 100}
+              >
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                  <path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z" />
+                </svg>
+              </button>
+            </div>
+            <span className="text-xs text-white/48">
+              {urlSamplePct === 0 ? "analisa todas as URLs" : `${urlSamplePct}% por categoria`}
             </span>
           </div>
-
           {/* Regras de Visualização */}
           <div className="space-y-2">
             <button
               onClick={() => setRulesOpen((o) => !o)}
-              className="flex items-center gap-2 text-xs text-white/40 hover:text-white/60 transition-colors font-medium uppercase tracking-wider"
+              className="flex items-center gap-2 text-xs text-white/60 hover:text-white/80 transition-colors font-medium uppercase tracking-wider"
             >
               <span>{rulesOpen ? "▾" : "▸"}</span>
               Regras de Visualização
@@ -507,7 +546,7 @@ export default function VerificationContainer() {
                           ),
                         )
                       }
-                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/70 placeholder:text-white/25 focus:outline-none focus:border-white/30 w-40"
+                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/85 placeholder:text-white/35 focus:outline-none focus:border-white/35 w-40"
                     />
                     <select
                       value={rule.criterio}
@@ -524,7 +563,7 @@ export default function VerificationContainer() {
                           ),
                         )
                       }
-                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/70 focus:outline-none focus:border-white/30"
+                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/85 focus:outline-none focus:border-white/35"
                     >
                       {CRITERIO_OPTIONS.map((o) => (
                         <option
@@ -549,13 +588,13 @@ export default function VerificationContainer() {
                           ),
                         )
                       }
-                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/70 placeholder:text-white/25 focus:outline-none focus:border-white/30 w-32"
+                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/85 placeholder:text-white/35 focus:outline-none focus:border-white/35 w-32"
                     />
                     <button
                       onClick={() =>
                         setViewRules((rs) => rs.filter((_, i) => i !== idx))
                       }
-                      className="text-white/30 hover:text-rose-400 transition-colors text-sm px-1"
+                      className="text-white/45 hover:text-rose-400 transition-colors text-sm px-1"
                       title="Remover regra"
                     >
                       ×
@@ -569,7 +608,7 @@ export default function VerificationContainer() {
                       { veiculo: "", criterio: "100", secundagem: "" },
                     ])
                   }
-                  className="text-xs text-[rgba(120,180,255,0.6)] hover:text-[rgba(120,180,255,0.9)] transition-colors"
+                  className="text-xs text-[rgba(120,180,255,0.75)] hover:text-[rgba(120,180,255,0.95)] transition-colors"
                 >
                   + Adicionar regra
                 </button>
@@ -581,7 +620,7 @@ export default function VerificationContainer() {
           <div className="space-y-3">
             {/* Chips de ano */}
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-white/40 font-medium uppercase tracking-wider shrink-0 mr-1">
+              <span className="text-xs text-white/62 font-medium uppercase tracking-wider shrink-0 mr-1">
                 Ano
               </span>
               {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
@@ -591,7 +630,7 @@ export default function VerificationContainer() {
                   className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors border ${
                     selectedYear === y
                       ? "bg-[rgba(120,180,255,0.18)] border-[rgba(120,180,255,0.4)] text-[rgba(120,180,255,0.95)]"
-                      : "bg-white/4 border-white/10 text-white/40 hover:text-white/70 hover:border-white/25"
+                      : "bg-white/4 border-white/10 text-white/60 hover:text-white/85 hover:border-white/28"
                   }`}
                 >
                   {y}
@@ -600,7 +639,7 @@ export default function VerificationContainer() {
             </div>
             {/* Chips de mês */}
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-white/40 font-medium uppercase tracking-wider shrink-0 mr-1">
+              <span className="text-xs text-white/62 font-medium uppercase tracking-wider shrink-0 mr-1">
                 Mês
               </span>
               {MONTHS.map((m) => (
@@ -610,7 +649,7 @@ export default function VerificationContainer() {
                   className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors border ${
                     selectedMonth === m.num
                       ? "bg-[rgba(120,180,255,0.18)] border-[rgba(120,180,255,0.4)] text-[rgba(120,180,255,0.95)]"
-                      : "bg-white/4 border-white/10 text-white/40 hover:text-white/70 hover:border-white/25"
+                      : "bg-white/4 border-white/10 text-white/60 hover:text-white/85 hover:border-white/28"
                   }`}
                 >
                   {m.label}
@@ -619,21 +658,21 @@ export default function VerificationContainer() {
             </div>
             {/* Range manual */}
             <div className="flex items-center gap-3">
-              <span className="text-xs text-white/30 shrink-0">ou</span>
+              <span className="text-xs text-white/48 shrink-0">ou</span>
               <input
                 type="text"
                 placeholder="DD/MM/AAAA"
                 value={ini}
                 onChange={(e) => handleManualDate("ini", e.target.value)}
-                className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 placeholder:text-white/25 focus:outline-none focus:border-white/30 w-36"
+                className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/85 placeholder:text-white/38 focus:outline-none focus:border-white/35 w-36"
               />
-              <span className="text-white/30 text-sm">até</span>
+              <span className="text-white/48 text-sm">até</span>
               <input
                 type="text"
                 placeholder="DD/MM/AAAA"
                 value={fim}
                 onChange={(e) => handleManualDate("fim", e.target.value)}
-                className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 placeholder:text-white/25 focus:outline-none focus:border-white/30 w-36"
+                className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/85 placeholder:text-white/38 focus:outline-none focus:border-white/35 w-36"
               />
             </div>
           </div>
@@ -642,11 +681,12 @@ export default function VerificationContainer() {
           <button
             onClick={handleVerificar}
             disabled={!canSubmit}
-            className="w-full py-3 rounded-xl text-sm font-semibold transition-all
-              bg-[rgba(120,180,255,0.12)] hover:bg-[rgba(120,180,255,0.2)]
-              border border-[rgba(120,180,255,0.2)] hover:border-[rgba(120,180,255,0.4)]
-              text-[rgba(120,180,255,0.9)] hover:text-[rgba(120,180,255,1)]
-              disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full py-3.5 rounded-xl text-sm font-semibold transition-all duration-200
+              bg-[rgba(120,180,255,0.12)] hover:bg-[rgba(120,180,255,0.18)]
+              border border-[rgba(120,180,255,0.22)] hover:border-[rgba(120,180,255,0.48)]
+              text-[rgba(120,180,255,0.85)] hover:text-white
+              shadow-[0_0_0_0_rgba(120,180,255,0)] hover:shadow-[0_0_24px_rgba(120,180,255,0.12)]
+              disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:shadow-none"
           >
             Verificar
           </button>
@@ -665,7 +705,7 @@ export default function VerificationContainer() {
                 <p className="text-sm text-[rgba(120,180,255,0.8)] font-medium animate-pulse">
                   {LOADING_STEPS[loadingStep]}
                 </p>
-                <p className="text-xs text-white/25">
+                <p className="text-xs text-white/45">
                   Isso pode levar alguns segundos...
                 </p>
               </div>
@@ -712,7 +752,7 @@ export default function VerificationContainer() {
             <div className="space-y-4">
               {/* Resumo */}
               <div className="flex items-center justify-between">
-                <div className="flex gap-4 text-xs text-white/50">
+                <div className="flex gap-4 text-xs text-white/68">
                   <span>
                     <span className="text-emerald-400 font-semibold">
                       {result.veiculos.filter((v) => v.status === "OK").length}
@@ -743,14 +783,14 @@ export default function VerificationContainer() {
                   {result.file_base64 && (
                     <button
                       onClick={handleDownload}
-                      className="text-xs px-4 py-2 rounded-lg border border-white/15 text-white/60 hover:text-white/90 hover:border-white/30 transition-colors"
+                      className="text-xs px-4 py-2 rounded-lg border border-white/15 text-white/72 hover:text-white/95 hover:border-white/32 transition-colors"
                     >
                       Baixar consolidado verificado
                     </button>
                   )}
                   <button
                     onClick={handleReset}
-                    className="text-xs px-4 py-2 rounded-lg border border-white/10 text-white/35 hover:text-white/70 hover:border-white/25 transition-colors"
+                    className="text-xs px-4 py-2 rounded-lg border border-white/10 text-white/52 hover:text-white/80 hover:border-white/25 transition-colors"
                   >
                     Nova verificação
                   </button>
@@ -762,13 +802,13 @@ export default function VerificationContainer() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/10 bg-white/3">
-                      <th className="text-left px-4 py-3 text-xs text-white/40 font-medium uppercase tracking-wider">
+                      <th className="text-left px-4 py-3 text-xs text-white/58 font-medium uppercase tracking-wider">
                         Veículo
                       </th>
-                      <th className="text-left px-4 py-3 text-xs text-white/40 font-medium uppercase tracking-wider">
+                      <th className="text-left px-4 py-3 text-xs text-white/58 font-medium uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="text-left px-4 py-3 text-xs text-white/40 font-medium uppercase tracking-wider">
+                      <th className="text-left px-4 py-3 text-xs text-white/58 font-medium uppercase tracking-wider">
                         Devolutiva
                       </th>
                     </tr>
@@ -784,7 +824,7 @@ export default function VerificationContainer() {
                         }`}
                       >
                         <td
-                          className={`px-4 py-3 font-medium ${v.status === "DIVERGENCIA" ? "text-rose-300/90" : "text-white/80"}`}
+                          className={`px-4 py-3 font-medium ${v.status === "DIVERGENCIA" ? "text-rose-300/95" : "text-white/92"}`}
                         >
                           {v.veiculo}
                         </td>
@@ -847,7 +887,7 @@ export default function VerificationContainer() {
                         {result.url_check_anomalies.length}
                       </span>
                     </span>
-                    <span className="text-white/30 text-xs">
+                    <span className="text-white/48 text-xs">
                       {anomaliesOpen ? "▲" : "▼"}
                     </span>
                   </button>
@@ -856,19 +896,19 @@ export default function VerificationContainer() {
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-white/10">
-                            <th className="text-left py-2 pr-4 text-white/40 font-medium">
+                            <th className="text-left py-2 pr-4 text-white/58 font-medium">
                               URL
                             </th>
-                            <th className="text-left py-2 pr-4 text-white/40 font-medium whitespace-nowrap">
+                            <th className="text-left py-2 pr-4 text-white/58 font-medium whitespace-nowrap">
                               Categoria
                             </th>
-                            <th className="text-left py-2 pr-4 text-white/40 font-medium whitespace-nowrap">
+                            <th className="text-left py-2 pr-4 text-white/58 font-medium whitespace-nowrap">
                               Impressões URL
                             </th>
-                            <th className="text-left py-2 pr-4 text-white/40 font-medium whitespace-nowrap">
+                            <th className="text-left py-2 pr-4 text-white/58 font-medium whitespace-nowrap">
                               % do total
                             </th>
-                            <th className="text-left py-2 text-white/40 font-medium">
+                            <th className="text-left py-2 text-white/58 font-medium">
                               Motivo
                             </th>
                           </tr>
@@ -879,7 +919,7 @@ export default function VerificationContainer() {
                               key={i}
                               className="border-b border-white/5 last:border-0"
                             >
-                              <td className="py-2 pr-4 text-white/50 max-w-[260px] truncate">
+                              <td className="py-2 pr-4 text-white/68 max-w-[260px] truncate">
                                 <a
                                   href={a.url}
                                   target="_blank"
@@ -893,13 +933,13 @@ export default function VerificationContainer() {
                               <td className="py-2 pr-4 text-violet-300/70 whitespace-nowrap">
                                 {a.categoria}
                               </td>
-                              <td className="py-2 pr-4 text-white/55 whitespace-nowrap">
+                              <td className="py-2 pr-4 text-white/72 whitespace-nowrap">
                                 {formatInt(a.impressoes)}
                               </td>
-                              <td className="py-2 pr-4 text-white/55 whitespace-nowrap">
+                              <td className="py-2 pr-4 text-white/72 whitespace-nowrap">
                                 {formatPct(a.pct)}
                               </td>
-                              <td className="py-2 text-white/50">{a.reason}</td>
+                              <td className="py-2 text-white/68">{a.reason}</td>
                             </tr>
                           ))}
                         </tbody>
