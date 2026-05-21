@@ -258,6 +258,10 @@ def _fuzzy_match(consol_norm: str, name_list: list[str], norm_dict: dict) -> tup
     """Retorna (result_dict, score) do melhor match fuzzy, ou (None, 0) se abaixo do threshold."""
     if not name_list:
         return None, 0
+    # Match exato tem prioridade absoluta — evita que "UOL" e "UOL VAST" se confundam,
+    # já que token_set_ratio trata subconjuntos de tokens como 100%.
+    if consol_norm in norm_dict:
+        return norm_dict[consol_norm], 100
     best = process.extractOne(
         consol_norm, name_list,
         scorer=fuzz.token_set_ratio,

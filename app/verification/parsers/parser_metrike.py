@@ -31,7 +31,8 @@ from parser_utils import col_index, parse_date, to_int, cli_date, vehicle_from_f
 def _find_header(ws):
     veiculo_variants  = {"veículo", "veiculo", "vehicle"}
     entregue_variants = {"impressões", "impressoes", "impressions",
-                         "entregues", "entregue"}
+                         "entregues", "entregue",
+                         "views", "view"}
     for i, row in enumerate(ws.iter_rows(max_row=25, values_only=True), start=1):
         vals = [str(v).strip() if v is not None else "" for v in row]
         lows = {v.lower() for v in vals}
@@ -73,14 +74,14 @@ def parse_comprovante(
     if header_row_idx is None:
         wb.close()
         raise ValueError(
-            f"Cabeçalho com 'Veículo' e 'Impressões' não encontrado: {path.name}"
+            f"Cabeçalho com 'Veículo' e 'Impressões'/'Views' não encontrado: {path.name}"
         )
 
     i_veiculo    = col_index(header, "Veículo", "Veiculo", "Vehicle")
     i_impressoes = col_index(header, "Impressões", "Impressoes", "Impressions",
-                              "Entregues", "Entregue")
+                              "Entregues", "Entregue", "Views", "View")
     i_cliques    = col_index(header, "Cliques", "Clicks")
-    i_viewable   = col_index(header, "Viewable", "Viewables")
+    i_viewable   = col_index(header, "Viewable", "Viewables", "Vieweables")
     i_contratado = col_index(header, "Contratado", "Contracted")
     i_data       = col_index(header, "Data", "Date")
 
