@@ -105,12 +105,21 @@ export async function POST(req: NextRequest) {
 
     const allBlobUrls = [consolidado_url, ...comp_urls, ...verif_urls];
 
+    // Download blobs via fetch (Node.js handles signed URLs fine) and pass as
+    // base64 to Python, because Python's urllib gets 403 from Vercel Blob CDN.
+    const downloadB64 = async (url: string) => {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`Blob download failed (${resp.status}): ${url}`);
+      return Buffer.from(await resp.arrayBuffer()).toString('base64');
+    };
+    const nameFromUrl = (url: string) => url.split('?')[0].split('/').pop() ?? 'file.xlsx';
+
     const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
     const pyBody = {
-      consolidado_url,
+      consolidado_b64:  await downloadB64(consolidado_url),
       consolidado_name,
-      comp_urls,
-      verif_urls,
+      comp_files:  await Promise.all(comp_urls.map(async (url) => ({ name: nameFromUrl(url), b64: await downloadB64(url) }))),
+      verif_files: await Promise.all(verif_urls.map(async (url) => ({ name: nameFromUrl(url), b64: await downloadB64(url) }))),
       adserver,
       url_sample_pct: body.url_sample_pct ?? 10,
       ...(body.ini ? { ini: body.ini } : {}),
