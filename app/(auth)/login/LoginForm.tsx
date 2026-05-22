@@ -1,10 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 
 export default function LoginForm() {
-  const router = useRouter()
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [error, setError]       = useState('')
@@ -28,14 +26,14 @@ export default function LoginForm() {
       return
     }
 
+    // Full page navigation — ensures Safari includes the cookie
     const ALLOWED_REDIRECTS = ['/', '/waiting']
     if (data.redirect && ALLOWED_REDIRECTS.includes(data.redirect)) {
-      router.push(data.redirect)
+      window.location.href = data.redirect
       return
     }
 
-    router.push('/')
-    router.refresh()
+    window.location.href = '/'
   }
 
   return (

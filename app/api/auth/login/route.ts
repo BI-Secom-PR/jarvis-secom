@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure:   IS_PROD,
-    sameSite: 'strict',
+    sameSite: 'lax',
     path:     '/',
     maxAge:   60 * 60 * 24 * 30, // 30 days
   })
