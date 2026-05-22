@@ -141,9 +141,10 @@ export async function POST(req: NextRequest) {
     if (!pyResp.ok) {
       let errText = pyRespText;
       try {
-        const errJson = JSON.parse(pyRespText) as { error?: string; trace?: string };
+        const errJson = JSON.parse(pyRespText) as { error?: string; trace?: string; openpyxl_version?: string; python_version?: string };
+        const meta = [errJson.openpyxl_version && `openpyxl=${errJson.openpyxl_version}`, errJson.python_version && `py=${errJson.python_version.split(' ')[0]}`].filter(Boolean).join(' ');
         const trace = errJson.trace ? `\n${errJson.trace}` : '';
-        errText = `${errJson.error ?? pyRespText}${trace}`;
+        errText = `${errJson.error ?? pyRespText}${meta ? ` [${meta}]` : ''}${trace}`;
       } catch {
         // Keep raw body if response is not valid JSON (e.g. Vercel HTML error page).
       }

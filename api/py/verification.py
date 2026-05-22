@@ -182,7 +182,17 @@ class handler(BaseHTTPRequestHandler):
             self._json(200, result)
         except Exception as e:
             import traceback
-            self._json(500, {"error": str(e), "trace": traceback.format_exc()})
+            try:
+                import openpyxl as _ox
+                _ver = _ox.__version__
+            except Exception:
+                _ver = "unknown"
+            self._json(500, {
+                "error": str(e),
+                "trace": traceback.format_exc(),
+                "openpyxl_version": _ver,
+                "python_version": sys.version,
+            })
 
     def _json(self, status: int, data: dict):
         enc = json.dumps(data, ensure_ascii=False, default=str).encode("utf-8")
