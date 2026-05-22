@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { upload } from "@vercel/blob/client";
 import Link from "next/link";
 
 type VehicleResult = {
@@ -276,6 +277,7 @@ export default function VerificationContainer() {
   const [anomaliesOpen, setAnomaliesOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -339,32 +341,76 @@ export default function VerificationContainer() {
     if (!adserver || !consolidado[0] || comprovantes.length === 0) return;
     setLoading(true);
     setLoadingStep(0);
+    setUploadProgress(null);
     setError(null);
     setResult(null);
 
     try {
-      const form = new FormData();
-      form.append("adserver", adserver);
-      form.append("consolidado", consolidado[0]);
-      for (const f of comprovantes) form.append("comprovante", f);
-      for (const f of verifs) form.append("verif", f);
-      if (ini) form.append("ini", ini);
-      if (fim) form.append("fim", fim);
-      form.append("url_sample_pct", String(urlSamplePct));
-      if (viewRules.length > 0)
-        form.append("view_rules", JSON.stringify(viewRules));
+      if (process.env.NEXT_PUBLIC_USE_BLOB_UPLOAD) {
+        // Upload files directly to Vercel Blob (bypasses 4.5 MB function limit)
+        const allFiles = [consolidado[0], ...comprovantes, ...verifs];
+        setUploadProgress({ done: 0, total: allFiles.length });
 
-      const res = await fetch("/api/verification/run", {
-        method: "POST",
-        body: form,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setResult(data);
+        const blobUpload = async (file: File) => {
+          const b = await upload(file.name, file, {
+            access: "public",
+            handleUploadUrl: "/api/verification/blob-upload",
+          });
+          setUploadProgress((p) => p && { ...p, done: p.done + 1 });
+          return b.url;
+        };
+
+        const consolidadoUrl = await blobUpload(consolidado[0]);
+        const compUrls: string[] = [];
+        for (const f of comprovantes) compUrls.push(await blobUpload(f));
+        const verifUrls: string[] = [];
+        for (const f of verifs) verifUrls.push(await blobUpload(f));
+        setUploadProgress(null);
+
+        const res = await fetch("/api/verification/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            adserver,
+            consolidado_url: consolidadoUrl,
+            consolidado_name: consolidado[0].name,
+            comp_urls: compUrls,
+            verif_urls: verifUrls,
+            ...(ini ? { ini } : {}),
+            ...(fim ? { fim } : {}),
+            url_sample_pct: urlSamplePct,
+            ...(viewRules.length > 0 ? { view_rules: JSON.stringify(viewRules) } : {}),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+        setResult(data);
+      } else {
+        // On-prem: multipart FormData (no size restriction)
+        const form = new FormData();
+        form.append("adserver", adserver);
+        form.append("consolidado", consolidado[0]);
+        for (const f of comprovantes) form.append("comprovante", f);
+        for (const f of verifs) form.append("verif", f);
+        if (ini) form.append("ini", ini);
+        if (fim) form.append("fim", fim);
+        form.append("url_sample_pct", String(urlSamplePct));
+        if (viewRules.length > 0)
+          form.append("view_rules", JSON.stringify(viewRules));
+
+        const res = await fetch("/api/verification/run", {
+          method: "POST",
+          body: form,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+        setResult(data);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
+      setUploadProgress(null);
     }
   }
 
@@ -703,7 +749,9 @@ export default function VerificationContainer() {
               {/* Etapa atual */}
               <div className="flex flex-col items-center gap-1.5">
                 <p className="text-sm text-[rgba(120,180,255,0.8)] font-medium animate-pulse">
-                  {LOADING_STEPS[loadingStep]}
+                  {uploadProgress
+                    ? `Enviando arquivos... ${uploadProgress.done}/${uploadProgress.total}`
+                    : LOADING_STEPS[loadingStep]}
                 </p>
                 <p className="text-xs text-white/45">
                   Isso pode levar alguns segundos...

@@ -20,6 +20,7 @@
     "@google/genai": "^1.45.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/dompurify": "^3.0.5",
+    "@vercel/blob": "^2.4.0",
     "ai": "^6.0.116",
     "bcryptjs": "^3.0.3",
     "dompurify": "^3.4.0",

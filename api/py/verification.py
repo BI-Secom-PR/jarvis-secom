@@ -22,6 +22,7 @@ import os
 import shutil
 import sys
 import tempfile
+import urllib.request
 from datetime import date
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
@@ -73,6 +74,12 @@ def _patch_openpyxl_colors():
         pass
 
 
+def _download_url(url: str, dest: str) -> None:
+    """Download a file from a URL (e.g. Vercel Blob) to a local path."""
+    with urllib.request.urlopen(url) as resp, open(dest, "wb") as f:
+        shutil.copyfileobj(resp, f)
+
+
 def _run_engine(body: dict) -> dict:
     _patch_openpyxl_colors()
     # Lazy import after sys.path is set
@@ -81,27 +88,44 @@ def _run_engine(body: dict) -> dict:
 
     tmpdir = tempfile.mkdtemp(prefix="secom-verif-")
     try:
-        # Save consolidado
+        # Save consolidado — supports both blob URL and legacy base64
         consol_name = body.get("consolidado_name", "consolidado.xlsx")
         consol_path = os.path.join(tmpdir, consol_name)
-        with open(consol_path, "wb") as f:
-            f.write(base64.b64decode(body["consolidado_b64"]))
+        if "consolidado_url" in body:
+            _download_url(body["consolidado_url"], consol_path)
+        else:
+            with open(consol_path, "wb") as f:
+                f.write(base64.b64decode(body["consolidado_b64"]))
 
-        # Save comprovantes
+        # Save comprovantes — supports blob URLs (comp_urls) or legacy base64 (comp_files)
         comp_paths = []
-        for item in body.get("comp_files", []):
-            p = os.path.join(tmpdir, item["name"])
-            with open(p, "wb") as f:
-                f.write(base64.b64decode(item["b64"]))
-            comp_paths.append(p)
+        if "comp_urls" in body:
+            for url in body["comp_urls"]:
+                name = url.split("?")[0].rsplit("/", 1)[-1]
+                p = os.path.join(tmpdir, name)
+                _download_url(url, p)
+                comp_paths.append(p)
+        else:
+            for item in body.get("comp_files", []):
+                p = os.path.join(tmpdir, item["name"])
+                with open(p, "wb") as f:
+                    f.write(base64.b64decode(item["b64"]))
+                comp_paths.append(p)
 
-        # Save verification files
+        # Save verification files — supports blob URLs (verif_urls) or legacy base64 (verif_files)
         verif_paths = []
-        for item in body.get("verif_files", []):
-            p = os.path.join(tmpdir, item["name"])
-            with open(p, "wb") as f:
-                f.write(base64.b64decode(item["b64"]))
-            verif_paths.append(p)
+        if "verif_urls" in body:
+            for url in body["verif_urls"]:
+                name = url.split("?")[0].rsplit("/", 1)[-1]
+                p = os.path.join(tmpdir, name)
+                _download_url(url, p)
+                verif_paths.append(p)
+        else:
+            for item in body.get("verif_files", []):
+                p = os.path.join(tmpdir, item["name"])
+                with open(p, "wb") as f:
+                    f.write(base64.b64decode(item["b64"]))
+                verif_paths.append(p)
 
         adserver = body["adserver"]
         data_ini = _parse_date(body.get("ini"))
