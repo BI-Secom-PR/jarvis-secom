@@ -43,16 +43,32 @@ def _parse_date(s: str | None) -> date | None:
 
 
 def _patch_openpyxl_colors():
-    """Some xlsx files use non-standard color codes that fail openpyxl's strict validator."""
-    try:
-        from openpyxl.descriptors import MatchedString
-        _orig = MatchedString.__set__
+    """Patch openpyxl's strict string/color validators to silently drop invalid values.
+
+    openpyxl ≤3.0.x: validator is MatchedString in openpyxl.descriptors
+    openpyxl ≥3.1.x: validator is MatchPattern in openpyxl.descriptors.base
+    Both raise ValueError for non-conforming cell attributes (e.g. bad color codes).
+    """
+    def _make_lenient(cls):
+        orig = cls.__set__
         def _lenient(self, instance, value):
             try:
-                _orig(self, instance, value)
-            except ValueError:
+                orig(self, instance, value)
+            except (ValueError, TypeError):
                 pass
-        MatchedString.__set__ = _lenient
+        cls.__set__ = _lenient
+
+    # openpyxl 3.1+
+    try:
+        from openpyxl.descriptors.base import MatchPattern
+        _make_lenient(MatchPattern)
+    except Exception:
+        pass
+
+    # openpyxl 3.0 and older
+    try:
+        from openpyxl.descriptors import MatchedString  # type: ignore[attr-defined]
+        _make_lenient(MatchedString)
     except Exception:
         pass
 
