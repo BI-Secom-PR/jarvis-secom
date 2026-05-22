@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { upload } from "@vercel/blob/client";
 import Link from "next/link";
 
 type VehicleResult = {
@@ -347,18 +346,18 @@ export default function VerificationContainer() {
 
     try {
       if (process.env.NEXT_PUBLIC_USE_BLOB_UPLOAD) {
-        // Upload files directly to Vercel Blob (bypasses 4.5 MB function limit)
+        // Upload files to Vercel Blob via server-side API route
         const allFiles = [consolidado[0], ...comprovantes, ...verifs];
         setUploadProgress({ done: 0, total: allFiles.length });
 
         const blobUpload = async (file: File) => {
-          const safeName = file.name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9._-]/g, "");
-          const b = await upload(safeName, file, {
-            access: "public",
-            handleUploadUrl: `${window.location.origin}/api/verification/blob-upload`,
-          });
+          const fd = new FormData();
+          fd.append("file", file);
+          const res = await fetch("/api/verification/blob-upload", { method: "POST", body: fd });
+          if (!res.ok) throw new Error(`Upload failed: ${await res.text()}`);
           setUploadProgress((p) => p && { ...p, done: p.done + 1 });
-          return b.url;
+          const { url } = await res.json();
+          return url;
         };
 
         const consolidadoUrl = await blobUpload(consolidado[0]);
