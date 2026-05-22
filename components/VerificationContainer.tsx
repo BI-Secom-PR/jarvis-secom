@@ -354,10 +354,13 @@ export default function VerificationContainer() {
           const fd = new FormData();
           fd.append("file", file);
           const res = await fetch("/api/verification/blob-upload", { method: "POST", body: fd });
-          if (!res.ok) throw new Error(`Upload failed: ${await res.text()}`);
+          const text = await res.text();
+          if (!res.ok) throw new Error(`Upload failed: ${text}`);
+          let json: { url?: string };
+          try { json = JSON.parse(text); } catch { throw new Error(`Unexpected response from blob upload`); }
+          if (!json.url) throw new Error(`Blob upload returned no URL`);
           setUploadProgress((p) => p && { ...p, done: p.done + 1 });
-          const { url } = await res.json();
-          return url;
+          return json.url;
         };
 
         const consolidadoUrl = await blobUpload(consolidado[0]);
@@ -382,7 +385,9 @@ export default function VerificationContainer() {
             ...(viewRules.length > 0 ? { view_rules: JSON.stringify(viewRules) } : {}),
           }),
         });
-        const data = await res.json();
+        const text = await res.text();
+        let data: any;
+        try { data = JSON.parse(text); } catch { throw new Error(`Unexpected response from server: ${text.slice(0, 200)}`); }
         if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
         setResult(data);
       } else {
