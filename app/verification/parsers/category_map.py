@@ -72,8 +72,11 @@ CATEGORY_MAP: dict[str, str] = {
     "aplicativo móvel":                 "app_movel",
     "aplicativo movel":                 "app_movel",
     "mobile app":                       "app_movel",
-    # Teste de Tag (col 21)
+    # Teste de Tag (col 21) — inclui variante METRIKE "Teste Banner"
     "teste de tag":                     "teste_tag",
+    "teste banner":                     "teste_tag",
+    # Policial (METRIKE) — conteúdo policial/crime → violência
+    "policial":                         "violencia",
     # Não Classificado (col 22)
     "não classificado":                 "nao_classificado",
     "nao classificado":                 "nao_classificado",
