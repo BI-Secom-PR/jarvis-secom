@@ -12,7 +12,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
 
     const safeName = file.name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9._-]/g, "");
-    const blob = await put(safeName, file, { access: 'private' });
+    const blob = await put(safeName, file, { access: 'private', addRandomSuffix: true });
     return NextResponse.json({ url: blob.url });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
