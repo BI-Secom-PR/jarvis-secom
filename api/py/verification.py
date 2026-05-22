@@ -74,10 +74,16 @@ def _patch_openpyxl_colors():
         pass
 
 
-def _download_url(url: str, dest: str) -> None:
-    """Download a file from a URL (e.g. Vercel Blob) to a local path."""
-    with urllib.request.urlopen(url) as resp, open(dest, "wb") as f:
-        shutil.copyfileobj(resp, f)
+def _download_url(url: str, dest: str, token: str | None = None) -> None:
+    """Download a file from a URL (e.g. Vercel Blob) to a local path.
+    If token is provided, sends it as a Bearer Authorization header."""
+    if token:
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        with urllib.request.urlopen(req) as resp, open(dest, "wb") as f:
+            shutil.copyfileobj(resp, f)
+    else:
+        with urllib.request.urlopen(url) as resp, open(dest, "wb") as f:
+            shutil.copyfileobj(resp, f)
 
 
 def _run_engine(body: dict) -> dict:
@@ -86,13 +92,14 @@ def _run_engine(body: dict) -> dict:
     engine = importlib.import_module("engine")
     verificar = engine.verificar
 
+    blob_token = body.get("blob_token")
     tmpdir = tempfile.mkdtemp(prefix="secom-verif-")
     try:
         # Save consolidado — supports both blob URL and legacy base64
         consol_name = body.get("consolidado_name", "consolidado.xlsx")
         consol_path = os.path.join(tmpdir, consol_name)
         if "consolidado_url" in body:
-            _download_url(body["consolidado_url"], consol_path)
+            _download_url(body["consolidado_url"], consol_path, blob_token)
         else:
             with open(consol_path, "wb") as f:
                 f.write(base64.b64decode(body["consolidado_b64"]))
@@ -103,7 +110,7 @@ def _run_engine(body: dict) -> dict:
             for url in body["comp_urls"]:
                 name = url.split("?")[0].rsplit("/", 1)[-1]
                 p = os.path.join(tmpdir, name)
-                _download_url(url, p)
+                _download_url(url, p, blob_token)
                 comp_paths.append(p)
         else:
             for item in body.get("comp_files", []):
@@ -118,7 +125,7 @@ def _run_engine(body: dict) -> dict:
             for url in body["verif_urls"]:
                 name = url.split("?")[0].rsplit("/", 1)[-1]
                 p = os.path.join(tmpdir, name)
-                _download_url(url, p)
+                _download_url(url, p, blob_token)
                 verif_paths.append(p)
         else:
             for item in body.get("verif_files", []):

@@ -119,6 +119,7 @@ export async function POST(req: NextRequest) {
       ...(body.ini ? { ini: body.ini } : {}),
       ...(body.fim ? { fim: body.fim } : {}),
       ...(body.view_rules ? { view_rules: body.view_rules } : {}),
+      ...(process.env.BLOB_READ_WRITE_TOKEN ? { blob_token: process.env.BLOB_READ_WRITE_TOKEN } : {}),
     };
 
     let engineResult: Record<string, unknown> = {};
@@ -203,6 +204,7 @@ export async function POST(req: NextRequest) {
       ...(ini ? { ini } : {}),
       ...(fim ? { fim } : {}),
       ...(viewRulesRaw ? { view_rules: viewRulesRaw } : {}),
+      ...(process.env.BLOB_READ_WRITE_TOKEN ? { blob_token: process.env.BLOB_READ_WRITE_TOKEN } : {}),
     };
 
     let pyResp: Response;
