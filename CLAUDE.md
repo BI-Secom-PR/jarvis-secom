@@ -234,20 +234,4 @@ Cada adserver pode usar um layout diferente de colunas no consolidado (posiçõe
 - A detecção de SSL é automática: `lib/db/index.ts` e `drizzle.config.ts` aplicam SSL quando o host contém `neon.tech`
 - Vercel: **https://jarvis-app-v2.vercel.app**
 
-### Deploy (on-prem Linux server via GitHub Actions)
-Push to `master` triggers `.github/workflows/deploy.yml` which SSHs into the server and runs `deploy.sh`:
-```bash
-# deploy.sh on the server does:
-git pull origin master
-npm ci
-.venv/bin/pip install -r requirements.txt --quiet
-npm run build
-sudo systemctl restart jarvis
-```
-Logs: `journalctl -u jarvis -f` on the server.
-
-**One-time server setup** — see plan at `~/.claude/plans/what-if-we-put-dreamy-papert.md`:
-- Ubuntu 24.04, Node.js 24 LTS, Python 3 venv with `openpyxl` + `rapidfuzz`
-- Headscale (OSS VPN coordinator) for staff access — no user limit, no cost
-- systemd unit at `/etc/systemd/system/jarvis.service` with `EnvironmentFile=/opt/jarvis_ui/.env.local`
-- GitHub Actions secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`
+#

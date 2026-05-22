@@ -84,8 +84,8 @@ function FileDrop({
           dragging
             ? "border border-[rgba(120,180,255,0.5)] bg-[rgba(120,180,255,0.06)] shadow-[0_0_0_1px_rgba(120,180,255,0.15)]"
             : hasFiles
-              ? "border border-[rgba(120,180,255,0.2)] bg-white/[0.03] hover:border-[rgba(120,180,255,0.32)]"
-              : "border border-dashed border-white/15 bg-white/[0.02] hover:border-white/30 hover:bg-white/[0.03]"
+              ? "border border-[rgba(120,180,255,0.2)] bg-white/3 hover:border-[rgba(120,180,255,0.32)]"
+              : "border border-dashed border-white/15 bg-white/2 hover:border-white/30 hover:bg-white/3"
         }`}
     >
       {/* Input transparente cobre toda a área — clique + drag handlers direto no input */}
@@ -121,7 +121,7 @@ function FileDrop({
       />
 
       {/* Label strip */}
-      <div className={`px-4 pt-3 pb-2 border-b ${hasFiles ? "border-white/[0.06]" : "border-transparent"}`}>
+      <div className={`px-4 pt-3 pb-2 border-b ${hasFiles ? "border-white/6" : "border-transparent"}`}>
         <p className="text-[10px] text-white/55 font-semibold uppercase tracking-widest">
           {label}
         </p>
