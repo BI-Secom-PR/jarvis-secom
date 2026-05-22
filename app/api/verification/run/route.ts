@@ -105,10 +105,14 @@ export async function POST(req: NextRequest) {
 
     const allBlobUrls = [consolidado_url, ...comp_urls, ...verif_urls];
 
-    // Download blobs via fetch (Node.js handles signed URLs fine) and pass as
-    // base64 to Python, because Python's urllib gets 403 from Vercel Blob CDN.
+    // Download blobs via fetch with BLOB_READ_WRITE_TOKEN auth header.
+    // Private blobs require the token even from within the Vercel environment.
     const downloadB64 = async (url: string) => {
-      const resp = await fetch(url);
+      const resp = await fetch(url, {
+        headers: process.env.BLOB_READ_WRITE_TOKEN
+          ? { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` }
+          : undefined,
+      });
       if (!resp.ok) throw new Error(`Blob download failed (${resp.status}): ${url}`);
       return Buffer.from(await resp.arrayBuffer()).toString('base64');
     };
