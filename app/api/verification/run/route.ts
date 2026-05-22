@@ -105,25 +105,15 @@ export async function POST(req: NextRequest) {
 
     const allBlobUrls = [consolidado_url, ...comp_urls, ...verif_urls];
 
-    // Download blobs via fetch with BLOB_READ_WRITE_TOKEN auth header.
-    // Private blobs require the token even from within the Vercel environment.
-    const downloadB64 = async (url: string) => {
-      const resp = await fetch(url, {
-        headers: process.env.BLOB_READ_WRITE_TOKEN
-          ? { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` }
-          : undefined,
-      });
-      if (!resp.ok) throw new Error(`Blob download failed (${resp.status}): ${url}`);
-      return Buffer.from(await resp.arrayBuffer()).toString('base64');
-    };
-    const nameFromUrl = (url: string) => url.split('?')[0].split('/').pop() ?? 'file.xlsx';
-
+    // Pass blob URLs directly to the Python engine instead of downloading and
+    // base64-encoding them here. This avoids Vercel's 4.5 MB serverless function
+    // payload limit (FUNCTION_PAYLOAD_TOO_LARGE / HTTP 413).
     const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
-    const pyBody = {
-      consolidado_b64:  await downloadB64(consolidado_url),
+    const pyBody: Record<string, unknown> = {
+      consolidado_url,
       consolidado_name,
-      comp_files:  await Promise.all(comp_urls.map(async (url) => ({ name: nameFromUrl(url), b64: await downloadB64(url) }))),
-      verif_files: await Promise.all(verif_urls.map(async (url) => ({ name: nameFromUrl(url), b64: await downloadB64(url) }))),
+      comp_urls,
+      verif_urls,
       adserver,
       url_sample_pct: body.url_sample_pct ?? 10,
       ...(body.ini ? { ini: body.ini } : {}),
