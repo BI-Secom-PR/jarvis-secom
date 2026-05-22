@@ -352,9 +352,10 @@ export default function VerificationContainer() {
         setUploadProgress({ done: 0, total: allFiles.length });
 
         const blobUpload = async (file: File) => {
-          const b = await upload(file.name, file, {
+          const safeName = file.name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9._-]/g, "");
+          const b = await upload(safeName, file, {
             access: "public",
-            handleUploadUrl: "/api/verification/blob-upload",
+            handleUploadUrl: `${window.location.origin}/api/verification/blob-upload`,
           });
           setUploadProgress((p) => p && { ...p, done: p.done + 1 });
           return b.url;
