@@ -14,8 +14,13 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: '/apple-touch-icon.png',
+        destination: '/apple-icon.png',
+        permanent: true,
+      },
+      {
         source: '/apple-touch-icon-precomposed.png',
-        destination: '/apple-touch-icon.png',
+        destination: '/apple-icon.png',
         permanent: true,
       },
     ];
