@@ -212,7 +212,7 @@ def parse_verif(
 
     veiculos_indevidas: dict[str, dict] = defaultdict(lambda: dict(INDEVIDAS_ZERO))
     veiculos_entregue:  dict[str, int]  = defaultdict(int)
-    MAX_POOL = 500
+    MAX_POOL = 10000
     url_pool: list[dict] = []
     pool_count = 0
 

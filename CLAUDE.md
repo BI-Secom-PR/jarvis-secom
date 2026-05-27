@@ -197,7 +197,7 @@ Cada adserver pode usar um layout diferente de colunas no consolidado (posiçõe
 - Col 27: Devolutiva BI SECOM (padrão: 28) | Col 28: URL info (padrão: 30)
 
 ### Amostragem de URLs para AI check
-- Parsers devolvem o pool completo de URLs indevidas (reservoir ≤ 500 por arquivo)
+- Parsers devolvem o pool completo de URLs indevidas (reservoir ≤ 10000 por arquivo)
 - `engine.py` agrupa por categoria e amostra **30% por categoria indevida** (mín. 1), cap global 200
 - `route.ts` envia ao Ollama `gemma4:31b-cloud` em paralelo (máx 50 URLs, batches de 10)
 - Retorna `url_check_anomalies: [{url, categoria, reason}]` para a UI
