@@ -23,16 +23,28 @@ async function checkUrlCategory(item: UrlSampleItem): Promise<UrlAnomalyItem | n
     const response = await ollamaClient.chat({
       model: 'gemma4:31b-cloud',
       options: { num_predict: 80 },
-      messages: [{ role: 'user', content: `Você é um classificador de brand safety. Dado uma URL e a categoria de conteúdo indevido atribuída a ela pelo adserver, determine se essa classificação é CORRETA ou INCORRETA.
+      messages: [{ role: 'user', content: `Você é um classificador de brand safety para o SECOM (Secretaria de Comunicação Social do Governo Federal do Brasil). Dado uma URL e a categoria de conteúdo indevido atribuída a ela pelo adserver, determine se essa classificação é CORRETA ou INCORRETA.
 
-Contexto importante sobre categorias:
-- "safeframe": não é conteúdo indevido, mas uma limitação técnica de rastreamento. O Safeframe pode limitar o acesso à URL da página por privacidade, categorizando entregas em apps, programática ou iframes. Trate sempre como CORRETA.
+As categorias de conteúdo consideradas indevidas pelo SECOM são:
+- Língua estrangeira: conteúdo entregue fora do português brasileiro (já foi objeto de questionamento pelo TCU e CGU)
+- Conteúdo adulto: sexo, sexualidade, pornografia e afins
+- Violência: acidentes, armas, morte, guerra, conflitos militares
+- Crimes: crimes, violação de direitos, atividade policial
+- Pirataria: distribuição ilegal de conteúdo protegido
+- Terrorismo: grupos terroristas, ataques, extremismo
+- Discurso de ódio: conteúdo discriminatório por raça, gênero, religião, orientação sexual etc.
+- Conteúdo gerado pelo usuário sem moderação: bate-papo, fóruns abertos — risco de conteúdo adulto e crimes, especialmente pedofilia
+- Drogas: uso, venda ou apologia a substâncias ilícitas
+
+Categorias que NÃO são conteúdo indevido:
+- "safeframe": limitação técnica de rastreamento. O Safeframe pode restringir o acesso à URL da página por privacidade, afetando entregas em apps, programática ou iframes. Trate sempre como CORRETA.
+- "aplicativo móvel" e "teste de tag": limitações técnicas, não conteúdo impróprio. Trate sempre como CORRETA.
 
 URL: ${item.url}
 Categoria atribuída: ${item.categoria}
 
 Responda com exatamente uma das opções:
-- "SIM" (a URL realmente contém esse tipo de conteúdo indevido, ou a categoria é uma limitação técnica como safeframe)
+- "SIM" (a URL realmente contém esse tipo de conteúdo indevido, ou a categoria é uma limitação técnica)
 - "NÃO: <uma frase explicando por que a classificação parece incorreta>"` }],
     });
 

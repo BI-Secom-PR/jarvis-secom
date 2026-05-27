@@ -98,7 +98,7 @@ def parse(
     veiculos_entregue: dict[str, int] = defaultdict(int)
 
     # Pool de URLs para amostragem — reservoir sampling, máx 500 entradas
-    MAX_POOL = 500
+    MAX_POOL = 10000
     url_pool: list[dict] = []
     pool_count = 0
 

@@ -241,6 +241,12 @@ const LOADING_STEPS = [
   "Gerando arquivo verificado...",
 ];
 
+const STEP_PROGRESS = [8, 25, 45, 65, 82];
+
+function formatElapsed(s: number): string {
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
 const MONTHS = [
   { label: "Jan", num: 1 },
   { label: "Fev", num: 2 },
@@ -277,6 +283,7 @@ export default function VerificationContainer() {
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -333,6 +340,15 @@ export default function VerificationContainer() {
     const id = setInterval(() => {
       setLoadingStep((s) => (s + 1) % LOADING_STEPS.length);
     }, 3200);
+    return () => clearInterval(id);
+  }, [loading]);
+
+  useEffect(() => {
+    if (!loading) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const id = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
     return () => clearInterval(id);
   }, [loading]);
 
@@ -752,30 +768,28 @@ export default function VerificationContainer() {
                 <div className="absolute inset-[6px] rounded-full border border-transparent border-t-[rgba(120,180,255,0.3)] animate-spin [animation-duration:1.5s]" />
               </div>
               {/* Etapa atual */}
-              <div className="flex flex-col items-center gap-1.5">
-                <p className="text-sm text-[rgba(120,180,255,0.8)] font-medium animate-pulse">
+              <div className="flex flex-col items-center gap-1.5 w-full max-w-xs">
+                <p className="text-sm text-[rgba(120,180,255,0.8)] font-medium animate-pulse text-center">
                   {uploadProgress
                     ? `Enviando arquivos... ${uploadProgress.done}/${uploadProgress.total}`
                     : LOADING_STEPS[loadingStep]}
                 </p>
                 <p className="text-xs text-white/45">
-                  Isso pode levar alguns segundos...
+                  Isso pode levar alguns minutos...
                 </p>
               </div>
-              {/* Indicador de progresso */}
-              <div className="flex gap-1.5">
-                {LOADING_STEPS.map((_, i) => (
+              {/* Barra de progresso */}
+              <div className="w-full max-w-xs">
+                <div className="w-full bg-white/8 rounded-full h-1.5">
                   <div
-                    key={i}
-                    className={`h-1 rounded-full transition-all duration-700 ${
-                      i === loadingStep
-                        ? "w-5 bg-[rgba(120,180,255,0.7)]"
-                        : i < loadingStep
-                          ? "w-1.5 bg-[rgba(120,180,255,0.35)]"
-                          : "w-1.5 bg-white/10"
-                    }`}
+                    className="bg-[rgba(120,180,255,0.7)] h-1.5 rounded-full transition-all duration-700 ease-out"
+                    style={{ width: `${uploadProgress ? Math.round((uploadProgress.done / uploadProgress.total) * STEP_PROGRESS[0]) : STEP_PROGRESS[loadingStep]}%` }}
                   />
-                ))}
+                </div>
+                <div className="flex justify-between text-xs text-white/30 mt-1.5">
+                  <span>{uploadProgress ? `${Math.round((uploadProgress.done / uploadProgress.total) * STEP_PROGRESS[0])}%` : `${STEP_PROGRESS[loadingStep]}%`}</span>
+                  <span>{formatElapsed(elapsedSeconds)}</span>
+                </div>
               </div>
             </div>
           )}

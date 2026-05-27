@@ -304,7 +304,7 @@ def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int, di
     cpv_indev: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     cpv_total_by_vehicle: dict[str, int] = defaultdict(int)
     veiculos_entregue: dict[str, int] = defaultdict(int)
-    MAX_POOL = 500
+    MAX_POOL = 10000
     url_pool: list[dict] = []
     pool_count = 0
 
@@ -377,7 +377,7 @@ def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int
     sheets = _get_verif_sheets(wb)
     indev: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     veiculos_entregue: dict[str, int] = defaultdict(int)
-    MAX_POOL = 500
+    MAX_POOL = 10000
     url_pool: list[dict] = []
     pool_count = 0
     found_header = False
