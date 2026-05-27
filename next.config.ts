@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+type SizeLimit = number | `${number}${'k' | 'K' | 'm' | 'M' | 'g' | 'G' | 't' | 'T' | 'p' | 'P'}${'b' | 'B'}`;
+
 const isDev = process.env.NODE_ENV === 'development';
 const envAllowedDevOrigins = (process.env.ALLOWED_DEV_ORIGINS ?? '')
   .split(',')
@@ -9,7 +11,7 @@ const defaultAllowedDevOrigins = ['http://localhost:3000', 'http://127.0.0.1:300
 const allowedDevOrigins = isDev
   ? Array.from(new Set([...defaultAllowedDevOrigins, ...envAllowedDevOrigins]))
   : [];
-const maxUploadBodySize = process.env.MAX_UPLOAD_BODY_SIZE ?? '200mb';
+const maxUploadBodySize: SizeLimit = (process.env.MAX_UPLOAD_BODY_SIZE ?? '200mb') as SizeLimit;
 
 const nextConfig: NextConfig = {
   allowedDevOrigins,
