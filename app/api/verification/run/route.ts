@@ -17,6 +17,16 @@ const ollamaClient = new Ollama({
 
 type UrlSampleItem  = { url: string; categoria: string; veiculo: string; impressoes: number };
 type UrlAnomalyItem = { url: string; categoria: string; veiculo: string; reason: string; impressoes: number; pct: number };
+type Send = (ev: object) => void;
+type VerificationResult = {
+  veiculos: unknown;
+  sem_comprovante: unknown;
+  sem_consolidado: unknown;
+  parse_errors: unknown;
+  file_base64: string | null;
+  file_name: string;
+  url_check_anomalies: UrlAnomalyItem[];
+};
 
 async function checkUrlCategory(item: UrlSampleItem): Promise<UrlAnomalyItem | null> {
   try {
@@ -88,15 +98,40 @@ function runEngine(args: string[]): Promise<string> {
   });
 }
 
+function sseResponse(work: (send: Send) => Promise<void>): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send: Send = (ev) =>
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(ev)}\n\n`));
+      try {
+        await work(send);
+      } catch (e) {
+        try {
+          send({ type: 'error', message: e instanceof Error ? e.message : String(e) });
+        } catch { /* controller may already be closed */ }
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
+}
+
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const isJson = req.headers.get('content-type')?.includes('application/json');
 
-  // ── Branch: Vercel Blob URLs (JSON) vs on-prem multipart ──────────────────
+  // ── Branch: Vercel Blob URLs (JSON) ───────────────────────────────────────
   if (isJson) {
-    // Client uploaded files to Vercel Blob; receive URLs + text params as JSON
     type BlobBody = {
       adserver: string;
       consolidado_url: string;
@@ -111,15 +146,11 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as BlobBody;
 
     const { adserver, consolidado_url, consolidado_name, comp_urls, verif_urls = [] } = body;
-    if (!adserver)         return NextResponse.json({ error: 'Adserver não informado.' }, { status: 400 });
-    if (!consolidado_url)  return NextResponse.json({ error: 'Arquivo consolidado não enviado.' }, { status: 400 });
+    if (!adserver)          return NextResponse.json({ error: 'Adserver não informado.' }, { status: 400 });
+    if (!consolidado_url)   return NextResponse.json({ error: 'Arquivo consolidado não enviado.' }, { status: 400 });
     if (!comp_urls?.length) return NextResponse.json({ error: 'Nenhum comprovante enviado.' }, { status: 400 });
 
     const allBlobUrls = [consolidado_url, ...comp_urls, ...verif_urls];
-
-    // Pass blob URLs directly to the Python engine instead of downloading and
-    // base64-encoding them here. This avoids Vercel's 4.5 MB serverless function
-    // payload limit (FUNCTION_PAYLOAD_TOO_LARGE / HTTP 413).
     const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
     const pyBody: Record<string, unknown> = {
       consolidado_url,
@@ -134,8 +165,83 @@ export async function POST(req: NextRequest) {
       ...(process.env.BLOB_READ_WRITE_TOKEN ? { blob_token: process.env.BLOB_READ_WRITE_TOKEN } : {}),
     };
 
-    let engineResult: Record<string, unknown> = {};
-    try {
+    return sseResponse(async (send) => {
+      let engineResult: Record<string, unknown> = {};
+      try {
+        send({ type: 'engine_start' });
+        let pyResp: Response;
+        try {
+          pyResp = await fetch(pyUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(pyBody),
+          });
+        } catch (fetchErr) {
+          throw new Error(`Failed to reach Python engine: ${fetchErr}`);
+        }
+        const pyRespText = await pyResp.text();
+        if (!pyResp.ok) {
+          let errText = pyRespText;
+          try {
+            const errJson = JSON.parse(pyRespText) as { error?: string; trace?: string; openpyxl_version?: string; python_version?: string };
+            const meta = [errJson.openpyxl_version && `openpyxl=${errJson.openpyxl_version}`, errJson.python_version && `py=${errJson.python_version.split(' ')[0]}`].filter(Boolean).join(' ');
+            const trace = errJson.trace ? `\n${errJson.trace}` : '';
+            errText = `${errJson.error ?? pyRespText}${meta ? ` [${meta}]` : ''}${trace}`;
+          } catch { /* keep raw body */ }
+          throw new Error(`Python engine error (HTTP ${pyResp.status}): ${errText}`);
+        }
+        try {
+          engineResult = JSON.parse(pyRespText) as Record<string, unknown>;
+        } catch {
+          throw new Error(`Python engine returned non-JSON (HTTP ${pyResp.status}): ${pyRespText.slice(0, 500)}`);
+        }
+      } finally {
+        await del(allBlobUrls).catch(() => {});
+      }
+      send({ type: 'engine_done' });
+      const result = await buildEngineResponse(engineResult, send);
+      send({ type: 'done', result });
+    });
+  }
+
+  // ── On-prem: multipart FormData ────────────────────────────────────────────
+  const form = await req.formData();
+
+  const consolidadoFile = form.get('consolidado') as File | null;
+  if (!consolidadoFile) return NextResponse.json({ error: 'Arquivo consolidado não enviado.' }, { status: 400 });
+
+  const adserver = form.get('adserver') as string | null;
+  if (!adserver) return NextResponse.json({ error: 'Adserver não informado.' }, { status: 400 });
+
+  const compFiles = form.getAll('comprovante') as File[];
+  if (!compFiles.length) return NextResponse.json({ error: 'Nenhum comprovante enviado.' }, { status: 400 });
+
+  const verifFiles = form.getAll('verif') as File[];
+  const ini = form.get('ini') as string | null;
+  const fim = form.get('fim') as string | null;
+  const urlSamplePct = Number(form.get('url_sample_pct') ?? 10);
+  const viewRulesRaw = form.get('view_rules') as string | null;
+
+  return sseResponse(async (send) => {
+    let engineResult: Record<string, unknown>;
+    send({ type: 'engine_start' });
+
+    if (process.env.VERCEL_URL) {
+      // On Vercel via FormData (fallback — shouldn't happen when blob upload is active)
+      const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
+      const toB64 = async (f: File) => Buffer.from(await f.arrayBuffer()).toString('base64');
+      const pyBody = {
+        consolidado_b64:  await toB64(consolidadoFile),
+        consolidado_name: consolidadoFile.name,
+        comp_files: await Promise.all(compFiles.map(async (f) => ({ name: f.name, b64: await toB64(f) }))),
+        verif_files: await Promise.all(verifFiles.map(async (f) => ({ name: f.name, b64: await toB64(f) }))),
+        adserver,
+        url_sample_pct: urlSamplePct,
+        ...(ini ? { ini } : {}),
+        ...(fim ? { fim } : {}),
+        ...(viewRulesRaw ? { view_rules: viewRulesRaw } : {}),
+        ...(process.env.BLOB_READ_WRITE_TOKEN ? { blob_token: process.env.BLOB_READ_WRITE_TOKEN } : {}),
+      };
       let pyResp: Response;
       try {
         pyResp = await fetch(pyUrl, {
@@ -144,9 +250,8 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify(pyBody),
         });
       } catch (fetchErr) {
-        return NextResponse.json({ error: `Failed to reach Python engine: ${fetchErr}` }, { status: 502 });
+        throw new Error(`Failed to reach Python engine: ${fetchErr}`);
       }
-
       const pyRespText = await pyResp.text();
       if (!pyResp.ok) {
         let errText = pyRespText;
@@ -155,168 +260,87 @@ export async function POST(req: NextRequest) {
           const meta = [errJson.openpyxl_version && `openpyxl=${errJson.openpyxl_version}`, errJson.python_version && `py=${errJson.python_version.split(' ')[0]}`].filter(Boolean).join(' ');
           const trace = errJson.trace ? `\n${errJson.trace}` : '';
           errText = `${errJson.error ?? pyRespText}${meta ? ` [${meta}]` : ''}${trace}`;
-        } catch { /* keep raw body */ }
-        return NextResponse.json({ error: `Python engine error (HTTP ${pyResp.status}): ${errText}` }, { status: 500 });
+        } catch { /* keep raw body if response is not valid JSON (e.g. Vercel HTML error page) */ }
+        throw new Error(`Python engine error (HTTP ${pyResp.status}): ${errText}`);
       }
-
       try {
         engineResult = JSON.parse(pyRespText) as Record<string, unknown>;
       } catch {
-        return NextResponse.json({ error: `Python engine returned non-JSON (HTTP ${pyResp.status}): ${pyRespText.slice(0, 500)}` }, { status: 500 });
+        throw new Error(`Python engine returned non-JSON response (HTTP ${pyResp.status}): ${pyRespText.slice(0, 500)}`);
       }
-    } finally {
-      // Clean up blobs regardless of success or error
-      await del(allBlobUrls).catch(() => {});
-    }
-
-    return buildEngineResponse(engineResult);
-  }
-
-  // ── On-prem: multipart FormData ────────────────────────────────────────────
-  const form = await req.formData();
-
-  const consolidadoFile = form.get('consolidado') as File | null;
-  if (!consolidadoFile) {
-    return NextResponse.json({ error: 'Arquivo consolidado não enviado.' }, { status: 400 });
-  }
-
-  const adserver = form.get('adserver') as string | null;
-  if (!adserver) {
-    return NextResponse.json({ error: 'Adserver não informado.' }, { status: 400 });
-  }
-
-  const compFiles = form.getAll('comprovante') as File[];
-  if (!compFiles.length) {
-    return NextResponse.json({ error: 'Nenhum comprovante enviado.' }, { status: 400 });
-  }
-
-  const verifFiles = form.getAll('verif') as File[];
-  const ini = form.get('ini') as string | null;
-  const fim = form.get('fim') as string | null;
-  const urlSamplePct = Number(form.get('url_sample_pct') ?? 10);
-  const viewRulesRaw = form.get('view_rules') as string | null;
-
-  // ── Executar engine ────────────────────────────────────────────────────────
-  let engineResult: Record<string, unknown>;
-
-  if (process.env.VERCEL_URL) {
-    // On Vercel via FormData (fallback — shouldn't happen when blob upload is active)
-    const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
-
-    const toB64 = async (f: File) =>
-      Buffer.from(await f.arrayBuffer()).toString('base64');
-
-    const pyBody = {
-      consolidado_b64:  await toB64(consolidadoFile),
-      consolidado_name: consolidadoFile.name,
-      comp_files: await Promise.all(compFiles.map(async (f) => ({ name: f.name, b64: await toB64(f) }))),
-      verif_files: await Promise.all(verifFiles.map(async (f) => ({ name: f.name, b64: await toB64(f) }))),
-      adserver,
-      url_sample_pct: urlSamplePct,
-      ...(ini ? { ini } : {}),
-      ...(fim ? { fim } : {}),
-      ...(viewRulesRaw ? { view_rules: viewRulesRaw } : {}),
-      ...(process.env.BLOB_READ_WRITE_TOKEN ? { blob_token: process.env.BLOB_READ_WRITE_TOKEN } : {}),
-    };
-
-    let pyResp: Response;
-    try {
-      pyResp = await fetch(pyUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(pyBody),
-      });
-    } catch (fetchErr) {
-      return NextResponse.json({ error: `Failed to reach Python engine: ${fetchErr}` }, { status: 502 });
-    }
-
-    const pyRespText = await pyResp.text();
-    if (!pyResp.ok) {
-      let errText = pyRespText;
+    } else {
+      // On-prem: spawn python3
+      const tmpDir = path.join(os.tmpdir(), `secom-verif-${randomUUID()}`);
+      await fs.mkdir(tmpDir, { recursive: true });
       try {
-        const errJson = JSON.parse(pyRespText) as { error?: string; trace?: string; openpyxl_version?: string; python_version?: string };
-        const meta = [errJson.openpyxl_version && `openpyxl=${errJson.openpyxl_version}`, errJson.python_version && `py=${errJson.python_version.split(' ')[0]}`].filter(Boolean).join(' ');
-        const trace = errJson.trace ? `\n${errJson.trace}` : '';
-        errText = `${errJson.error ?? pyRespText}${meta ? ` [${meta}]` : ''}${trace}`;
-      } catch {
-        // Keep raw body if response is not valid JSON (e.g. Vercel HTML error page).
-      }
-      return NextResponse.json({ error: `Python engine error (HTTP ${pyResp.status}): ${errText}` }, { status: 500 });
-    }
+        const consolidadoPath = path.join(tmpDir, consolidadoFile.name);
+        await fs.writeFile(consolidadoPath, Buffer.from(await consolidadoFile.arrayBuffer()));
 
-    try {
-      engineResult = JSON.parse(pyRespText) as Record<string, unknown>;
-    } catch {
-      return NextResponse.json({ error: `Python engine returned non-JSON response (HTTP ${pyResp.status}): ${pyRespText.slice(0, 500)}` }, { status: 500 });
-    }
-  } else {
-    // On-prem: spawn python3 as before
-    const tmpDir = path.join(os.tmpdir(), `secom-verif-${randomUUID()}`);
-    await fs.mkdir(tmpDir, { recursive: true });
-
-    try {
-      const consolidadoPath = path.join(tmpDir, consolidadoFile.name);
-      await fs.writeFile(consolidadoPath, Buffer.from(await consolidadoFile.arrayBuffer()));
-
-      const compPaths: string[] = [];
-      for (const file of compFiles) {
-        const dest = path.join(tmpDir, file.name);
-        await fs.writeFile(dest, Buffer.from(await file.arrayBuffer()));
-        compPaths.push(dest);
-      }
-
-      const verifPaths: string[] = [];
-      for (const file of verifFiles) {
-        const dest = path.join(tmpDir, file.name);
-        await fs.writeFile(dest, Buffer.from(await file.arrayBuffer()));
-        verifPaths.push(dest);
-      }
-
-      const args = [consolidadoPath, '--adserver', adserver];
-      if (compPaths.length > 0)  args.push('--comp',  ...compPaths);
-      if (verifPaths.length > 0) args.push('--verif', ...verifPaths);
-      if (ini) args.push('--ini', ini);
-      if (fim) args.push('--fim', fim);
-      args.push('--url-pct', String(urlSamplePct));
-      if (viewRulesRaw) args.push('--view-rules', viewRulesRaw);
-
-      const stdout = await runEngine(args);
-      engineResult = JSON.parse(stdout.trim()) as Record<string, unknown>;
-
-      // Read generated file before tmpDir cleanup so UI can show download button.
-      const generatedOutputPath = (engineResult.output as string) ?? '';
-      if (generatedOutputPath) {
-        try {
-          engineResult.output_b64 = (await fs.readFile(generatedOutputPath)).toString('base64');
-        } catch {
-          // Non-critical: fallback attempts below may still provide file_base64.
+        const compPaths: string[] = [];
+        for (const file of compFiles) {
+          const dest = path.join(tmpDir, file.name);
+          await fs.writeFile(dest, Buffer.from(await file.arrayBuffer()));
+          compPaths.push(dest);
         }
-      }
-    } finally {
-      await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-    }
-  }
 
-  return buildEngineResponse(engineResult);
+        const verifPaths: string[] = [];
+        for (const file of verifFiles) {
+          const dest = path.join(tmpDir, file.name);
+          await fs.writeFile(dest, Buffer.from(await file.arrayBuffer()));
+          verifPaths.push(dest);
+        }
+
+        const args = [consolidadoPath, '--adserver', adserver];
+        if (compPaths.length > 0)  args.push('--comp',  ...compPaths);
+        if (verifPaths.length > 0) args.push('--verif', ...verifPaths);
+        if (ini) args.push('--ini', ini);
+        if (fim) args.push('--fim', fim);
+        args.push('--url-pct', String(urlSamplePct));
+        if (viewRulesRaw) args.push('--view-rules', viewRulesRaw);
+
+        const stdout = await runEngine(args);
+        engineResult = JSON.parse(stdout.trim()) as Record<string, unknown>;
+
+        // Read generated file before tmpDir cleanup so UI can show download button.
+        const generatedOutputPath = (engineResult.output as string) ?? '';
+        if (generatedOutputPath) {
+          try {
+            engineResult.output_b64 = (await fs.readFile(generatedOutputPath)).toString('base64');
+          } catch { /* non-critical */ }
+        }
+      } finally {
+        await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+      }
+    }
+
+    send({ type: 'engine_done' });
+    const result = await buildEngineResponse(engineResult, send);
+    send({ type: 'done', result });
+  });
 }
 
-async function buildEngineResponse(engineResult: Record<string, unknown>): Promise<NextResponse> {
-  // On Vercel the engine returns output_b64 directly; on-prem we read the file.
+async function buildEngineResponse(
+  engineResult: Record<string, unknown>,
+  send: Send,
+): Promise<VerificationResult> {
   let fileBase64: string | null = (engineResult.output_b64 as string | null) ?? null;
   const outputPath: string = (engineResult.output as string) ?? '';
   const outputName: string = engineResult.output_name
     ? (engineResult.output_name as string)
     : outputPath ? path.basename(outputPath) : 'verificado.xlsx';
 
-  // ── AI URL check (pct controlado pelo engine, 10 por vez para evitar rate limit) ─────
+  // ── AI URL check ──────────────────────────────────────────────────────────
   let urlCheckAnomalies: UrlAnomalyItem[] = [];
   const urlSample: UrlSampleItem[] = (engineResult.url_sample as UrlSampleItem[]) ?? [];
   if (urlSample.length > 0 && process.env.OLLAMA_BASE_URL) {
     const BATCH = 10;
+    send({ type: 'url_check_start', total: urlSample.length });
+    let done = 0;
     for (let i = 0; i < urlSample.length; i += BATCH) {
-      const settled = await Promise.allSettled(
-        urlSample.slice(i, i + BATCH).map(checkUrlCategory)
-      );
+      const batch = urlSample.slice(i, i + BATCH);
+      const settled = await Promise.allSettled(batch.map(checkUrlCategory));
+      done += batch.length;
+      send({ type: 'url_check_progress', done, total: urlSample.length });
       urlCheckAnomalies.push(
         ...settled
           .filter((r): r is PromiseFulfilledResult<UrlAnomalyItem> =>
@@ -327,7 +351,7 @@ async function buildEngineResponse(engineResult: Record<string, unknown>): Promi
     }
   }
 
-  // ── Calcular pct de impressões por veículo ────────────────────────────────────
+  // ── Calcular pct de impressões por veículo ────────────────────────────────
   if (urlCheckAnomalies.length > 0) {
     const entregueByMatch = new Map<string, number>();
     for (const v of (engineResult.veiculos ?? []) as { veiculo: string; match: string | null; entregue_consol: number }[]) {
@@ -342,8 +366,9 @@ async function buildEngineResponse(engineResult: Record<string, unknown>): Promi
     });
   }
 
-  // ── Escrever URL info (col 30) no arquivo verificado ────────────────────────
+  // ── Escrever URL info (col 30) no arquivo verificado ─────────────────────
   if (urlCheckAnomalies.length > 0) {
+    send({ type: 'writing' });
     const matchToConsol = new Map<string, string>();
     for (const v of (engineResult.veiculos ?? []) as { veiculo: string; match: string | null }[]) {
       if (v.match) matchToConsol.set(v.match, v.veiculo);
@@ -394,7 +419,7 @@ async function buildEngineResponse(engineResult: Record<string, unknown>): Promi
     } catch { /* non-critical */ }
   }
 
-  return NextResponse.json({
+  return {
     veiculos:            engineResult.veiculos,
     sem_comprovante:     engineResult.sem_comprovante,
     sem_consolidado:     engineResult.sem_consolidado,
@@ -402,5 +427,5 @@ async function buildEngineResponse(engineResult: Record<string, unknown>): Promi
     file_base64:         fileBase64,
     file_name:           outputName,
     url_check_anomalies: urlCheckAnomalies,
-  });
+  };
 }

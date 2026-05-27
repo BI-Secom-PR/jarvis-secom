@@ -1,15 +1,25 @@
 import type { NextConfig } from "next";
 
 const isDev = process.env.NODE_ENV === 'development';
+const envAllowedDevOrigins = (process.env.ALLOWED_DEV_ORIGINS ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const defaultAllowedDevOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+const allowedDevOrigins = isDev
+  ? Array.from(new Set([...defaultAllowedDevOrigins, ...envAllowedDevOrigins]))
+  : [];
+const maxUploadBodySize = process.env.MAX_UPLOAD_BODY_SIZE ?? '200mb';
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins,
   devIndicators: false,
   serverExternalPackages: ['pdfkit', 'svg-to-pdfkit', 'exceljs'],
   experimental: {
     serverActions: {
-      bodySizeLimit: '50mb',
+      bodySizeLimit: maxUploadBodySize,
     },
-    proxyClientMaxBodySize: '50mb',
+    proxyClientMaxBodySize: maxUploadBodySize,
   },
   async redirects() {
     return [

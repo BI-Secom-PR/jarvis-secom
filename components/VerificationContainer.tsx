@@ -165,7 +165,7 @@ function FileDrop({
 }
 
 // Regex: captura (prefixo) (campo) (resto) de linhas da devolutiva
-const DEVOLUTIVA_LINE_RE = /^(OK|DIV|DIF|\?)\s+([^:]+):(.*)$/;
+const DEVOLUTIVA_LINE_RE = /^(OK|DIV|DIF|ALERTA|\?)\s+([^:]+):(.*)$/;
 
 function difColorByPct(pctValue: number | null): string {
   if (typeof pctValue !== "number" || !Number.isFinite(pctValue)) {
@@ -188,6 +188,7 @@ function DevolutivaLines({ text }: { text: string }) {
           const isOk = prefix === "OK";
           const isDiv = prefix === "DIV";
           const isDif = prefix === "DIF";
+          const isAlerta = prefix === "ALERTA";
           const pctMatch = rest.match(/\(([+-]?\d+(?:[.,]\d+)?)%\)/);
           const pctValue = pctMatch
             ? Number.parseFloat(pctMatch[1].replace(",", "."))
@@ -198,7 +199,9 @@ function DevolutivaLines({ text }: { text: string }) {
               ? "text-rose-400"
               : isDif
                 ? difColorByPct(pctValue)
-                : "text-amber-400/70";
+                : isAlerta
+                  ? "text-amber-400"
+                  : "text-amber-400/70";
           return (
             <div key={i} className="text-xs leading-relaxed">
               <span className={`font-bold ${color}`}>{prefix}</span>{" "}
@@ -232,16 +235,6 @@ const ADSERVERS: { id: string; label: string; disabled?: boolean }[] = [
   { id: "metrike", label: "METRIKE" },
   { id: "brz", label: "BRZ", disabled: true },
 ];
-
-const LOADING_STEPS = [
-  "Lendo e validando arquivos...",
-  "Cruzando veículos com o consolidado...",
-  "Comparando métricas e categorias indevidas...",
-  "Verificando URLs com IA...",
-  "Gerando arquivo verificado...",
-];
-
-const STEP_PROGRESS = [8, 25, 45, 65, 82];
 
 function formatElapsed(s: number): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
@@ -281,7 +274,8 @@ export default function VerificationContainer() {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [anomaliesOpen, setAnomaliesOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [loadingStep, setLoadingStep] = useState(0);
+  const [progressPct, setProgressPct] = useState(0);
+  const [progressLabel, setProgressLabel] = useState('');
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [result, setResult] = useState<VerificationResult | null>(null);
@@ -334,18 +328,9 @@ export default function VerificationContainer() {
 
   useEffect(() => {
     if (!loading) {
-      setLoadingStep(0);
-      return;
-    }
-    const id = setInterval(() => {
-      setLoadingStep((s) => (s + 1) % LOADING_STEPS.length);
-    }, 3200);
-    return () => clearInterval(id);
-  }, [loading]);
-
-  useEffect(() => {
-    if (!loading) {
       setElapsedSeconds(0);
+      setProgressPct(0);
+      setProgressLabel('');
       return;
     }
     const id = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
@@ -355,10 +340,39 @@ export default function VerificationContainer() {
   async function handleVerificar() {
     if (!adserver || !consolidado[0] || comprovantes.length === 0) return;
     setLoading(true);
-    setLoadingStep(0);
+    setProgressPct(0);
+    setProgressLabel('');
     setUploadProgress(null);
     setError(null);
     setResult(null);
+
+    const consumeVerifStream = async (res: Response) => {
+      if (!res.body) throw new Error(`HTTP ${res.status}: servidor não retornou stream`);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop()!;
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const ev = JSON.parse(line.slice(6));
+          if (ev.type === 'engine_start')           { setProgressPct(10); setProgressLabel('Processando arquivos...'); }
+          else if (ev.type === 'engine_done')        { setProgressPct(45); setProgressLabel('Cruzando veículos com o consolidado...'); }
+          else if (ev.type === 'url_check_start')    { setProgressLabel(`Verificando URLs com IA... (0/${ev.total})`); }
+          else if (ev.type === 'url_check_progress') {
+            setProgressPct(45 + Math.round((ev.done / ev.total) * 43));
+            setProgressLabel(`Verificando URLs com IA... (${ev.done}/${ev.total})`);
+          }
+          else if (ev.type === 'writing')            { setProgressPct(92); setProgressLabel('Gerando arquivo verificado...'); }
+          else if (ev.type === 'done')               { setProgressPct(100); setResult(ev.result); break outer; }
+          else if (ev.type === 'error')              { throw new Error(ev.message); }
+        }
+      }
+    };
 
     try {
       if (process.env.NEXT_PUBLIC_USE_BLOB_UPLOAD) {
@@ -385,6 +399,8 @@ export default function VerificationContainer() {
         const verifUrls: string[] = [];
         for (const f of verifs) verifUrls.push(await blobUpload(f));
         setUploadProgress(null);
+        setProgressPct(8);
+        setProgressLabel('Aguardando processamento...');
 
         const res = await fetch("/api/verification/run", {
           method: "POST",
@@ -401,11 +417,7 @@ export default function VerificationContainer() {
             ...(viewRules.length > 0 ? { view_rules: JSON.stringify(viewRules) } : {}),
           }),
         });
-        const text = await res.text();
-        let data: any;
-        try { data = JSON.parse(text); } catch { throw new Error(`Unexpected response from server: ${text.slice(0, 200)}`); }
-        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-        setResult(data);
+        await consumeVerifStream(res);
       } else {
         // On-prem: multipart FormData (no size restriction)
         const form = new FormData();
@@ -423,9 +435,7 @@ export default function VerificationContainer() {
           method: "POST",
           body: form,
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-        setResult(data);
+        await consumeVerifStream(res);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -772,7 +782,7 @@ export default function VerificationContainer() {
                 <p className="text-sm text-[rgba(120,180,255,0.8)] font-medium animate-pulse text-center">
                   {uploadProgress
                     ? `Enviando arquivos... ${uploadProgress.done}/${uploadProgress.total}`
-                    : LOADING_STEPS[loadingStep]}
+                    : progressLabel || 'Preparando...'}
                 </p>
                 <p className="text-xs text-white/45">
                   Isso pode levar alguns minutos...
@@ -783,11 +793,11 @@ export default function VerificationContainer() {
                 <div className="w-full bg-white/8 rounded-full h-1.5">
                   <div
                     className="bg-[rgba(120,180,255,0.7)] h-1.5 rounded-full transition-all duration-700 ease-out"
-                    style={{ width: `${uploadProgress ? Math.round((uploadProgress.done / uploadProgress.total) * STEP_PROGRESS[0]) : STEP_PROGRESS[loadingStep]}%` }}
+                    style={{ width: `${uploadProgress ? Math.round((uploadProgress.done / uploadProgress.total) * 8) : progressPct}%` }}
                   />
                 </div>
                 <div className="flex justify-between text-xs text-white/30 mt-1.5">
-                  <span>{uploadProgress ? `${Math.round((uploadProgress.done / uploadProgress.total) * STEP_PROGRESS[0])}%` : `${STEP_PROGRESS[loadingStep]}%`}</span>
+                  <span>{uploadProgress ? `${Math.round((uploadProgress.done / uploadProgress.total) * 8)}%` : `${progressPct}%`}</span>
                   <span>{formatElapsed(elapsedSeconds)}</span>
                 </div>
               </div>

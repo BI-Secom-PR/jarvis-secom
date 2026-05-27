@@ -382,6 +382,17 @@ def _compare(
             indev_linhas.append("OK indevidas: todas zeradas")
 
         linhas.extend(indev_linhas)
+
+        # Alerta safeframe: se > 10% do total de impressões do consolidado
+        safeframe_verif = verif_indev.get("safeframe", 0)
+        entregue_consol = consol_row.get("entregue", 0)
+        if safeframe_verif > 0 and entregue_consol > 0:
+            pct_sf = safeframe_verif / entregue_consol * 100
+            if pct_sf > 10:
+                linhas.append(
+                    f"ALERTA safeframe: {_fmt_num(safeframe_verif)} imp "
+                    f"({pct_sf:.1f}% do total) — alto índice, verificar rastreamento"
+                )
     else:
         linhas.append("? indevidas: sem arquivo de verification")
 
@@ -527,6 +538,21 @@ def verificar(
             comp_raw.extend(parse_comp(cp, data_ini=data_ini, data_fim=data_fim))
         except Exception as e:
             parse_errors.append({"arquivo": Path(cp).name, "erro": str(e)})
+
+    # Safeframe é limitação técnica, não conteúdo indevido — exclui do pool de IA.
+    url_pool = [item for item in url_pool if normaliza_categoria(item.get("categoria", "")) != "safeframe"]
+
+    # ── Agrupa URLs duplicadas por (url, categoria, veiculo) somando impressões ──
+    # O mesmo URL pode aparecer em múltiplas linhas do verification file. Agrupar
+    # evita re-análise pela IA e dá o total real de impressões por URL.
+    grouped: dict[tuple[str, str, str], dict] = {}
+    for item in url_pool:
+        key = (item["url"], item["categoria"], item["veiculo"])
+        if key in grouped:
+            grouped[key]["impressoes"] = grouped[key].get("impressoes", 0) + item.get("impressoes", 0)
+        else:
+            grouped[key] = dict(item)
+    url_pool = list(grouped.values())
 
     # ── Amostra de URLs: pct% por categoria indevida (0 = todas) ──────────────
     # Parsers devolvem o pool completo (reservoir ≤ 500); amostragem feita aqui.
