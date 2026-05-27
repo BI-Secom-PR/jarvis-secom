@@ -15,6 +15,7 @@ Verification:
 
 import json
 import random
+import re
 import sys
 from collections import defaultdict
 from datetime import date
@@ -105,27 +106,31 @@ def parse_comprovante(
         if not vname:
             vname = fallback_vehicle
 
-        # Linha #TOTAL → apenas contratado (viewability calculado de viewables/entregue)
-        if "#TOTAL" in vname.upper():
-            if last_vehicle is not None:
-                if i_contratado is not None and i_contratado < len(row):
-                    c = to_int(row[i_contratado])
-                    if c > 0:
-                        contratado[last_vehicle] = c
+        data_raw = row[i_data] if i_data is not None and i_data < len(row) else None
+        data_str = str(data_raw).strip() if data_raw is not None else ""
+
+        # Linha #TOTAL → extrair contratado e pular.
+        # METRIKE põe o label (#TOTAL POR CAMPANHA / #TOTAL POR VEÍCULO) na coluna
+        # Data, não na coluna Veículo — verificar ambas.
+        if "#TOTAL" in vname.upper() or "#TOTAL" in data_str.upper():
+            vname_clean = re.sub(r"\s*\|\s*Campaign ID:?\s*\d+", "", vname, flags=re.IGNORECASE).strip()
+            target = last_vehicle or vname_clean
+            if i_contratado is not None and i_contratado < len(row):
+                c = to_int(row[i_contratado])
+                if c > 0:
+                    contratado[target] = contratado.get(target, 0) + c
             continue
 
-        if i_data is not None and i_data < len(row):
-            raw_date = row[i_data]
-            if raw_date is not None:
-                d = parse_date(raw_date)
-                if d is None:
-                    # Unparseable value in date column (e.g. "#TOTAL POR VEÍCULO",
-                    # "Total por placement_id") → subtotal row, skip to avoid double-count
-                    continue
-                if data_ini and d < data_ini:
-                    continue
-                if data_fim and d > data_fim:
-                    continue
+        if data_raw is not None:
+            d = parse_date(data_raw)
+            if d is None:
+                # Unparseable value in date column (e.g. "Total por placement_id",
+                # "Total por formato") → subtotal row, skip to avoid double-count
+                continue
+            if data_ini and d < data_ini:
+                continue
+            if data_fim and d > data_fim:
+                continue
 
         imp = to_int(row[i_impressoes] if i_impressoes < len(row) else None)
         if imp == 0:
