@@ -277,11 +277,11 @@ def _is_flat_format(wb) -> bool:
     return "campaignuuid" in vals
 
 
-def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int, dict, dict]:
+def _parse_verif_flat(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, list, int, dict, dict, dict]:
     """
     Parseia o formato flat ADFORCE (Result 1, header na linha 1).
     Indevidas = soma de CPM+CPC+CPV+CPCV por categoria (apenas uma terá valor por linha).
-    Retorna (indev, entregue_dict, url_pool, pool_count, cpv_indev, cpv_total_by_vehicle).
+    Retorna (indev, entregue_dict, url_pool, pool_count, cpv_indev, cpv_total_by_vehicle, total_dict).
     cpv_indev é separado para indevidas; cpv_total_by_vehicle alimenta DIF views.
     """
     ws = wb.worksheets[0]
@@ -296,6 +296,7 @@ def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int, di
     i_cpv        = col_index(header, "cpv", "CPV", "Views", "Visualizações", "Visualizacoes")
     i_cpcv       = col_index(header, "cpcv", "CPCV")
     i_data       = col_index(header, "date", "Date", "Data")
+    i_estado     = col_index(header, "Estado", "State", "UF")
 
     if i_vehicle is None or i_categories is None:
         raise ValueError("Colunas 'vehicle'/'categories' não encontradas no formato flat ADFORCE")
@@ -304,6 +305,7 @@ def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int, di
     cpv_indev: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     cpv_total_by_vehicle: dict[str, int] = defaultdict(int)
     veiculos_entregue: dict[str, int] = defaultdict(int)
+    veiculos_total:    dict[str, int] = defaultdict(int)
     MAX_POOL = 10000
     url_pool: list[dict] = []
     pool_count = 0
@@ -338,8 +340,14 @@ def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int, di
         v_cpcv = _metric(i_cpcv)
         total_val = v_cpm + v_cpc + v_cpv + v_cpcv
 
-        veiculos_entregue[veiculo] += total_val
+        veiculos_total[veiculo] += total_val
+        veiculos_entregue_total = total_val # Temp for clarity
         cpv_total_by_vehicle[veiculo] += v_cpv
+
+        if praca and i_estado is not None and i_estado < len(row):
+            estado_row = str(row[i_estado]).strip().upper() if row[i_estado] else ""
+            if estado_row and estado_row != praca.upper().strip():
+                continue
 
         if not categoria:
             continue
@@ -353,6 +361,8 @@ def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int, di
         if v_cpv > 0:
             cpv_indev[veiculo][cat_key] += v_cpv
 
+        veiculos_entregue[veiculo] += total_val
+
         if url and total_val > 0:
             pool_count += 1
             entry = {"url": url, "categoria": categoria, "veiculo": veiculo,
@@ -364,19 +374,20 @@ def _parse_verif_flat(wb, data_ini, data_fim) -> tuple[dict, dict, list, int, di
                 if idx < MAX_POOL:
                     url_pool[idx] = entry
 
-    return indev, veiculos_entregue, url_pool, pool_count, cpv_indev, cpv_total_by_vehicle
+    return indev, veiculos_entregue, url_pool, pool_count, cpv_indev, cpv_total_by_vehicle, veiculos_total
 
 
-def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int, dict]:
+def _parse_verif_multitab(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, list, int, dict, dict]:
     """
     Parseia o formato multi-sheet ADFORCE (uma sheet por veículo, pula ABAT).
     Indevidas = coluna Impressões apenas (as demais colunas não correspondem a indevidas).
-    Retorna (indev, entregue_dict, url_pool, pool_count, cpv_indev).
+    Retorna (indev, entregue_dict, url_pool, pool_count, cpv_indev, total_by_vehicle).
     cpv_indev é vazio neste formato (Impressões não distingue tipo de métrica).
     """
     sheets = _get_verif_sheets(wb)
     indev: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     veiculos_entregue: dict[str, int] = defaultdict(int)
+    veiculos_total:    dict[str, int] = defaultdict(int)
     MAX_POOL = 10000
     url_pool: list[dict] = []
     pool_count = 0
@@ -443,7 +454,7 @@ def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int
             v_vis_comp  = _metric(i_vis_comp)
 
             total_val = v_imp + v_cliques + v_vis + v_vis_comp
-
+            veiculos_total[veiculo] += total_val
             veiculos_entregue[veiculo] += total_val
 
             cat_key = normaliza_categoria(categoria)
@@ -469,7 +480,7 @@ def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int
             "Header com 'Categoria' e 'Veículo' não encontrado em nenhuma sheet"
         )
 
-    return indev, veiculos_entregue, url_pool, pool_count, {}
+    return indev, veiculos_entregue, url_pool, pool_count, {}, veiculos_total
 
 
 def parse_verif(
@@ -491,13 +502,13 @@ def parse_verif(
 
     if _is_flat_format(wb):
         formato = "adforce_verif_flat"
-        indev, veiculos_entregue, url_pool, _, cpv_indev, cpv_total = _parse_verif_flat(
-            wb, data_ini, data_fim
+        indev, veiculos_entregue, url_pool, _, cpv_indev, cpv_total, veiculos_total = _parse_verif_flat(
+            wb, data_ini, data_fim, praca=praca
         )
     else:
         formato = "adforce_verif_multitab"
-        indev, veiculos_entregue, url_pool, _, cpv_indev = _parse_verif_multitab(
-            wb, data_ini, data_fim
+        indev, veiculos_entregue, url_pool, _, cpv_indev, veiculos_total = _parse_verif_multitab(
+            wb, data_ini, data_fim, praca=praca
         )
         cpv_total = {}
 

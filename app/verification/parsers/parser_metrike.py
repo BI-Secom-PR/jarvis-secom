@@ -221,6 +221,7 @@ def parse_verif(
 
     veiculos_indevidas: dict[str, dict] = defaultdict(lambda: dict(INDEVIDAS_ZERO))
     veiculos_entregue:  dict[str, int]  = defaultdict(int)
+    veiculos_total:     dict[str, int]  = defaultdict(int)
     MAX_POOL = 10000
     url_pool: list[dict] = []
     pool_count = 0
@@ -247,6 +248,8 @@ def parse_verif(
         if praca and i_estado is not None and i_estado < len(row):
             estado_row = str(row[i_estado]).strip().upper() if row[i_estado] else ""
             if estado_row and estado_row != praca.upper().strip():
+                # Mesmo filtrando a linha, somamos ao total geral do veículo para o DIF
+                veiculos_total[veiculo] += impressoes
                 continue
 
         cat_key = normaliza_categoria(categoria)
@@ -256,6 +259,7 @@ def parse_verif(
             )
 
         veiculos_entregue[veiculo] += impressoes
+        veiculos_total[veiculo] += impressoes
 
         if url and cat_key:
             pool_count += 1
@@ -276,6 +280,7 @@ def parse_verif(
             "tipo_compra":       None,
             "contratado":        None,
             "entregue":          veiculos_entregue[veiculo],
+            "entregue_total":    veiculos_total[veiculo],
             "cliques":           None,
             "viewables":         None,
             "viewability":       None,

@@ -37,6 +37,7 @@ from datetime import date
 from pathlib import Path
 
 import openpyxl
+from openpyxl.styles import PatternFill
 from rapidfuzz import fuzz, process
 
 sys.path.insert(0, str(Path(__file__).parent / "parsers"))
@@ -56,6 +57,12 @@ PARSER_MAP: dict[str, str] = {
 FUZZY_THRESHOLD  = 85     # % mínimo para aceitar match de veículo
 HEADER_ROW       = 8      # linha 1-indexed do cabeçalho no template
 DATA_START_ROW   = 9      # primeira linha de dados (1-indexed)
+
+# Cores para a Devolutiva no Excel (Standard Excel Theme: Green/Red/Yellow/Gray)
+COLOR_OK       = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid") # Verde claro
+COLOR_DIV      = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid") # Vermelho claro
+COLOR_ALERTA   = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid") # Amarelo/Âmbar
+COLOR_PENDENTE = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid") # Cinza claro
 
 # Mapeamento col_index(1-based) → chave interna  [template 29 colunas]
 COL_VEICULO        = 1
@@ -305,6 +312,7 @@ def _compare(
     consol_row: dict,
     comp_result: dict | None,
     verif_result: dict | None,
+    verif_result_dif: dict | None = None,
 ) -> tuple[str, list[str]]:
     """
     Compara métricas de uma linha do consolidado com comprovante e verification.
@@ -429,12 +437,15 @@ def _compare(
         return "OK", ["OK — sem dados para comparar"]
 
     # ── Delta (comp/consol) vs verification (sempre ao final) ──────────────────
-    if verif_result is not None:
+    # Usa verif_result_dif (sem filtro de praça) quando disponível, pois a DIF
+    # deve comparar com o total do verification, não com o subconjunto filtrado.
+    verif_for_dif = verif_result_dif or verif_result
+    if verif_for_dif is not None:
         base_imp    = (comp_result.get("entregue") if comp_result is not None else consol_row.get("entregue")) or 0
-        verif_imp   = verif_result.get("entregue") or 0
+        verif_imp   = verif_for_dif.get("entregue_total") or verif_for_dif.get("entregue") or 0
         base_views  = (comp_result.get("views") if comp_result is not None else consol_row.get("views")) or 0
         # Alguns verifs reportam contagem equivalente em "entregue".
-        verif_views = (verif_result.get("views") or verif_imp or 0)
+        verif_views = (verif_for_dif.get("views") or verif_imp or 0)
         base_label  = "comp" if comp_result is not None else "consol"
 
         # Regra: se houver views no consolidado, o DIF principal deve usar views.
@@ -572,6 +583,17 @@ def verificar(
     else:
         url_sample = []
 
+    # ── Parseia verification SEM filtro de praça p/ DIF (que não deve filtrar por estado) ──
+    verif_raw_unfiltered: list[dict] = []
+    for vp in verif_paths:
+        try:
+            results = parse_verif(vp, data_ini=data_ini, data_fim=data_fim, praca=None)
+            verif_raw_unfiltered.extend(results)
+        except Exception as e:
+            print(f"[verif/unfiltered] ERRO {Path(vp).name}: {e}", file=sys.stderr)
+    verif_norm_unfiltered = _merge_by_veiculo(verif_raw_unfiltered)
+    verif_names_unfiltered = list(verif_norm_unfiltered.keys())
+
     # ── Índices por veículo normalizado (somando múltiplos arquivos) ──────────
     verif_norm  = _merge_by_veiculo(verif_raw)
     comp_norm   = _merge_by_veiculo(comp_raw)
@@ -624,6 +646,7 @@ def verificar(
 
             verif_match, verif_score = _fuzzy_match(consol_norm, verif_names, verif_norm)
             comp_match,  comp_score  = _fuzzy_match(consol_norm, comp_names,  comp_norm)
+            verif_match_dif, _       = _fuzzy_match(consol_norm, verif_names_unfiltered, verif_norm_unfiltered)
 
             if verif_match:
                 matched_verif_names.add(_normalize(verif_match["veiculo"]))
@@ -636,7 +659,7 @@ def verificar(
                 match_name = None
                 score = 0
             else:
-                status, linhas = _compare(crow, comp_match, verif_match)
+                status, linhas = _compare(crow, comp_match, verif_match, verif_match_dif)
                 devolutiva = "\n".join(linhas)
                 match_name = (verif_match or comp_match or {}).get("veiculo")
                 score = verif_score or comp_score
@@ -651,7 +674,18 @@ def verificar(
                 "entregue_consol": crow["entregue"],
             })
 
-            ws.cell(row=crow["row_idx"], column=col_devolutiva_bi).value = devolutiva
+            cell = ws.cell(row=crow["row_idx"], column=col_devolutiva_bi)
+            cell.value = devolutiva
+
+            # Aplica cor de fundo baseada no status/conteúdo da devolutiva
+            if status == "DIVERGENCIA":
+                cell.fill = COLOR_DIV
+            elif "ALERTA" in devolutiva:
+                cell.fill = COLOR_ALERTA
+            elif status == "PENDENTE":
+                cell.fill = COLOR_PENDENTE
+            else:
+                cell.fill = COLOR_OK
 
         # ── Veículos sem entrada no consolidado ──────────────────────────────
         sem_consolidado: list[str] = []
