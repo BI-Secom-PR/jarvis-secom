@@ -227,6 +227,7 @@ Cada adserver pode usar um layout diferente de colunas no consolidado (posiçõe
 - **Ano**: chips ano−1 e ano atual — ao trocar com mês selecionado, recalcula `ini`/`fim`
 - **Mês**: chips Jan–Dez preenchem `ini`/`fim` automaticamente com o ano selecionado
 - **Range manual**: campos DD/MM/AAAA — desseleciona chip de mês ao editar
+- **Praça**: select com os 27 estados brasileiros (UF). Quando selecionado, `parse_verif` de **todos** os parsers (00px, ADFORCE, ADMOTION, AHEAD, METRIKE) descarta linhas onde a coluna `Estado`/`UF`/`State` existe e difere da sigla escolhida. Linhas sem valor nessa coluna passam normalmente (fallback seguro). Se o arquivo de verification não tiver coluna de estado, o filtro é silenciosamente ignorado.
 
 ### PostgreSQL (produção e desenvolvimento)
 - **Neon** (serverless Postgres) — projeto `jarvis-secom`, região `sa-east-1`
