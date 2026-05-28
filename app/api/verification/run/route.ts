@@ -142,6 +142,7 @@ export async function POST(req: NextRequest) {
       fim?: string;
       url_sample_pct?: number;
       view_rules?: string;
+      praca?: string;
     };
     const body = (await req.json()) as BlobBody;
 
@@ -162,6 +163,7 @@ export async function POST(req: NextRequest) {
       ...(body.ini ? { ini: body.ini } : {}),
       ...(body.fim ? { fim: body.fim } : {}),
       ...(body.view_rules ? { view_rules: body.view_rules } : {}),
+      ...(body.praca ? { praca: body.praca } : {}),
       ...(process.env.BLOB_READ_WRITE_TOKEN ? { blob_token: process.env.BLOB_READ_WRITE_TOKEN } : {}),
     };
 
@@ -221,6 +223,7 @@ export async function POST(req: NextRequest) {
   const fim = form.get('fim') as string | null;
   const urlSamplePct = Number(form.get('url_sample_pct') ?? 10);
   const viewRulesRaw = form.get('view_rules') as string | null;
+  const pracaRaw = form.get('praca') as string | null;
 
   return sseResponse(async (send) => {
     let engineResult: Record<string, unknown>;
@@ -240,6 +243,7 @@ export async function POST(req: NextRequest) {
         ...(ini ? { ini } : {}),
         ...(fim ? { fim } : {}),
         ...(viewRulesRaw ? { view_rules: viewRulesRaw } : {}),
+        ...(pracaRaw ? { praca: pracaRaw } : {}),
         ...(process.env.BLOB_READ_WRITE_TOKEN ? { blob_token: process.env.BLOB_READ_WRITE_TOKEN } : {}),
       };
       let pyResp: Response;
@@ -297,6 +301,7 @@ export async function POST(req: NextRequest) {
         if (fim) args.push('--fim', fim);
         args.push('--url-pct', String(urlSamplePct));
         if (viewRulesRaw) args.push('--view-rules', viewRulesRaw);
+        if (pracaRaw) args.push('--praca', pracaRaw);
 
         const stdout = await runEngine(args);
         engineResult = JSON.parse(stdout.trim()) as Record<string, unknown>;

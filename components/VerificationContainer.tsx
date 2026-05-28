@@ -227,6 +227,12 @@ function DevolutivaLines({ text }: { text: string }) {
   );
 }
 
+const ESTADOS_BRASIL = [
+  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO",
+  "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI",
+  "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+];
+
 const ADSERVERS: { id: string; label: string; disabled?: boolean }[] = [
   { id: "00px", label: "00px" },
   { id: "adforce", label: "ADFORCE" },
@@ -270,6 +276,7 @@ export default function VerificationContainer() {
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [urlSamplePct, setUrlSamplePct] = useState(10);
+  const [praca, setPraca] = useState<string>("");
   const [viewRules, setViewRules] = useState<ViewRule[]>([]);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [anomaliesOpen, setAnomaliesOpen] = useState(false);
@@ -415,6 +422,7 @@ export default function VerificationContainer() {
             ...(fim ? { fim } : {}),
             url_sample_pct: urlSamplePct,
             ...(viewRules.length > 0 ? { view_rules: JSON.stringify(viewRules) } : {}),
+            ...(praca ? { praca } : {}),
           }),
         });
         await consumeVerifStream(res);
@@ -430,6 +438,7 @@ export default function VerificationContainer() {
         form.append("url_sample_pct", String(urlSamplePct));
         if (viewRules.length > 0)
           form.append("view_rules", JSON.stringify(viewRules));
+        if (praca) form.append("praca", praca);
 
         const res = await fetch("/api/verification/run", {
           method: "POST",
@@ -471,6 +480,7 @@ export default function VerificationContainer() {
     setSelectedYear(currentYear);
     setSelectedMonth(null);
     setUrlSamplePct(10);
+    setPraca("");
     setViewRules([]);
     setResult(null);
     setError(null);
@@ -594,6 +604,28 @@ export default function VerificationContainer() {
               {urlSamplePct === 0 ? "analisa todas as URLs" : `${urlSamplePct}% por categoria`}
             </span>
           </div>
+          {/* Filtro de Praça */}
+          <div className="flex items-center gap-4 flex-wrap">
+            <span className="text-xs text-white/62 font-medium uppercase tracking-wider shrink-0">
+              Praça
+            </span>
+            <select
+              value={praca}
+              onChange={(e) => setPraca(e.target.value)}
+              className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/85 focus:outline-none focus:border-white/35 appearance-none cursor-pointer"
+            >
+              <option value="" className="bg-[#1a1a2e] text-white/60">Todos os estados</option>
+              {ESTADOS_BRASIL.map((uf) => (
+                <option key={uf} value={uf} className="bg-[#1a1a2e]">{uf}</option>
+              ))}
+            </select>
+            {praca && (
+              <span className="text-xs text-white/48">
+                filtrando verification por <span className="text-[rgba(120,180,255,0.8)] font-semibold">{praca}</span>
+              </span>
+            )}
+          </div>
+
           {/* Regras de Visualização */}
           <div className="space-y-2">
             <button

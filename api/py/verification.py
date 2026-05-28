@@ -151,6 +151,7 @@ def _run_engine(body: dict) -> dict:
             data_ini=data_ini,
             data_fim=data_fim,
             output_path=output_path,
+            praca=body.get("praca") or None,
         )
 
         # Read verified xlsx and encode as base64

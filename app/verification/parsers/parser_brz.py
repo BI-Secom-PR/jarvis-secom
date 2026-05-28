@@ -11,7 +11,7 @@ def parse_comprovante(filepath: str, data_ini=None, data_fim=None):
     )
 
 
-def parse_verif(filepath: str, data_ini=None, data_fim=None):
+def parse_verif(filepath: str, data_ini=None, data_fim=None, praca=None):
     raise NotImplementedError(
         "Parser BRZ pendente de integração — adserver em ajuste de formato."
     )

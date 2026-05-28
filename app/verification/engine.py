@@ -476,6 +476,7 @@ def verificar(
     output_path: str | None = None,
     url_sample_pct: int = 10,
     view_rules: list[dict] | None = None,
+    praca: str | None = None,
 ) -> dict:
     """
     Verifica um consolidado contra comprovantes e arquivos de verification.
@@ -486,6 +487,7 @@ def verificar(
     verif_paths      — arquivos de verification de URL (opcional)
     data_ini / data_fim — filtro de período (opcional)
     output_path      — caminho de saída; padrão: <nome> - Verificado.xlsx
+    praca            — sigla do estado para filtrar verification (ex.: "SP")
 
     Retorna dict com:
       {
@@ -515,7 +517,7 @@ def verificar(
 
     for vp in verif_paths:
         try:
-            results = parse_verif(vp, data_ini=data_ini, data_fim=data_fim)
+            results = parse_verif(vp, data_ini=data_ini, data_fim=data_fim, praca=praca)
             veiculos_encontrados = [r["veiculo"] for r in results]
             print(
                 f"[verif] {Path(vp).name}: {len(results)} veículos"
@@ -707,6 +709,8 @@ if __name__ == "__main__":
                     help="% de URLs indevidas a analisar via IA (0 = todas)")
     ap.add_argument("--view-rules", default=None,
                     help="JSON array de regras de visualização por veículo")
+    ap.add_argument("--praca", default=None, metavar="UF",
+                    help="Sigla do estado para filtrar verification (ex.: SP)")
     args = ap.parse_args()
 
     from parser_utils import cli_date  # noqa: E402
@@ -722,6 +726,7 @@ if __name__ == "__main__":
             output_path=args.output,
             url_sample_pct=args.url_pct,
             view_rules=json.loads(args.view_rules) if args.view_rules else None,
+            praca=args.praca,
         )
         # Resumo legível → stderr (não polui o JSON que o Node.js consome)
         print(f"\nArquivo gerado: {resultado['output']}", file=sys.stderr)

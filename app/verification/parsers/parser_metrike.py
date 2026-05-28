@@ -2,11 +2,12 @@
 Parser METRIKE — comprovante de entrega + verification de URLs.
 
 Comprovante:
-  Sheet "Worksheet". Cabeçalho na linha ~12.
-  Colunas: Veículo, Data, Campanha, ID, Placement ID, Formato, Dimensão,
-           Segmentação, Descrição, Linha criativa, Contratado, Impressões,
-           Cliques, Viewable, VA%, Tipo de compra.
-  Linhas "#TOTAL POR CAMPANHA" → extrair Contratado e VA%.
+  Sheet "Worksheet". Cabeçalho da tabela na linha ~12.
+  Valores totais do veículo ficam ACIMA da tabela (col E=label, F=valor):
+    Total Contratado, Total impressões entregue, Total clique entregue, Veículo.
+  Tabela: Veículo, Data, Campanha, ID, Placement ID, Formato, Dimensão,
+          Segmentação, Descrição, Linha criativa, Contratado, Impressões,
+          Cliques, Viewable, VA%, Tipo de compra.
 
 Verification:
   Sheet única (índice 0). Cabeçalho na linha ~5.
@@ -15,7 +16,6 @@ Verification:
 
 import json
 import random
-import re
 import sys
 from collections import defaultdict
 from datetime import date
@@ -58,12 +58,37 @@ def _find_verif_header(ws):
 
 # ── parse_comprovante ────────────────────────────────────────────────────────────
 
+def _parse_header_meta(ws) -> dict:
+    """Lê valores do cabeçalho acima da tabela (col E=label, F=valor).
+    
+    Retorna dict com chaves: contratado, entregue, cliques, veiculo.
+    """
+    meta: dict = {}
+    for row in ws.iter_rows(max_row=10, values_only=True):
+        vals = list(row)
+        label = str(vals[4]).strip() if len(vals) > 4 and vals[4] else ""
+        value = vals[5] if len(vals) > 5 else None
+        if "Total Contratado" in label:
+            meta["contratado"] = to_int(value) or 0
+        elif "impressões" in label.lower() or "impressoes" in label.lower():
+            meta["entregue"] = to_int(value) or 0
+        elif "clique" in label.lower():
+            meta["cliques"] = to_int(value)
+        elif label in ("Veículo:", "Veiculo:"):
+            meta["veiculo"] = str(value).strip() if value else None
+    return meta
+
+
 def parse_comprovante(
     filepath: str,
     data_ini: date | None = None,
     data_fim: date | None = None,
 ) -> list[dict]:
-    """Parseia comprovante METRIKE (Worksheet, #TOTAL POR CAMPANHA)."""
+    """Parseia comprovante METRIKE usando valores do cabeçalho acima da tabela.
+    
+    Os totais (contratado, entregue, cliques, veiculo) vêm das linhas 5-8.
+    As linhas individuais da tabela são usadas apenas para viewability.
+    """
     path = Path(filepath)
     if not path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
@@ -71,6 +96,14 @@ def parse_comprovante(
     wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
     ws = wb.worksheets[0]
 
+    # ── Valores do cabeçalho (acima da tabela) ──────────────────────────────
+    meta = _parse_header_meta(ws)
+    veiculo_nome = meta.get("veiculo") or vehicle_from_filename(filepath)
+    contratado = meta.get("contratado")
+    entregue_total = meta.get("entregue")
+    cliques_total = meta.get("cliques")
+
+    # ── Encontrar header da tabela ──────────────────────────────────────────
     header_row_idx, header = _find_header(ws)
     if header_row_idx is None:
         wb.close()
@@ -78,54 +111,34 @@ def parse_comprovante(
             f"Cabeçalho com 'Veículo' e 'Impressões'/'Views' não encontrado: {path.name}"
         )
 
-    i_veiculo    = col_index(header, "Veículo", "Veiculo", "Vehicle")
     i_impressoes = col_index(header, "Impressões", "Impressoes", "Impressions",
                               "Entregues", "Entregue", "Views", "View")
-    i_cliques    = col_index(header, "Cliques", "Clicks")
     i_viewable   = col_index(header, "Viewable", "Viewables", "Vieweables")
-    i_contratado = col_index(header, "Contratado", "Contracted")
     i_data       = col_index(header, "Data", "Date")
 
     if i_impressoes is None:
         wb.close()
         raise ValueError(f"Coluna obrigatória ausente (Impressões): {path.name}")
-    fallback_vehicle = vehicle_from_filename(filepath)
 
-    entregue:   dict[str, int]   = defaultdict(int)
-    cliques:    dict[str, int]   = defaultdict(int)
-    viewables:  dict[str, int]   = defaultdict(int)
-    contratado: dict[str, int]   = {}
-    last_vehicle: str | None     = None
+    # ── Linhas individuais → apenas viewability ─────────────────────────────
+    total_impressions = 0
+    total_viewables   = 0
 
     for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
         if all(v is None for v in row):
             continue
 
-        veiculo_raw = row[i_veiculo] if i_veiculo is not None and i_veiculo < len(row) else None
-        vname = str(veiculo_raw).strip() if veiculo_raw is not None else ""
-        if not vname:
-            vname = fallback_vehicle
-
+        # Pula linhas #TOTAL, "Total por placement_id" etc.
+        veiculo_raw = row[0] if row[0] is not None else ""
         data_raw = row[i_data] if i_data is not None and i_data < len(row) else None
         data_str = str(data_raw).strip() if data_raw is not None else ""
 
-        # Linha #TOTAL → extrair contratado e pular.
-        # METRIKE põe o label (#TOTAL POR CAMPANHA / #TOTAL POR VEÍCULO) na coluna
-        # Data, não na coluna Veículo — verificar ambas.
+        vname = str(veiculo_raw).strip() if veiculo_raw else ""
         if "#TOTAL" in vname.upper() or "#TOTAL" in data_str.upper():
-            vname_clean = re.sub(r"\s*\|\s*Campaign ID:?\s*\d+", "", vname, flags=re.IGNORECASE).strip()
-            target = last_vehicle or vname_clean
-            if i_contratado is not None and i_contratado < len(row):
-                c = to_int(row[i_contratado])
-                if c > 0:
-                    contratado[target] = contratado.get(target, 0) + c
             continue
-
         if data_raw is not None:
             d = parse_date(data_raw)
             if d is None:
-                # Unparseable value in date column (e.g. "Total por placement_id",
-                # "Total por formato") → subtotal row, skip to avoid double-count
                 continue
             if data_ini and d < data_ini:
                 continue
@@ -136,40 +149,34 @@ def parse_comprovante(
         if imp == 0:
             continue
 
-        entregue[vname] += imp
-        if i_cliques is not None and i_cliques < len(row):
-            cliques[vname] += to_int(row[i_cliques])
+        total_impressions += imp
         if i_viewable is not None and i_viewable < len(row):
-            viewables[vname] += to_int(row[i_viewable])
-
-        last_vehicle = vname
+            total_viewables += to_int(row[i_viewable])
 
     wb.close()
 
-    if not entregue:
-        return []
+    # Se o header não tinha entregue, usa a soma das linhas individuais
+    if entregue_total is None:
+        entregue_total = total_impressions
 
-    # Viewability = soma(viewables) / soma(impressões) * 100
-    viewability: dict[str, float] = {}
-    for vname in entregue:
-        if viewables[vname] > 0 and entregue[vname] > 0:
-            viewability[vname] = round(viewables[vname] / entregue[vname] * 100, 2)
+    viewability = (
+        round(total_viewables / entregue_total * 100, 2)
+        if total_viewables > 0 and entregue_total > 0
+        else None
+    )
 
-    return [
-        {
-            "veiculo":           vname,
-            "tipo_compra":       None,
-            "contratado":        contratado.get(vname),
-            "entregue":          imp,
-            "cliques":           cliques[vname] or None,
-            "viewables":         viewables[vname] or None,
-            "viewability":       viewability.get(vname),
-            "indevidas":         {},
-            "url_sample":        [],
-            "formato_detectado": "metrike_comprovante",
-        }
-        for vname, imp in entregue.items()
-    ]
+    return [{
+        "veiculo":           veiculo_nome,
+        "tipo_compra":       None,
+        "contratado":        contratado,
+        "entregue":          entregue_total,
+        "cliques":           cliques_total,
+        "viewables":         total_viewables or None,
+        "viewability":       viewability,
+        "indevidas":         {},
+        "url_sample":        [],
+        "formato_detectado": "metrike_comprovante",
+    }]
 
 
 # ── parse_verif ──────────────────────────────────────────────────────────────────
@@ -178,8 +185,12 @@ def parse_verif(
     filepath: str,
     data_ini: date | None = None,
     data_fim: date | None = None,
+    praca: str | None = None,
 ) -> list[dict]:
-    """Parseia verification METRIKE (Data, Veículo, Categoria, Url)."""
+    """Parseia verification METRIKE (Data, Veículo, Categoria, Url).
+
+    praca — sigla do estado (ex.: 'SP') para filtrar pela coluna Estado.
+    """
     path = Path(filepath)
     if not path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
@@ -200,6 +211,7 @@ def parse_verif(
     i_categoria  = col_index(header, "Categoria", "Category")
     i_url        = col_index(header, "Url", "URL", "url")
     i_data       = col_index(header, "Data", "Date")
+    i_estado     = col_index(header, "Estado", "State", "UF")
 
     if i_veiculo is None or i_impressoes is None or i_categoria is None:
         wb.close()
@@ -231,6 +243,11 @@ def parse_verif(
 
         if not veiculo or not categoria:
             continue
+
+        if praca and i_estado is not None and i_estado < len(row):
+            estado_row = str(row[i_estado]).strip().upper() if row[i_estado] else ""
+            if estado_row and estado_row != praca.upper().strip():
+                continue
 
         cat_key = normaliza_categoria(categoria)
         if cat_key:
