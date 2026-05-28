@@ -45,7 +45,7 @@ Use `requireAuth()` for protected route handlers and `requireAdmin()` for admin-
 3. Routes by provider:
    - **Google**: Vercel AI SDK `generateText()` with `execute_sql_query` tool
    - **Ollama**: native `ollama` npm client with manual tool-calling loop (max 6 steps)
-4. SQL guard regex only allows `SELECT` on `gold_*` tables; blocks `INTO OUTFILE`, `LOAD_FILE`
+4. Two-layer SQL guard: `SAFE_QUERY` requires `SELECT … FROM`; `BLOCKED_PATTERNS` rejects `UNION SELECT`, `SLEEP()`, `BENCHMARK()`, `INFORMATION_SCHEMA`, `mysql.`, `sys.`, `performance_schema`
 5. Pipe characters in results are replaced with `∣` to prevent markdown table breakage
 6. Client parses `CHART_REQUEST:{...}` sentinel strings from AI response to render Recharts charts
 
@@ -124,115 +124,24 @@ See `GOLD_LAYER_DATA_DICTIONARY.md` for full column definitions. Key tables:
 
 All tables are prefixed `gold_` and the SQL guard enforces this.
 
-## Verificação de Campanhas (`/verification`)
+## Security Notes
 
-Rota **isolada** do chat — não compartilha estado, API ou lógica com `/chat`.
+### SQL Guard (MySQL)
+Two constants in `app/api/chat/route.ts` and `app/api/external/query/route.ts` protect the MySQL query path:
+- `SAFE_QUERY` — allowlist: query must start with `SELECT … FROM`
+- `BLOCKED_PATTERNS` — blocklist: rejects `UNION SELECT`, `SLEEP()`, `BENCHMARK()`, `INFORMATION_SCHEMA`, `mysql.*`, `sys.*`, `performance_schema`
 
-### Fluxo de 3 arquivos
-1. **Consolidado** — template SECOM 29 colunas (gerado pelas agências via `TEMPLATE - Consolidado Verification.xlsx`)
-2. **Comprovante(s)** — relatório de entrega do adserver (um ou mais arquivos `.xlsx`)
-3. **Verification URL(s)** — arquivo de verification com categoria+URL por linha (opcional, um ou mais)
+Both checks must pass. If either fails the query is rejected with HTTP 400 before touching the database. The MySQL user is also read-only on `airbyte_secom` as a second layer.
 
-### Arquitetura de parsers por adserver
-O usuário seleciona o adserver na UI. Cada adserver tem seu próprio módulo em `app/verification/parsers/`:
+### Verification Subprocess Inputs
+`app/api/verification/run/route.ts` validates inputs before spawning `engine.py`:
+- `adserver` must be one of: `00px`, `ADFORCE`, `ADMOTION`, `AHEAD`, `METRIKE`, `BRZ`
+- `ini` / `fim` (date range) must match `YYYY-MM-DD`
 
-| Adserver | Módulo | Notas |
-|---|---|---|
-| 00px | `parser_00px.py` | Multi-sheet CPM+CPC+CPV, VA (IAB) viewability; verif tem layout multi-seção (ver nota abaixo) |
-| ADFORCE | `parser_adforce.py` | Sheet única, viewability média ponderada, verif multi-sheet (pula ABAT); tolera células NaN no XML |
-| ADMOTION | `parser_admotion.py` | Site (CM360) como veículo, Active View columns, URL Veiculada |
-| AHEAD | `parser_ahead.py` | Mesmo formato CM360 do ADMOTION |
-| METRIKE | `parser_metrike.py` | Sheet "Worksheet", linha #TOTAL POR CAMPANHA para contratado; viewability = viewables/impressões×100; comprovante tem subtotais por placement — ver nota abaixo |
-| BRZ | `parser_brz.py` | Placeholder — `NotImplementedError` (adserver em ajuste) |
+Validation runs in both the JSON Blob branch and the FormData on-prem branch.
 
-Cada parser exporta `parse_comprovante(filepath, data_ini, data_fim)` e `parse_verif(filepath, data_ini, data_fim)`.
-Para adicionar novo adserver: criar `parser_X.py` com as duas funções e adicionar ao `PARSER_MAP` em `engine.py`.
-
-### Subtotais em comprovantes (`parse_comprovante`)
-Os comprovantes METRIKE e 00px contêm subtotais cujo label fica na **coluna Data** (não na coluna Veículo): `#TOTAL POR VEÍCULO`, `#TOTAL POR CANAL`, `Total por placement_id`. O guard de `#TOTAL` na coluna Veículo não os captura. Ambos os parsers descartam qualquer linha onde a coluna Data tem valor mas não é parseável como data — isso evita múltipla contagem independente de filtro de período.
-
-### CPV e coluna `entregue` no consolidado
-Para todos os tipos de compra (CPM, CPV), o engine lê `entregue` da **col 5 (Impressões)**. A col 9 (Views) é o numerador do VTR (views completos), não a métrica de entrega. Os parsers 00px CPV usam "Views" como sinônimo de total de plays = col 5.
-
-### Comprovantes ADFORCE — CPV com colunas "Impressões" e "Entregues" separadas
-Comprovantes CPV (ex.: TEADS) exportados pelo ADFORCE contêm **duas colunas distintas**:
-- **Impressões** — exibições totais do anúncio (equivale ao `entregue` / col 5 do consolidado)
-- **Entregues** — plays de vídeo (equivale ao `views` / col 9 do consolidado)
-- **0%** — coluna de video plays que o parser mapeia para o campo `views`
-
-O `parse_comprovante` prioriza "Impressões" para o campo `entregue`; só usa "Entregues" como fallback se "Impressões" não existir no cabeçalho.
-
-### Tolerância a NaN no ADFORCE (`_load_workbook_safe`)
-Alguns comprovantes ADFORCE contêm células `NaN` (resultado de `0/0` sem tratamento), que corrompem o XML do XLSX e fazem o openpyxl falhar. O `parser_adforce.py` usa `_load_workbook_safe()`: tenta carregar normalmente; se falhar, abre o arquivo como ZIP, remove `<v>NaN</v>` dos XMLs de worksheets e recarrega do buffer sanitizado.
-
-### Datas como serial float (`parse_date` em `parser_utils.py`)
-Quando openpyxl não reconhece o formato de data de uma célula (cell type `"n"` em vez de `"d"`), retorna o serial Excel como float (ex.: `46082.125` = 01/03/2026 03:00). `parse_date()` detecta floats no intervalo válido de datas Excel e converte via `openpyxl.utils.datetime.from_excel()`. Afeta todos os parsers que usam `parser_utils`.
-
-### Layout multi-seção do arquivo de verification 00px
-O arquivo de verification 00px tem duas linhas de cabeçalho (row 8 = seções, row 10 = colunas) e três seções de métricas na mesma sheet:
-- **IMPRESSÕES | CPM** → col "Impressões" (preenchida apenas em linhas CPM)
-- **CLIQUES | CPC** → col "Cliques"
-- **VISUALIZAÇÕES | CPV** → col "Views" (preenchida apenas em linhas CPV)
-
-`parse_verif` lê `impressoes = Impressões OR Views` por linha — usa o que não for zero. Isso garante que veículos CPV (ex.: Teads) tenham suas indevidas contadas corretamente.
-
-**Atenção:** se o arquivo de verification incluir múltiplos Placement IDs, os totais de indevidas serão a soma de todos. Ex.: arquivo Teads com placements 152077 + 152078 soma ambos, mas o consolidado pode refletir apenas um deles — nesse caso a agência deve fornecer um arquivo filtrado por placement.
-
-### Template 29 colunas (atualizado)
-- Col 14: Conteúdo Sensível (novo — agregado geral)
-- Cols 15–22: 8 categorias individuais (acidente, violencia, lingua_estrangeira, pornografia, safeframe, app_movel, teste_tag, nao_classificado)
-- **Col 28**: Devolutiva BI SECOM (era col 27)
-- Col 29: Devolutiva Agência
-
-### CATEGORY_MAP centralizado
-Em `app/verification/parsers/category_map.py` — único lugar para adicionar variantes de categoria.
-Inclui strings compostas do ADFORCE (e.g. `"acidentes,violencia,crime"` sem espaços e `"pornografia, sexo, sexualidade"` → mapeados corretamente).
-
-### Layouts de consolidado por adserver
-Cada adserver pode usar um layout diferente de colunas no consolidado (posições de indevidas e devolutiva variam). O `engine.py` detecta as posições **dinamicamente** lendo o header da row 8 via `_detect_consolidado_cols(ws)`, que usa `normaliza_categoria()` para mapear nomes de colunas → chaves internas. Fallback para as constantes hardcoded do template padrão SECOM (29 colunas) quando o header não é reconhecido.
-
-**ADFORCE** (confirmado em `/verification/ADFORCE/`):
-- Col 14: `Acidentes,Violencia,Crime` (combinado; padrão tem Acidente=15, Violência=16)
-- Col 15: `Língua Estrangeira` | Col 16: `Politica` | Col 17: `Sexo/Pornografia`
-- Col 27: Devolutiva BI SECOM (padrão: 28) | Col 28: URL info (padrão: 30)
-
-### Amostragem de URLs para AI check
-- Parsers devolvem o pool completo de URLs indevidas (reservoir ≤ 10000 por arquivo)
-- `engine.py` agrupa por categoria e amostra **30% por categoria indevida** (mín. 1), cap global 200
-- `route.ts` envia ao Ollama `gemma4:31b-cloud` em paralelo (máx 50 URLs, batches de 10)
-- Retorna `url_check_anomalies: [{url, categoria, reason}]` para a UI
-- Categoria `safeframe` é tratada como limitação técnica (não conteúdo indevido) — o prompt da IA instrui a classificá-la sempre como CORRETA
-- Usa `OLLAMA_BASE_URL` — se ausente, URL check é silenciosamente pulado
-- **Não duplo-amostrar**: parsers nunca fazem sub-amostragem própria
-
-### Detecção de header nos parsers de verif
-- `_find_verif_header` exige `"categoria"` + variant de `"veículo"` na mesma linha (até row 25)
-- **Não exige coluna "url"** — URL é enriquecimento opcional, não obrigatório para detectar formato
-- Arquivos sem coluna "Url" no header (ex: R7, UOL METRIKE) são parseados normalmente
-
-### Passagem de múltiplos arquivos ao engine.py
-- `route.ts` usa `args.push('--comp', ...compPaths)` e `args.push('--verif', ...verifPaths)`
-- **Não** usar loop `for p of paths: args.push('--flag', p)` — argparse com `nargs` sobrescreve a cada flag repetida
-
-### Devolutiva — formato das linhas
-- `OK campo: valor` — campo OK (verde na UI)
-- `DIV campo: comprovante X / consolidado Y` — divergência (vermelho)
-- `? indevidas: sem arquivo de verification` — verif não enviado
-- `PENDENTE: ...` — sem comprovante nem verif
-
-### Viewability no consolidado
-- Excel armazena como decimal (0.7166). `_read_consolidado` normaliza: se ≤ 1.0 → multiplica por 100
-
-### Filtros disponíveis na UI
-- **Ano**: chips ano−1 e ano atual — ao trocar com mês selecionado, recalcula `ini`/`fim`
-- **Mês**: chips Jan–Dez preenchem `ini`/`fim` automaticamente com o ano selecionado
-- **Range manual**: campos DD/MM/AAAA — desseleciona chip de mês ao editar
-- **Praça**: select com os 27 estados brasileiros (UF). Quando selecionado, `parse_verif` de **todos** os parsers (00px, ADFORCE, ADMOTION, AHEAD, METRIKE) descarta linhas onde a coluna `Estado`/`UF`/`State` existe e difere da sigla escolhida. Linhas sem valor nessa coluna passam normalmente (fallback seguro). Se o arquivo de verification não tiver coluna de estado, o filtro é silenciosamente ignorado.
-
-### PostgreSQL (produção e desenvolvimento)
-- **Neon** (serverless Postgres) — projeto `jarvis-secom`, região `sa-east-1`
-- Host: `ep-raspy-poetry-acxtgwu0.sa-east-1.aws.neon.tech` — SSL obrigatório (`ssl: 'require'`)
-- A detecção de SSL é automática: `lib/db/index.ts` e `drizzle.config.ts` aplicam SSL quando o host contém `neon.tech`
-- Vercel: **https://jarvis-app-v2.vercel.app**
-
-#
+### Known Gaps (not yet fixed)
+- No rate limiting on `/api/auth/login`, `/api/auth/register`, `/api/external/query`
+- Account enumeration possible via `/waiting` redirect for pending users
+- CSP uses `'unsafe-inline'` for scripts — nonce-based CSP not yet implemented
+- Sessions have no idle timeout (only 30-day absolute expiry)

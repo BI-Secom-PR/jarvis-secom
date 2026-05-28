@@ -25,11 +25,12 @@ function resolveModel(id: ModelId) {
 }
 
 const SAFE_QUERY = /^\s*SELECT\b(?![\s\S]*\b(?:INTO\s+(?:OUTFILE|DUMPFILE)|LOAD_FILE)\b)[\s\S]+\bFROM\b/i;
+const BLOCKED_PATTERNS = /\b(UNION[\s\S]*SELECT|SLEEP\s*\(|BENCHMARK\s*\(|INFORMATION_SCHEMA|mysql\s*\.|sys\s*\.|performance_schema)\b/i;
 const EXPORT_TTL_DAYS = 7;
 const EXPORT_ROW_CAP = 50_000;
 
 async function executeSql(sql_query: string): Promise<Record<string, unknown>[]> {
-  if (!SAFE_QUERY.test(sql_query))
+  if (!SAFE_QUERY.test(sql_query) || BLOCKED_PATTERNS.test(sql_query))
     throw new Error('Only SELECT queries on airbyte_secom are allowed.');
   console.log('[SQL]', sql_query);
   const pool = getPool();

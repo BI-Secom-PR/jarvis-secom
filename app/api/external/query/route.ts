@@ -46,7 +46,8 @@ export async function POST(req: NextRequest) {
           }),
           execute: async ({ sql_query }): Promise<unknown> => {
             const SAFE_QUERY = /^\s*SELECT\b(?![\s\S]*\b(?:INTO\s+(?:OUTFILE|DUMPFILE)|LOAD_FILE)\b)[\s\S]+\bFROM\b/i;
-            if (!SAFE_QUERY.test(sql_query))
+            const BLOCKED_PATTERNS = /\b(UNION[\s\S]*SELECT|SLEEP\s*\(|BENCHMARK\s*\(|INFORMATION_SCHEMA|mysql\s*\.|sys\s*\.|performance_schema)\b/i;
+            if (!SAFE_QUERY.test(sql_query) || BLOCKED_PATTERNS.test(sql_query))
               throw new Error('Only SELECT queries on airbyte_secom are allowed.');
             console.log('[SQL][external]', sql_query);
             const [rows] = await pool.query(sql_query);

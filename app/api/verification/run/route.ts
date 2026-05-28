@@ -8,6 +8,16 @@ import os from 'os';
 import { del } from '@vercel/blob';
 import { Ollama } from 'ollama';
 
+const VALID_ADSERVERS = new Set(['00px', 'ADFORCE', 'ADMOTION', 'AHEAD', 'METRIKE', 'BRZ']);
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function validateAdserver(adserver: string): string | null {
+  return VALID_ADSERVERS.has(adserver) ? null : `Adserver inválido: ${adserver}`;
+}
+function validateDate(label: string, val: string): string | null {
+  return DATE_RE.test(val) ? null : `${label} deve estar no formato YYYY-MM-DD`;
+}
+
 const ollamaClient = new Ollama({
   host: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434',
   headers: process.env.OLLAMA_API_KEY
@@ -150,6 +160,10 @@ export async function POST(req: NextRequest) {
     if (!adserver)          return NextResponse.json({ error: 'Adserver não informado.' }, { status: 400 });
     if (!consolidado_url)   return NextResponse.json({ error: 'Arquivo consolidado não enviado.' }, { status: 400 });
     if (!comp_urls?.length) return NextResponse.json({ error: 'Nenhum comprovante enviado.' }, { status: 400 });
+    const adserverErr = validateAdserver(adserver);
+    if (adserverErr) return NextResponse.json({ error: adserverErr }, { status: 400 });
+    if (body.ini) { const e = validateDate('ini', body.ini); if (e) return NextResponse.json({ error: e }, { status: 400 }); }
+    if (body.fim) { const e = validateDate('fim', body.fim); if (e) return NextResponse.json({ error: e }, { status: 400 }); }
 
     const allBlobUrls = [consolidado_url, ...comp_urls, ...verif_urls];
     const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
@@ -214,6 +228,8 @@ export async function POST(req: NextRequest) {
 
   const adserver = form.get('adserver') as string | null;
   if (!adserver) return NextResponse.json({ error: 'Adserver não informado.' }, { status: 400 });
+  const adserverErrFd = validateAdserver(adserver);
+  if (adserverErrFd) return NextResponse.json({ error: adserverErrFd }, { status: 400 });
 
   const compFiles = form.getAll('comprovante') as File[];
   if (!compFiles.length) return NextResponse.json({ error: 'Nenhum comprovante enviado.' }, { status: 400 });
@@ -221,6 +237,8 @@ export async function POST(req: NextRequest) {
   const verifFiles = form.getAll('verif') as File[];
   const ini = form.get('ini') as string | null;
   const fim = form.get('fim') as string | null;
+  if (ini) { const e = validateDate('ini', ini); if (e) return NextResponse.json({ error: e }, { status: 400 }); }
+  if (fim) { const e = validateDate('fim', fim); if (e) return NextResponse.json({ error: e }, { status: 400 }); }
   const urlSamplePct = Number(form.get('url_sample_pct') ?? 10);
   const viewRulesRaw = form.get('view_rules') as string | null;
   const pracaRaw = form.get('praca') as string | null;
