@@ -394,6 +394,7 @@ def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int
         i_url       = col_index(header, "Url", "URL", "url", "URL Veiculada",
                                  "Url Veiculada")
         i_data      = col_index(header, "Data", "Date")
+        i_estado    = col_index(header, "Estado", "State", "UF")
 
         # Metric columns: each section has Impressões/Cliques/Visualizações/Vis.Completas
         i_imp      = col_index(header, "Impressões", "Impressoes", "Impressions",
@@ -425,6 +426,11 @@ def _parse_verif_multitab(wb, data_ini, data_fim) -> tuple[dict, dict, list, int
 
             if not veiculo or not categoria:
                 continue
+
+            if praca and i_estado is not None and i_estado < len(row):
+                estado_row = str(row[i_estado]).strip().upper() if row[i_estado] else ""
+                if estado_row and estado_row != praca.upper().strip():
+                    continue
 
             def _metric(i_col) -> int:
                 if i_col is None or i_col >= len(row):
@@ -470,6 +476,7 @@ def parse_verif(
     filepath: str,
     data_ini: date | None = None,
     data_fim: date | None = None,
+    praca: str | None = None,
 ) -> list[dict]:
     """
     Parseia verification ADFORCE — detecta automaticamente o formato:

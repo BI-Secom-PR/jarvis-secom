@@ -179,6 +179,7 @@ def parse_verif(
     filepath: str,
     data_ini: date | None = None,
     data_fim: date | None = None,
+    praca: str | None = None,
 ) -> list[dict]:
     """Parseia verification AHEAD (URL Veiculada, Veículos, Impressões Totais)."""
     path = Path(filepath)
@@ -203,6 +204,7 @@ def parse_verif(
     i_url        = col_index(header, "URL Veiculada", "Url Veiculada",
                               "Url", "URL", "url")
     i_data       = col_index(header, "Data", "Date")
+    i_estado     = col_index(header, "Estado", "State", "UF")
 
     if i_veiculo is None or i_impressoes is None or i_categoria is None:
         wb.close()
@@ -234,6 +236,11 @@ def parse_verif(
 
         if not veiculo or not categoria:
             continue
+
+        if praca and i_estado is not None and i_estado < len(row):
+            estado_row = str(row[i_estado]).strip().upper() if row[i_estado] else ""
+            if estado_row and estado_row != praca.upper().strip():
+                continue
 
         cat_key = normaliza_categoria(categoria)
         if cat_key:
