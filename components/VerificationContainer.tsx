@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import JarvisRing from "./JarvisRing";
 
 type VehicleResult = {
   veiculo: string;
@@ -492,7 +493,7 @@ export default function VerificationContainer() {
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden relative nebula-bg">
       {/* Header */}
-      <header className="shrink-0 flex items-center gap-2.5 px-6 py-4 border-b border-white/[0.07]">
+      <header className="shrink-0 relative flex items-center gap-2.5 px-6 py-4 border-b border-white/[0.07]">
         <Link
           href="/"
           className="text-xs text-white/52 hover:text-white/75 transition-colors"
@@ -503,6 +504,9 @@ export default function VerificationContainer() {
         <h1 className="text-xs font-semibold text-white/82 tracking-wide">
           Verificação de Consolidados
         </h1>
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <JarvisRing size={44} />
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto">

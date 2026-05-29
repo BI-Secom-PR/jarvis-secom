@@ -1,6 +1,7 @@
 import { requireAuth } from "@/lib/auth";
 import UserMenu from "@/components/UserMenu";
 import MenuCard from "@/components/MenuCard";
+import JarvisRing from "@/components/JarvisRing";
 
 export const metadata = { title: "Início — Jarvis SECOM" };
 
@@ -54,17 +55,8 @@ export default async function Home() {
 
       <div className="relative z-10 flex flex-col items-center gap-10 px-6 w-full max-w-2xl">
         <div className="flex flex-col items-center gap-2 text-center">
-          <div className="w-12 h-12 rounded-full bg-white/[0.07] border-[0.5px] border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] flex items-center justify-center mb-1">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="10" r="4" fill="rgba(120,180,255,0.7)" />
-              <circle
-                cx="10"
-                cy="10"
-                r="7"
-                stroke="rgba(120,180,255,0.25)"
-                strokeWidth="1"
-              />
-            </svg>
+          <div className="mb-1">
+            <JarvisRing />
           </div>
           <h1 className="text-[28px] font-semibold text-white tracking-[-0.5px]">
             Jarvis

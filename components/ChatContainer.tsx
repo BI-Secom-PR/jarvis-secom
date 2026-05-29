@@ -11,6 +11,7 @@ import TypingIndicator from "./TypingIndicator";
 import InputArea, { type InputAreaHandle } from "./InputArea";
 import WelcomeCard from "./WelcomeCard";
 import UserMenu from "./UserMenu";
+import JarvisRing from "./JarvisRing";
 import dynamic from "next/dynamic";
 const VoiceMode = dynamic(() => import("./VoiceMode"), { ssr: false });
 
@@ -34,23 +35,6 @@ async function callChatApi(
   if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
   return { output: data.output ?? "", chartData: data.chartData ?? undefined };
 }
-
-const StarIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 18 18"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path
-      d="M9 1L10.3 7.2L16.5 9L10.3 10.8L9 17L7.7 10.8L1.5 9L7.7 7.2L9 1Z"
-      stroke="#78b4ff"
-      strokeWidth="1.5"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
 
 export default function ChatContainer({ user }: { user: SessionUser }) {
   const router = useRouter();
@@ -162,8 +146,8 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
             <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </a>
-        <div className="w-10 h-10 rounded-full bg-white/[0.07] border-[0.5px] border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] flex items-center justify-center shrink-0">
-          <StarIcon />
+        <div className="shrink-0">
+          <JarvisRing size={44} />
         </div>
         <div>
           <h1 className="text-[17px] font-semibold text-white tracking-[-0.2px]">
