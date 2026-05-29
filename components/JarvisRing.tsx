@@ -11,7 +11,7 @@ const PALETTE = [CYAN, MAGENTA, PURPLE];
 
 type Particle = { angle: number; r: number; speed: number; alpha: number; color: (a: number) => string };
 
-export default function JarvisRing({ size = 120 }: { size?: number }) {
+export default function JarvisRing({ size = 180 }: { size?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
