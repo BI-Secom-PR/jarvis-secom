@@ -53,9 +53,10 @@ SCHEMA — airbyte_secom (gold layer)
 TABELAS (schema: airbyte_secom):
 • gold_platforms_campaigns   — grain: platform+campaign+ad+date+network (7 plataformas)
 • gold_platforms_regions     — grain: platform+campaign+ad+ad_group+date+region+country+city+network
+• gold_platforms_age_gender  — grain: platform+campaign+ad+ad_group+date+age+gender+network (4 plataformas)
 • gold_platforms_age         — grain: platform+campaign+ad+ad_group+date+age+network (4 plataformas)
 • gold_platforms_gender      — grain: platform+campaign+ad+ad_group+date+gender+network (4 plataformas)
-• gold_platforms_age_gender  — grain: platform+campaign+ad+ad_group+date+age+gender+network (4 plataformas)
+
 
 COLUNAS COMPARTILHADAS (todas as tabelas):
   Identidade:    id, platform, network, source_table, created_at, updated_at

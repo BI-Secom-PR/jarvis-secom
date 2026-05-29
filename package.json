@@ -36,14 +36,17 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.8.0",
-    "resend": "^6.9.4",
+    "resend": "^6.12.4",
     "svg-to-pdfkit": "^0.1.8",
     "zod": "^4.3.6"
   },
   "overrides": {
-    "protobufjs": "~7.5.5",
+    "protobufjs": "~7.5.8",
     "esbuild": "~0.25.0",
-    "postcss": "~8.5.10"
+    "postcss": "~8.5.10",
+    "tmp": ">=0.2.6",
+    "ws": ">=8.21.0",
+    "svix": ">=1.91.2"
   },
   "devDependencies": {
     "@anthropic-ai/claude-code": "^2.1.84",
