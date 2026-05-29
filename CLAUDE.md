@@ -135,8 +135,8 @@ Both checks must pass. If either fails the query is rejected with HTTP 400 befor
 
 ### Verification Subprocess Inputs
 `app/api/verification/run/route.ts` validates inputs before spawning `engine.py`:
-- `adserver` must be one of: `00px`, `ADFORCE`, `ADMOTION`, `AHEAD`, `METRIKE`, `BRZ`
-- `ini` / `fim` (date range) must match `YYYY-MM-DD`
+- `adserver` must be one of: `00px`, `adforce`, `admotion`, `ahead`, `metrike`, `brz` (lowercase — matches `engine.py` argparse choices)
+- `ini` / `fim` (date range) must match `DD/MM/YYYY` (the format `engine.py` expects)
 
 Validation runs in both the JSON Blob branch and the FormData on-prem branch.
 

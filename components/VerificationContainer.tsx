@@ -355,6 +355,12 @@ export default function VerificationContainer() {
     setResult(null);
 
     const consumeVerifStream = async (res: Response) => {
+      if (!res.ok && res.status !== 200) {
+        const text = await res.text();
+        let msg = `HTTP ${res.status}`;
+        try { msg = (JSON.parse(text) as { error?: string }).error ?? text; } catch { msg = text || msg; }
+        throw new Error(msg);
+      }
       if (!res.body) throw new Error(`HTTP ${res.status}: servidor não retornou stream`);
       const reader = res.body.getReader();
       const decoder = new TextDecoder();

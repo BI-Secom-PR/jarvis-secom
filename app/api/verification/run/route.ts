@@ -8,14 +8,14 @@ import os from 'os';
 import { del } from '@vercel/blob';
 import { Ollama } from 'ollama';
 
-const VALID_ADSERVERS = new Set(['00px', 'ADFORCE', 'ADMOTION', 'AHEAD', 'METRIKE', 'BRZ']);
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const VALID_ADSERVERS = new Set(['00px', 'adforce', 'admotion', 'ahead', 'metrike', 'brz']);
+const DATE_RE = /^\d{2}\/\d{2}\/\d{4}$/;
 
 function validateAdserver(adserver: string): string | null {
   return VALID_ADSERVERS.has(adserver) ? null : `Adserver inválido: ${adserver}`;
 }
 function validateDate(label: string, val: string): string | null {
-  return DATE_RE.test(val) ? null : `${label} deve estar no formato YYYY-MM-DD`;
+  return DATE_RE.test(val) ? null : `${label} deve estar no formato DD/MM/YYYY`;
 }
 
 const ollamaClient = new Ollama({
