@@ -31,7 +31,7 @@ from parser_utils import col_index, parse_date, to_int, cli_date, vehicle_from_f
 
 def _find_header(ws):
     veiculo_variants  = {"veículo", "veiculo", "vehicle"}
-    entregue_variants = {"impressões", "impressoes", "impressions",
+    entregue_variants = {"impressões", "impressoes", "impressions","Impressões",
                          "entregues", "entregue",
                          "views", "view"}
     for i, row in enumerate(ws.iter_rows(max_row=25, values_only=True), start=1):

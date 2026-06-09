@@ -105,5 +105,5 @@ def normaliza_categoria(texto: str) -> str | None:
     """
     if not texto or not isinstance(texto, str):
         return None
-    key = texto.strip().lower()
+    key = texto.split('\n')[0].strip().lower()
     return CATEGORY_MAP.get(key)
