@@ -24,7 +24,6 @@ from pathlib import Path
 
 import openpyxl
 
-from category_map import INDEVIDAS_ZERO, normaliza_categoria
 from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename
 
 
@@ -352,14 +351,14 @@ def _parse_verif_flat(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, l
         if not categoria:
             continue
 
-        cat_key = normaliza_categoria(categoria)
-        if not cat_key:
+        cat_str = categoria.strip() if categoria else ""
+        if not cat_str:
             continue
 
         if total_val > 0:
-            indev[veiculo][cat_key] += total_val
+            indev[veiculo][cat_str] += total_val
         if v_cpv > 0:
-            cpv_indev[veiculo][cat_key] += v_cpv
+            cpv_indev[veiculo][cat_str] += v_cpv
 
         veiculos_entregue[veiculo] += total_val
 
@@ -457,12 +456,12 @@ def _parse_verif_multitab(wb, data_ini, data_fim, praca=None) -> tuple[dict, dic
             veiculos_total[veiculo] += total_val
             veiculos_entregue[veiculo] += total_val
 
-            cat_key = normaliza_categoria(categoria)
-            if not cat_key:
+            cat_str = categoria.strip() if categoria else ""
+            if not cat_str:
                 continue
 
             if total_val > 0:
-                indev[veiculo][cat_key] += total_val
+                indev[veiculo][cat_str] += total_val
 
             if url and total_val > 0:
                 pool_count += 1

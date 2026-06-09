@@ -368,7 +368,17 @@ def _compare(
     consol_indev = consol_row.get("indevidas", {})
 
     if verif_result is not None:
-        verif_indev = verif_result.get("indevidas", {})
+        # Normaliza strings brutas do parser para chaves SECOM; preserva extras sem mapa
+        verif_indev_raw = verif_result.get("indevidas", {})
+        verif_indev: dict[str, int] = {}
+        verif_extras: dict[str, int] = {}
+        for raw_cat, count in verif_indev_raw.items():
+            cat_key = normaliza_categoria(raw_cat)
+            if cat_key:
+                verif_indev[cat_key] = verif_indev.get(cat_key, 0) + count
+            else:
+                verif_extras[raw_cat] = verif_extras.get(raw_cat, 0) + count
+
         indev_linhas: list[str] = []
         alguma_indevida_com_dado = False
 
@@ -553,7 +563,12 @@ def verificar(
             parse_errors.append({"arquivo": Path(cp).name, "erro": str(e)})
 
     # Safeframe é limitação técnica, não conteúdo indevido — exclui do pool de IA.
-    url_pool = [item for item in url_pool if normaliza_categoria(item.get("categoria", "")) != "safeframe"]
+    # Mantém apenas URLs de categorias indevidas reconhecidas pelo consolidado;
+    # safeframe é limitação técnica (não conteúdo indevido) e também é excluído.
+    url_pool = [
+        item for item in url_pool
+        if normaliza_categoria(item.get("categoria", "")) not in (None, "safeframe")
+    ]
 
     # ── Agrupa URLs duplicadas por (url, categoria, veiculo) somando impressões ──
     # O mesmo URL pode aparecer em múltiplas linhas do verification file. Agrupar

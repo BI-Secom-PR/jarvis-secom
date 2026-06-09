@@ -111,7 +111,7 @@ Special characters in `PG_PASSWORD` must be quoted: `PG_PASSWORD="p@ss&word"`
 | `components/ChatContainer.tsx` | Main chat state management |
 | `verification/` | Excel spreadsheets (data, not code) |
 | `app/verification/engine.py` | Python verification engine (29-col template) |
-| `app/verification/parsers/` | Format-specific parsers + category_map.py |
+| `app/verification/parsers/` | Format-specific parsers + category_map.py — one parser per adserver |
 | `app/api/verification/run/route.ts` | Verification API — spawns engine.py, runs AI URL check |
 | `components/VerificationContainer.tsx` | Verification UI |
 
@@ -132,6 +132,15 @@ Two constants in `app/api/chat/route.ts` and `app/api/external/query/route.ts` p
 - `BLOCKED_PATTERNS` — blocklist: rejects `UNION SELECT`, `SLEEP()`, `BENCHMARK()`, `INFORMATION_SCHEMA`, `mysql.*`, `sys.*`, `performance_schema`
 
 Both checks must pass. If either fails the query is rejected with HTTP 400 before touching the database. The MySQL user is also read-only on `airbyte_secom` as a second layer.
+
+### Verification Parser Contract
+
+Every adserver parser under `app/verification/parsers/` implements **two distinct functions** with completely different inputs and purposes:
+
+- **`parse_comprovante()`** — reads the **delivery receipt** provided by the adserver. Confirms that the ad was actually served (impressions, dates, vehicles). This is the adserver's own output.
+- **`parse_verif()`** — reads the **URL/category audit sheet**. Contains the URLs where the ad ran and the SECOM category each URL was classified under (brand safety verification). This is produced by the verification team, not the adserver.
+
+This distinction is universal across all adservers (`adforce`, `metrike`, `00px`, `ahead`, `admotion`, `brz`). Never conflate the two — they parse different files with different schemas for different stages of the verification process.
 
 ### Verification Subprocess Inputs
 `app/api/verification/run/route.ts` validates inputs before spawning `engine.py`:

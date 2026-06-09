@@ -26,7 +26,6 @@ from pathlib import Path
 
 import openpyxl
 
-from category_map import INDEVIDAS_ZERO, normaliza_categoria
 from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename
 
 
@@ -223,7 +222,7 @@ def parse_verif(
             f"Colunas obrigatórias ausentes (Veículos/Impressões Totais/Categoria): {path.name}"
         )
 
-    veiculos_indevidas: dict[str, dict] = defaultdict(lambda: dict(INDEVIDAS_ZERO))
+    veiculos_indevidas: dict[str, dict] = defaultdict(dict)
     veiculos_entregue:  dict[str, int]  = defaultdict(int)
     MAX_POOL = 10000
     url_pool: list[dict] = []
@@ -253,15 +252,14 @@ def parse_verif(
             if estado_row and estado_row != praca.upper().strip():
                 continue
 
-        cat_key = normaliza_categoria(categoria)
-        if cat_key:
-            veiculos_indevidas[veiculo][cat_key] = (
-                veiculos_indevidas[veiculo].get(cat_key, 0) + impressoes
-            )
+        cat_str = categoria.strip()
+        veiculos_indevidas[veiculo][cat_str] = (
+            veiculos_indevidas[veiculo].get(cat_str, 0) + impressoes
+        )
 
         veiculos_entregue[veiculo] += impressoes
 
-        if url and cat_key:
+        if url and cat_str:
             pool_count += 1
             entry = {"url": url, "categoria": categoria, "veiculo": veiculo, "impressoes": impressoes}
             if len(url_pool) < MAX_POOL:

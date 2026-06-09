@@ -34,7 +34,6 @@ from pathlib import Path
 
 import openpyxl
 
-from category_map import INDEVIDAS_ZERO, normaliza_categoria
 from parser_utils import col_index, parse_date, to_int, cli_date
 
 
@@ -92,9 +91,7 @@ def parse(
         )
 
     # Acumuladores por veículo
-    veiculos_indevidas: dict[str, dict[str, int]] = defaultdict(
-        lambda: dict(INDEVIDAS_ZERO)
-    )
+    veiculos_indevidas: dict[str, dict[str, int]] = defaultdict(dict)
     veiculos_entregue: dict[str, int] = defaultdict(int)
 
     # Pool de URLs para amostragem — reservoir sampling, máx 500 entradas
@@ -123,17 +120,15 @@ def parse(
         if not veiculo or not categoria:
             continue
 
-        # Mapear categoria → chave SECOM
-        cat_key = normaliza_categoria(categoria)
-        if cat_key:
-            veiculos_indevidas[veiculo][cat_key] = (
-                veiculos_indevidas[veiculo].get(cat_key, 0) + impressoes
-            )
+        cat_str = categoria.strip()
+        veiculos_indevidas[veiculo][cat_str] = (
+            veiculos_indevidas[veiculo].get(cat_str, 0) + impressoes
+        )
 
         veiculos_entregue[veiculo] += impressoes
 
         # Apenas URLs de categorias indevidas vão para a amostra de IA
-        if url and cat_key:
+        if url and cat_str:
             pool_count += 1
             entry = {"url": url, "categoria": categoria, "veiculo": veiculo, "impressoes": impressoes}
             if len(url_pool) < MAX_POOL:
