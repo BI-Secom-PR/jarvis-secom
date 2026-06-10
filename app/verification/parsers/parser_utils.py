@@ -2,9 +2,10 @@
 Utilitários compartilhados pelos parsers de verification/comprovante.
 """
 
+import random
+import re
 from datetime import date, datetime
 from pathlib import Path
-import re
 
 
 def to_int(v) -> int:
@@ -81,3 +82,33 @@ def vehicle_from_filename(filepath: str) -> str:
     candidate = re.sub(r"\b(comprovante|verification|verificacao|relatorio)\b", "", candidate, flags=re.IGNORECASE)
     candidate = re.sub(r"\s+", " ", candidate).strip(" _-")
     return candidate or stem
+
+
+class StratifiedReservoir:
+    """
+    Reservoir sampling estratificado para o pool de URLs.
+
+    Um reservoir global único deixa estratos raros (ex.: as poucas linhas cpv>0
+    de um veículo CPV num arquivo dominado por linhas cpm de outros veículos)
+    serem afogados pelo volume. Mantendo um reservoir independente por estrato
+    — (veículo, categoria, métrica) — linhas raras sobrevivem garantidamente
+    enquanto estratos gigantes continuam limitados a `cap` itens.
+    """
+
+    def __init__(self, cap: int = 500):
+        self.cap = cap
+        self._pools: dict[tuple, list[dict]] = {}
+        self._counts: dict[tuple, int] = {}
+
+    def add(self, key: tuple, entry: dict) -> None:
+        pool = self._pools.setdefault(key, [])
+        self._counts[key] = self._counts.get(key, 0) + 1
+        if len(pool) < self.cap:
+            pool.append(entry)
+        else:
+            idx = random.randint(0, self._counts[key] - 1)
+            if idx < self.cap:
+                pool[idx] = entry
+
+    def items(self) -> list[dict]:
+        return [e for pool in self._pools.values() for e in pool]

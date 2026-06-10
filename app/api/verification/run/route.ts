@@ -26,7 +26,7 @@ const ollamaClient = new Ollama({
 });
 
 type UrlSampleItem  = { url: string; categoria: string; veiculo: string; impressoes: number };
-type UrlAnomalyItem = { url: string; categoria: string; veiculo: string; reason: string; impressoes: number; pct: number };
+type UrlAnomalyItem = { url: string; categoria: string; categoria_sugerida: string | null; veiculo: string; reason: string; impressoes: number; pct: number };
 type Send = (ev: object) => void;
 type VerificationResult = {
   veiculos: unknown;
@@ -40,12 +40,12 @@ type VerificationResult = {
   url_check_anomalies: UrlAnomalyItem[];
 };
 
-async function checkUrlCategory(item: UrlSampleItem): Promise<UrlAnomalyItem | null> {
+async function checkUrlCategory(item: UrlSampleItem, categoriasDisponiveis: string[]): Promise<UrlAnomalyItem | null> {
   try {
     const response = await ollamaClient.chat({
       model: 'gemma4:31b-cloud',
-      options: { num_predict: 80 },
-      messages: [{ role: 'user', content: `Você é um classificador de brand safety para o SECOM (Secretaria de Comunicação Social do Governo Federal do Brasil). Dado uma URL e a categoria de conteúdo indevido atribuída a ela pelo adserver, determine se essa classificação é CORRETA ou INCORRETA.
+      options: { num_predict: 100 },
+      messages: [{ role: 'user', content: `Você é um classificador de brand safety para o SECOM (Secretaria de Comunicação Social do Governo Federal do Brasil). Dado uma URL e a categoria de conteúdo atribuída a ela pelo adserver, determine se essa classificação é CORRETA ou INCORRETA. Se for incorreta, indique a categoria correta para que o adserver possa recategorizar a URL.
 
 As categorias de conteúdo consideradas indevidas pelo SECOM são:
 - Língua estrangeira: conteúdo entregue fora do português brasileiro (já foi objeto de questionamento pelo TCU e CGU)
@@ -61,19 +61,26 @@ As categorias de conteúdo consideradas indevidas pelo SECOM são:
 Categorias que NÃO são conteúdo indevido:
 - "safeframe": limitação técnica de rastreamento. O Safeframe pode restringir o acesso à URL da página por privacidade, afetando entregas em apps, programática ou iframes. Trate sempre como CORRETA.
 - "aplicativo móvel" e "teste de tag": limitações técnicas, não conteúdo impróprio. Trate sempre como CORRETA.
-
+${categoriasDisponiveis.length > 0 ? `
+Categorias usadas neste arquivo de verificação (prefira sugerir uma destas, ou uma categoria indevida do SECOM acima):
+${categoriasDisponiveis.map((c) => `- ${c}`).join('\n')}
+` : ''}
 URL: ${item.url}
 Categoria atribuída: ${item.categoria}
 
 Responda com exatamente uma das opções:
-- "SIM" (a URL realmente contém esse tipo de conteúdo indevido, ou a categoria é uma limitação técnica)
-- "NÃO: <uma frase explicando por que a classificação parece incorreta>"` }],
+- "CORRETA" (a URL realmente pertence à categoria atribuída, ou a categoria é uma limitação técnica)
+- "INCORRETA: <categoria sugerida> | <uma frase explicando por que a classificação parece incorreta>"` }],
     });
 
     const trimmed = response.message.content.trim();
-    if (/^NÃO|^NAO/i.test(trimmed)) {
-      const reason = trimmed.replace(/^N[ÃA]O[:\s]*/i, '').trim() || 'Classificação suspeita';
-      return { url: item.url, categoria: item.categoria, veiculo: item.veiculo, reason, impressoes: item.impressoes, pct: 0 };
+    const match = trimmed.match(/^INCORRETA[:\s]*(.*)$/i) ?? trimmed.match(/^N[ÃA]O[:\s]*(.*)$/i);
+    if (match) {
+      const tail = match[1].trim();
+      const pipeIdx = tail.indexOf('|');
+      const categoriaSugerida = pipeIdx >= 0 ? tail.slice(0, pipeIdx).trim() || null : null;
+      const reason = (pipeIdx >= 0 ? tail.slice(pipeIdx + 1).trim() : tail) || 'Classificação suspeita';
+      return { url: item.url, categoria: item.categoria, categoria_sugerida: categoriaSugerida, veiculo: item.veiculo, reason, impressoes: item.impressoes, pct: 0 };
     }
     return null;
   } catch {
@@ -357,13 +364,14 @@ async function buildEngineResponse(
   // ── AI URL check ──────────────────────────────────────────────────────────
   let urlCheckAnomalies: UrlAnomalyItem[] = [];
   const urlSample: UrlSampleItem[] = (engineResult.url_sample as UrlSampleItem[]) ?? [];
+  const urlCategorias: string[] = (engineResult.url_categorias as string[]) ?? [];
   if (urlSample.length > 0 && process.env.OLLAMA_BASE_URL) {
     const BATCH = 10;
     send({ type: 'url_check_start', total: urlSample.length });
     let done = 0;
     for (let i = 0; i < urlSample.length; i += BATCH) {
       const batch = urlSample.slice(i, i + BATCH);
-      const settled = await Promise.allSettled(batch.map(checkUrlCategory));
+      const settled = await Promise.allSettled(batch.map((item) => checkUrlCategory(item, urlCategorias)));
       done += batch.length;
       send({ type: 'url_check_progress', done, total: urlSample.length });
       urlCheckAnomalies.push(
@@ -402,7 +410,9 @@ async function buildEngineResponse(
     for (const a of urlCheckAnomalies) {
       const consolName = matchToConsol.get(a.veiculo) ?? a.veiculo;
       if (!urlInfoByVeiculo[consolName]) urlInfoByVeiculo[consolName] = [];
-      urlInfoByVeiculo[consolName].push(`${a.url} [${a.impressoes} imp, ${a.pct}%] → ${a.reason}`);
+      urlInfoByVeiculo[consolName].push(
+        `${a.url} [${a.impressoes} imp, ${a.pct}%] → categoria atual: ${a.categoria}; sugerida: ${a.categoria_sugerida ?? '—'} (${a.reason})`
+      );
     }
     const urlInfoFlat = Object.fromEntries(
       Object.entries(urlInfoByVeiculo).map(([k, v]) => [k, v.join('\n')])

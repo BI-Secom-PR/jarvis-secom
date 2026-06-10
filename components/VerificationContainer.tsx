@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Fragment, useState, useEffect } from "react";
 import Link from "next/link";
 import JarvisRing from "./JarvisRing";
 
@@ -16,6 +16,8 @@ type VehicleResult = {
 type UrlAnomaly = {
   url: string;
   categoria: string;
+  categoria_sugerida?: string | null;
+  veiculo: string;
   reason: string;
   impressoes?: number;
   pct?: number;
@@ -1037,6 +1039,9 @@ export default function VerificationContainer() {
                               Categoria
                             </th>
                             <th className="text-left py-2 pr-4 text-white/58 font-medium whitespace-nowrap">
+                              Categoria sugerida
+                            </th>
+                            <th className="text-left py-2 pr-4 text-white/58 font-medium whitespace-nowrap">
                               Impressões URL
                             </th>
                             <th className="text-left py-2 pr-4 text-white/58 font-medium whitespace-nowrap">
@@ -1048,33 +1053,60 @@ export default function VerificationContainer() {
                           </tr>
                         </thead>
                         <tbody>
-                          {result.url_check_anomalies.map((a, i) => (
-                            <tr
-                              key={i}
-                              className="border-b border-white/5 last:border-0"
-                            >
-                              <td className="py-2 pr-4 text-white/68 max-w-[260px] truncate">
-                                <a
-                                  href={a.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="hover:text-violet-300 transition-colors"
-                                  title={a.url}
+                          {Object.entries(
+                            result.url_check_anomalies.reduce<Record<string, UrlAnomaly[]>>(
+                              (acc, a) => {
+                                const v = a.veiculo || "—";
+                                (acc[v] ??= []).push(a);
+                                return acc;
+                              },
+                              {}
+                            )
+                          ).map(([veiculo, anomalias]) => (
+                            <Fragment key={veiculo}>
+                              <tr className="border-b border-white/5">
+                                <td
+                                  colSpan={6}
+                                  className="pt-3 pb-1 text-violet-300 font-semibold"
                                 >
-                                  {a.url}
-                                </a>
-                              </td>
-                              <td className="py-2 pr-4 text-violet-300/70 whitespace-nowrap">
-                                {a.categoria}
-                              </td>
-                              <td className="py-2 pr-4 text-white/72 whitespace-nowrap">
-                                {formatInt(a.impressoes)}
-                              </td>
-                              <td className="py-2 pr-4 text-white/72 whitespace-nowrap">
-                                {formatPct(a.pct)}
-                              </td>
-                              <td className="py-2 text-white/68">{a.reason}</td>
-                            </tr>
+                                  {veiculo}
+                                  <span className="ml-2 text-white/40 font-normal">
+                                    {anomalias.length} URL{anomalias.length > 1 ? "s" : ""}
+                                  </span>
+                                </td>
+                              </tr>
+                              {anomalias.map((a, i) => (
+                                <tr
+                                  key={i}
+                                  className="border-b border-white/5 last:border-0"
+                                >
+                                  <td className="py-2 pr-4 text-white/68 max-w-[260px] truncate">
+                                    <a
+                                      href={a.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="hover:text-violet-300 transition-colors"
+                                      title={a.url}
+                                    >
+                                      {a.url}
+                                    </a>
+                                  </td>
+                                  <td className="py-2 pr-4 text-violet-300/70 whitespace-nowrap">
+                                    {a.categoria}
+                                  </td>
+                                  <td className="py-2 pr-4 text-amber-300/80 whitespace-nowrap">
+                                    {a.categoria_sugerida ?? "—"}
+                                  </td>
+                                  <td className="py-2 pr-4 text-white/72 whitespace-nowrap">
+                                    {formatInt(a.impressoes)}
+                                  </td>
+                                  <td className="py-2 pr-4 text-white/72 whitespace-nowrap">
+                                    {formatPct(a.pct)}
+                                  </td>
+                                  <td className="py-2 text-white/68">{a.reason}</td>
+                                </tr>
+                              ))}
+                            </Fragment>
                           ))}
                         </tbody>
                       </table>

@@ -532,6 +532,7 @@ def verificar(
         "sem_consolidado_comp":  list[str],
         "parse_errors":     list[dict],
         "url_sample":       list[dict],
+        "url_categorias":   list[str],
       }
     """
     if adserver not in PARSER_MAP:
@@ -576,12 +577,12 @@ def verificar(
         except Exception as e:
             parse_errors.append({"arquivo": Path(cp).name, "erro": str(e)})
 
-    # Safeframe é limitação técnica, não conteúdo indevido — exclui do pool de IA.
-    # Mantém apenas URLs de categorias indevidas reconhecidas pelo consolidado;
-    # safeframe é limitação técnica (não conteúdo indevido) e também é excluído.
+    # Categorias técnicas (safeframe, app móvel, teste de tag) não são conteúdo
+    # e ficam fora do pool de IA. Todas as demais — inclusive não-indevidas como
+    # "Notícias" — entram para checagem de categorização correta por veículo.
     url_pool = [
         item for item in url_pool
-        if normaliza_categoria(item.get("categoria", "")) not in (None, "safeframe")
+        if normaliza_categoria(item.get("categoria", "")) not in ("safeframe", "app_movel", "teste_tag")
     ]
 
     # ── Agrupa URLs duplicadas por (url, categoria, veiculo) somando impressões ──
@@ -592,25 +593,12 @@ def verificar(
         key = (item["url"], item["categoria"], item["veiculo"])
         if key in grouped:
             grouped[key]["impressoes"] = grouped[key].get("impressoes", 0) + item.get("impressoes", 0)
+            for m in ("cpm", "cpv"):
+                if m in item or m in grouped[key]:
+                    grouped[key][m] = (grouped[key].get(m) or 0) + (item.get(m) or 0)
         else:
             grouped[key] = dict(item)
     url_pool = list(grouped.values())
-
-    # ── Amostra de URLs: pct% por categoria indevida (0 = todas) ──────────────
-    # Parsers devolvem o pool completo (reservoir ≤ 500); amostragem feita aqui.
-    if url_pool:
-        if url_sample_pct == 0:
-            url_sample: list[dict] = list(url_pool)
-        else:
-            by_cat: dict[str, list] = defaultdict(list)
-            for item in url_pool:
-                by_cat[item["categoria"]].append(item)
-            url_sample = []
-            for items in by_cat.values():
-                n = max(1, len(items) * url_sample_pct // 100)
-                url_sample.extend(random.sample(items, min(n, len(items))))
-    else:
-        url_sample = []
 
     # ── Parseia verification SEM filtro de praça p/ DIF (que não deve filtrar por estado) ──
     verif_raw_unfiltered: list[dict] = []
@@ -669,6 +657,7 @@ def verificar(
         resultado_veiculos: list[dict] = []
         matched_verif_names: set[str] = set()
         matched_comp_names:  set[str] = set()
+        tipo_by_verif_norm: dict[str, str] = {}
 
         for crow in consol_rows:
             consol_norm = _normalize(crow["veiculo"])
@@ -679,6 +668,7 @@ def verificar(
 
             if verif_match:
                 matched_verif_names.add(_normalize(verif_match["veiculo"]))
+                tipo_by_verif_norm[_normalize(verif_match["veiculo"])] = crow.get("tipo_compra", "")
             if comp_match:
                 matched_comp_names.add(_normalize(comp_match["veiculo"]))
 
@@ -742,6 +732,51 @@ def verificar(
     finally:
         wb.close()
 
+    # ── Amostra de URLs: apenas veículos presentes no consolidado ─────────────
+    # URLs de veículos sem entrada no consolidado não são verificadas pela IA.
+    # Amostragem: pct% por categoria (0 = todas). Parsers devolvem o pool
+    # completo (reservoir); a amostragem é feita aqui, após o match fuzzy.
+    url_pool = [
+        item for item in url_pool
+        if _normalize(item.get("veiculo", "")) in matched_verif_names
+    ]
+
+    # ── Filtro por Objetivo de Mídia do consolidado ───────────────────────────
+    # CPM → só URLs com métrica cpm > 0; CPV → só URLs com cpv > 0. Aplica-se
+    # apenas quando o verification file traz métricas por URL (ex.: ADFORCE);
+    # parsers sem essas colunas não emitem as chaves e passam direto.
+    def _passa_objetivo(item: dict) -> bool:
+        tipo = tipo_by_verif_norm.get(_normalize(item.get("veiculo", "")), "")
+        if tipo == "CPM" and "cpm" in item:
+            return (item.get("cpm") or 0) > 0
+        if tipo == "CPV" and "cpv" in item:
+            return (item.get("cpv") or 0) > 0
+        return True
+
+    url_pool = [item for item in url_pool if _passa_objetivo(item)]
+
+    # Para CPM/CPV, o volume relevante da URL é a métrica do objetivo — não o
+    # total combinado (que somaria cliques/views de outros objetivos).
+    for item in url_pool:
+        tipo = tipo_by_verif_norm.get(_normalize(item.get("veiculo", "")), "")
+        if tipo == "CPM" and "cpm" in item:
+            item["impressoes"] = item.get("cpm") or 0
+        elif tipo == "CPV" and "cpv" in item:
+            item["impressoes"] = item.get("cpv") or 0
+    if url_pool:
+        if url_sample_pct == 0:
+            url_sample: list[dict] = list(url_pool)
+        else:
+            by_cat: dict[str, list] = defaultdict(list)
+            for item in url_pool:
+                by_cat[item["categoria"]].append(item)
+            url_sample = []
+            for items in by_cat.values():
+                n = max(1, len(items) * url_sample_pct // 100)
+                url_sample.extend(random.sample(items, min(n, len(items))))
+    else:
+        url_sample = []
+
     return {
         "output":           output_path,
         "veiculos":         resultado_veiculos,
@@ -751,6 +786,7 @@ def verificar(
         "sem_consolidado_comp":  sem_consolidado_comp,
         "parse_errors":     parse_errors,
         "url_sample":       url_sample,
+        "url_categorias":   sorted({item["categoria"] for item in url_pool}),
     }
 
 
