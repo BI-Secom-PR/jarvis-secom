@@ -60,12 +60,16 @@ CATEGORY_MAP: dict[str, str] = {
     "acidentes, violencia, crime":      "violencia",
     "acidentes,violência,crime":        "violencia",   # no-space variant (verif file)
     "acidentes,violencia,crime":        "violencia",   # no-space variant (verif file)
+    "acidente, crime, violencia":       "violencia",   # ADFORCE flat export order
+    "acidente, violência, crime":       "violencia",
+    "acidente, violencia, crime":       "violencia",
     "violência, crime":                 "violencia",
     "violencia, crime":                 "violencia",
     "sexo e sexualidade, pornografia":  "pornografia",
     "sexo, sexualidade e pornografia":  "pornografia",
     "pornografia, sexo, sexualidade":   "pornografia", # ADFORCE verif order
     "sexo e sexualidade":               "pornografia",
+    "sexo, sexualidade, pornografia":   "pornografia", # ADFORCE flat export order
     # Safeframe (col 19)
     "safeframe":                        "safeframe",
     # Aplicativo Móvel (col 20)
@@ -75,8 +79,10 @@ CATEGORY_MAP: dict[str, str] = {
     # Teste de Tag (col 21) — inclui variante METRIKE "Teste Banner"
     "teste de tag":                     "teste_tag",
     "teste banner":                     "teste_tag",
-    # Policial (METRIKE) — conteúdo policial/crime → violência
+    # Policial/Polícia — conteúdo policial/crime → violência
     "policial":                         "violencia",
+    "policia":                          "violencia",
+    "polícia":                          "violencia",
     # Não Classificado (col 22)
     "não classificado":                 "nao_classificado",
     "nao classificado":                 "nao_classificado",

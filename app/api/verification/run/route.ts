@@ -32,6 +32,8 @@ type VerificationResult = {
   veiculos: unknown;
   sem_comprovante: unknown;
   sem_consolidado: unknown;
+  sem_consolidado_verif: unknown;
+  sem_consolidado_comp: unknown;
   parse_errors: unknown;
   file_base64: string | null;
   file_name: string;
@@ -445,7 +447,9 @@ async function buildEngineResponse(
   return {
     veiculos:            engineResult.veiculos,
     sem_comprovante:     engineResult.sem_comprovante,
-    sem_consolidado:     engineResult.sem_consolidado,
+    sem_consolidado:      engineResult.sem_consolidado,
+    sem_consolidado_verif: engineResult.sem_consolidado_verif,
+    sem_consolidado_comp:  engineResult.sem_consolidado_comp,
     parse_errors:        engineResult.parse_errors,
     file_base64:         fileBase64,
     file_name:           outputName,

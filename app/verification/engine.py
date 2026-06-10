@@ -515,7 +515,9 @@ def verificar(
         "output":           str,
         "veiculos":         list[dict],
         "sem_comprovante":  list[str],
-        "sem_consolidado":  list[str],
+        "sem_consolidado":       list[str],
+        "sem_consolidado_verif": list[str],
+        "sem_consolidado_comp":  list[str],
         "parse_errors":     list[dict],
         "url_sample":       list[dict],
       }
@@ -703,19 +705,20 @@ def verificar(
                 cell.fill = COLOR_OK
 
         # ── Veículos sem entrada no consolidado ──────────────────────────────
-        sem_consolidado: list[str] = []
+        sem_consolidado_verif: list[str] = []
+        sem_consolidado_comp: list[str] = []
         seen: set[str] = set()
         for norm, r in verif_norm.items():
             if norm not in matched_verif_names:
                 name = r["veiculo"]
                 if name not in seen:
-                    sem_consolidado.append(name)
+                    sem_consolidado_verif.append(name)
                     seen.add(name)
         for norm, r in comp_norm.items():
             if norm not in matched_comp_names:
                 name = r["veiculo"]
                 if name not in seen:
-                    sem_consolidado.append(name)
+                    sem_consolidado_comp.append(name)
                     seen.add(name)
 
         # ── Salvar arquivo verificado ─────────────────────────────────────────
@@ -731,7 +734,9 @@ def verificar(
         "output":           output_path,
         "veiculos":         resultado_veiculos,
         "sem_comprovante":  [r["veiculo"] for r in resultado_veiculos if r["status"] == "PENDENTE"],
-        "sem_consolidado":  sem_consolidado,
+        "sem_consolidado":       sem_consolidado_verif + sem_consolidado_comp,
+        "sem_consolidado_verif": sem_consolidado_verif,
+        "sem_consolidado_comp":  sem_consolidado_comp,
         "parse_errors":     parse_errors,
         "url_sample":       url_sample,
     }
@@ -783,9 +788,13 @@ if __name__ == "__main__":
         print("-" * 90, file=sys.stderr)
         for v in resultado["veiculos"]:
             print(f"{v['veiculo']:<35} {v['status']:<12} {str(v.get('match') or ''):<35} {v.get('score',0):>5.0f}", file=sys.stderr)
-        if resultado["sem_consolidado"]:
-            print(f"\nComprovante sem consolidado ({len(resultado['sem_consolidado'])}):", file=sys.stderr)
-            for n in resultado["sem_consolidado"]:
+        if resultado["sem_consolidado_verif"]:
+            print(f"\nVerification sem consolidado ({len(resultado['sem_consolidado_verif'])}):", file=sys.stderr)
+            for n in resultado["sem_consolidado_verif"]:
+                print(f"  • {n}", file=sys.stderr)
+        if resultado["sem_consolidado_comp"]:
+            print(f"\nComprovante sem consolidado ({len(resultado['sem_consolidado_comp'])}):", file=sys.stderr)
+            for n in resultado["sem_consolidado_comp"]:
                 print(f"  - {n}", file=sys.stderr)
         if resultado["parse_errors"]:
             print(f"\nErros de parse ({len(resultado['parse_errors'])}):", file=sys.stderr)

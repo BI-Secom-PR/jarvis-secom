@@ -265,15 +265,20 @@ def _get_verif_sheets(wb):
 
 def _is_flat_format(wb) -> bool:
     """
-    Detecta o formato flat ADFORCE (sheet única "Result 1" com campaignUuid na col A).
-    Este formato tem uma linha de cabeçalho na linha 1 sem metadados acima.
+    Detecta o formato flat ADFORCE (sheet única com header na linha 1, sem metadados acima).
+    Variante antiga: tem coluna "campaignuuid".
+    Variante nova: tem colunas "vehicle" + "categories" (sem campaignuuid).
     """
     ws = wb.worksheets[0]
     first_row = next(ws.iter_rows(max_row=1, values_only=True), None)
     if first_row is None:
         return False
     vals = {str(v).strip().lower() for v in first_row if v is not None}
-    return "campaignuuid" in vals
+    if "campaignuuid" in vals:
+        return True
+    vehicle_cols  = {"vehicle", "veículo", "veiculo"}
+    category_cols = {"categories", "categoria", "category"}
+    return bool(vals & vehicle_cols) and bool(vals & category_cols)
 
 
 def _parse_verif_flat(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, list, int, dict, dict, dict]:

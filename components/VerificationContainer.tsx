@@ -25,6 +25,8 @@ type VerificationResult = {
   veiculos: VehicleResult[];
   sem_comprovante: string[];
   sem_consolidado: string[];
+  sem_consolidado_verif: string[];
+  sem_consolidado_comp: string[];
   parse_errors: { arquivo: string; erro: string }[];
   file_base64: string | null;
   file_name: string;
@@ -964,14 +966,27 @@ export default function VerificationContainer() {
               </div>
 
               {/* Avisos */}
-              {result.sem_consolidado.length > 0 && (
+              {result.sem_consolidado_verif?.length > 0 && (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                  <p className="text-xs text-amber-400 font-semibold mb-1">
+                    Verification sem entrada no consolidado (
+                    {result.sem_consolidado_verif.length}):
+                  </p>
+                  <ul className="text-xs text-amber-300/60 space-y-0.5">
+                    {result.sem_consolidado_verif.map((n) => (
+                      <li key={n}>• {n}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {result.sem_consolidado_comp?.length > 0 && (
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
                   <p className="text-xs text-amber-400 font-semibold mb-1">
                     Comprovantes sem entrada no consolidado (
-                    {result.sem_consolidado.length}):
+                    {result.sem_consolidado_comp.length}):
                   </p>
                   <ul className="text-xs text-amber-300/60 space-y-0.5">
-                    {result.sem_consolidado.map((n) => (
+                    {result.sem_consolidado_comp.map((n) => (
                       <li key={n}>• {n}</li>
                     ))}
                   </ul>
