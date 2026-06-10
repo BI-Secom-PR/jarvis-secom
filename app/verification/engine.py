@@ -67,6 +67,7 @@ COLOR_PENDENTE = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type
 # Mapeamento col_index(1-based) → chave interna  [template 29 colunas]
 COL_VEICULO        = 1
 COL_PRACA          = 2
+COL_TIPO           = 3   # Objetivo de Mídia / Tipo de Compra (CPM, CPV, CPC, CPCV…)
 COL_CONTRATADO     = 4
 COL_IMPRESSOES     = 5
 COL_CLIQUES        = 7
@@ -236,9 +237,13 @@ def _read_consolidado(ws) -> tuple[list[dict], int]:
         else:
             viewability_val = None
 
+        tipo_raw = _cell_value(ws, row_idx, COL_TIPO)
+        tipo_compra = str(tipo_raw).strip().upper() if tipo_raw else ""
+
         rows.append({
             "row_idx":       row_idx,
             "veiculo":       str(veiculo).strip(),
+            "tipo_compra":   tipo_compra,
             "contratado":    _to_int_safe(_cell_value(ws, row_idx, COL_CONTRATADO)),
             "entregue":      entregue,
             "views":         views,
@@ -289,7 +294,8 @@ def _merge_by_veiculo(results: list[dict]) -> dict[str, dict]:
         key = _normalize(r["veiculo"])
         if key not in merged:
             merged[key] = dict(r)
-            merged[key]["indevidas"] = dict(r.get("indevidas", {}))
+            merged[key]["indevidas"]     = dict(r.get("indevidas", {}))
+            merged[key]["indevidas_cpv"] = dict(r.get("indevidas_cpv", {}))
         else:
             m = merged[key]
             m["entregue"]    = (m.get("entregue") or 0) + (r.get("entregue") or 0)
@@ -300,6 +306,8 @@ def _merge_by_veiculo(results: list[dict]) -> dict[str, dict]:
             m["views_100"]   = _add_optional(m.get("views_100"),    r.get("views_100"))
             for cat, val in r.get("indevidas", {}).items():
                 m["indevidas"][cat] = m["indevidas"].get(cat, 0) + val
+            for cat, val in r.get("indevidas_cpv", {}).items():
+                m["indevidas_cpv"][cat] = m["indevidas_cpv"].get(cat, 0) + val
     return merged
 
 
@@ -368,8 +376,12 @@ def _compare(
     consol_indev = consol_row.get("indevidas", {})
 
     if verif_result is not None:
-        # Normaliza strings brutas do parser para chaves SECOM; preserva extras sem mapa
-        verif_indev_raw = verif_result.get("indevidas", {})
+        # Para campanhas CPV, indevidas = coluna cpv (views); demais usam total combinado.
+        tipo_compra = consol_row.get("tipo_compra", "")
+        if tipo_compra == "CPV" and verif_result.get("indevidas_cpv"):
+            verif_indev_raw = verif_result.get("indevidas_cpv", {})
+        else:
+            verif_indev_raw = verif_result.get("indevidas", {})
         verif_indev: dict[str, int] = {}
         verif_extras: dict[str, int] = {}
         for raw_cat, count in verif_indev_raw.items():

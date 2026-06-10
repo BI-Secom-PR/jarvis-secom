@@ -384,12 +384,12 @@ def _parse_verif_flat(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, l
 def _parse_verif_multitab(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, list, int, dict, dict]:
     """
     Parseia o formato multi-sheet ADFORCE (uma sheet por veículo, pula ABAT).
-    Indevidas = coluna Impressões apenas (as demais colunas não correspondem a indevidas).
-    Retorna (indev, entregue_dict, url_pool, pool_count, cpv_indev, total_by_vehicle).
-    cpv_indev é vazio neste formato (Impressões não distingue tipo de métrica).
+    Indevidas = soma de todas as métricas. Para CPV, vis_indev contém só Visualizações.
+    Retorna (indev, entregue_dict, url_pool, pool_count, vis_indev, total_by_vehicle).
     """
     sheets = _get_verif_sheets(wb)
-    indev: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    indev:     dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    vis_indev: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     veiculos_entregue: dict[str, int] = defaultdict(int)
     veiculos_total:    dict[str, int] = defaultdict(int)
     MAX_POOL = 10000
@@ -467,6 +467,8 @@ def _parse_verif_multitab(wb, data_ini, data_fim, praca=None) -> tuple[dict, dic
 
             if total_val > 0:
                 indev[veiculo][cat_str] += total_val
+            if v_vis > 0:
+                vis_indev[veiculo][cat_str] += v_vis
 
             if url and total_val > 0:
                 pool_count += 1
@@ -484,7 +486,7 @@ def _parse_verif_multitab(wb, data_ini, data_fim, praca=None) -> tuple[dict, dic
             "Header com 'Categoria' e 'Veículo' não encontrado em nenhuma sheet"
         )
 
-    return indev, veiculos_entregue, url_pool, pool_count, {}, veiculos_total
+    return indev, veiculos_entregue, url_pool, pool_count, vis_indev, veiculos_total
 
 
 def parse_verif(
@@ -532,6 +534,7 @@ def parse_verif(
             "viewables":         None,
             "viewability":       None,
             "indevidas":         dict(indev.get(veiculo, {})),
+            "indevidas_cpv":     {cat: v for cat, v in cpv_indev.get(veiculo, {}).items()},
             "url_sample":        url_pool if not results else [],
             "formato_detectado": formato,
         })
