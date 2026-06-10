@@ -46,7 +46,8 @@
     "postcss": "~8.5.10",
     "tmp": ">=0.2.6",
     "ws": ">=8.21.0",
-    "svix": ">=1.91.2"
+    "svix": ">=1.91.2",
+    "uuid": ">=11.1.1"
   },
   "devDependencies": {
     "@anthropic-ai/claude-code": "^2.1.84",
