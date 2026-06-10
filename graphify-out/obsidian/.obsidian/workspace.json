@@ -1,0 +1,209 @@
+{
+  "main": {
+    "id": "d3105b5bc97142ff",
+    "type": "split",
+    "children": [
+      {
+        "id": "ca6d1b7566037b93",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "64185e98b8631971",
+            "type": "leaf",
+            "state": {
+              "type": "empty",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "New tab"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "9e0eebec6d1f8410",
+    "type": "split",
+    "children": [
+      {
+        "id": "fd126c38d923d554",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "cd2ead331dc442e6",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "bb8fc0da4ac5be86",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "596a13bd81f49deb",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "be873defd90ef278",
+    "type": "split",
+    "children": [
+      {
+        "id": "7d26b31eb4eb8792",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "42d33f66aad879da",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "aaad54f4b4991f5e",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "65e1d93301042134",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "f1b87400202c81b3",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "2a73907caeff02a4",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "64185e98b8631971",
+  "lastOpenFiles": [
+    "users.md",
+    "graph.canvas",
+    "_COMMUNITY_Community 63.md",
+    "_COMMUNITY_Community 59.md",
+    "_COMMUNITY_Community 56.md",
+    "_COMMUNITY_Community 62.md",
+    "_COMMUNITY_Community 57.md",
+    "_COMMUNITY_Community 58.md",
+    "_COMMUNITY_Community 60.md",
+    "_COMMUNITY_Community 61.md",
+    "4. Notas Gerais.md",
+    "Disponibilidade por plataforma (gold_platforms_campaigns).md",
+    "3. Mapeamento de Colunas no Gold DB.md",
+    "Twitch Ads (referência — SEM dados no gold DB).md",
+    "Amazon DSP (BRL — custos já convertidos no gold DB).md",
+    "Pinterest Ads (BRL — custos já convertidos no gold DB).md",
+    "LinkedIn Ads (BRL equivalente — moeda varia por conta).md",
+    "TikTok Ads (BRL).md",
+    "Kwai Ads (BRL).md",
+    "Google Ads (BRL).md",
+    "Meta Ads (BRL).md",
+    "2. Médias da SECOM por Plataforma e Objetivo.md",
+    "1. Fórmulas Oficiais SECOM.md",
+    "Regras de Performance — SECOM (Médias Oficiais).md",
+    "performance_rules.md",
+    "Project Structure.md",
+    "Production Deployment (Vercel).md"
+  ]
+}

@@ -1,0 +1,597 @@
+{
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/api/py/verification.py": {
+    "mtime": 1779910393.9423184,
+    "ast_hash": "c40a9ffe11ca23eeb4d9b2c56a640604",
+    "semantic_hash": "c40a9ffe11ca23eeb4d9b2c56a640604"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/(auth)/login/LoginForm.tsx": {
+    "mtime": 1779479679.7296903,
+    "ast_hash": "f7818a550d36002d37dd0f717c0d271a",
+    "semantic_hash": "f7818a550d36002d37dd0f717c0d271a"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/(auth)/login/page.tsx": {
+    "mtime": 1773781994.0473464,
+    "ast_hash": "dc88c185da4b67ba6649746238aa282e",
+    "semantic_hash": "dc88c185da4b67ba6649746238aa282e"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/(auth)/register/RegisterForm.tsx": {
+    "mtime": 1773782009.246281,
+    "ast_hash": "ee442557be7b36bf7f71181cef87bb6e",
+    "semantic_hash": "ee442557be7b36bf7f71181cef87bb6e"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/(auth)/register/page.tsx": {
+    "mtime": 1773782013.503924,
+    "ast_hash": "ee9e543992de2c98beff44ef26cf77d8",
+    "semantic_hash": "ee9e543992de2c98beff44ef26cf77d8"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/(auth)/waiting/page.tsx": {
+    "mtime": 1773782020.2841346,
+    "ast_hash": "c8f4ac77e962d52846042a31576e852a",
+    "semantic_hash": "c8f4ac77e962d52846042a31576e852a"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/admin/UsersTable.tsx": {
+    "mtime": 1776365829.6928566,
+    "ast_hash": "a9a4929721b86c791c60e698e038a781",
+    "semantic_hash": "a9a4929721b86c791c60e698e038a781"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/admin/layout.tsx": {
+    "mtime": 1773782076.2784827,
+    "ast_hash": "4b85a1786595e79b057dee0c2a551a49",
+    "semantic_hash": "4b85a1786595e79b057dee0c2a551a49"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/admin/page.tsx": {
+    "mtime": 1773782102.5917265,
+    "ast_hash": "bc7ba5d7eb94ebe61d997fcf0fd4c771",
+    "semantic_hash": "bc7ba5d7eb94ebe61d997fcf0fd4c771"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/admin/users/[id]/route.ts": {
+    "mtime": 1774032760.101383,
+    "ast_hash": "cdfd993bebb5bce5f37e1acfa72dc696",
+    "semantic_hash": "cdfd993bebb5bce5f37e1acfa72dc696"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/admin/users/route.ts": {
+    "mtime": 1773782064.417548,
+    "ast_hash": "cb4c8ba753214f4f3f59f86cf730dc6a",
+    "semantic_hash": "cb4c8ba753214f4f3f59f86cf730dc6a"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/auth/change-password/route.ts": {
+    "mtime": 1774032550.6279058,
+    "ast_hash": "309d8a109bff21c47ae75b00b19808b7",
+    "semantic_hash": "309d8a109bff21c47ae75b00b19808b7"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/auth/login/route.ts": {
+    "mtime": 1779479674.5984972,
+    "ast_hash": "88f248e9f358e9415f755975558b3492",
+    "semantic_hash": "88f248e9f358e9415f755975558b3492"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/auth/logout/route.ts": {
+    "mtime": 1773781952.7719603,
+    "ast_hash": "b1759ebc0a817edc6de8db91cb8a6e2d",
+    "semantic_hash": "b1759ebc0a817edc6de8db91cb8a6e2d"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/auth/me/route.ts": {
+    "mtime": 1773781957.2076416,
+    "ast_hash": "73decb4e3f797df66719400c27237ff7",
+    "semantic_hash": "73decb4e3f797df66719400c27237ff7"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/auth/register/route.ts": {
+    "mtime": 1774032549.7927675,
+    "ast_hash": "5809a0a79f871915e9b4dafc0115d69d",
+    "semantic_hash": "5809a0a79f871915e9b4dafc0115d69d"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/chat-sessions/[id]/messages/route.ts": {
+    "mtime": 1773782146.8922455,
+    "ast_hash": "296717cf1098c52c584f832a864074ed",
+    "semantic_hash": "296717cf1098c52c584f832a864074ed"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/chat-sessions/[id]/route.ts": {
+    "mtime": 1774032767.6451669,
+    "ast_hash": "1605fd86d76ca53f59c11f0ad2ae5ec5",
+    "semantic_hash": "1605fd86d76ca53f59c11f0ad2ae5ec5"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/chat-sessions/route.ts": {
+    "mtime": 1773782127.676091,
+    "ast_hash": "7971f2b563ccf5f49adf49a93cb5244b",
+    "semantic_hash": "7971f2b563ccf5f49adf49a93cb5244b"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/chat/route.ts": {
+    "mtime": 1779989562.2681303,
+    "ast_hash": "a29dca07f4d97e605579bad783b39d55",
+    "semantic_hash": "a29dca07f4d97e605579bad783b39d55"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/exports/[id]/route.ts": {
+    "mtime": 1778079705.7500923,
+    "ast_hash": "5ba26d8e52680f1c713a15c82c4d4a46",
+    "semantic_hash": "5ba26d8e52680f1c713a15c82c4d4a46"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/exports/from-image/route.ts": {
+    "mtime": 1778079561.7640505,
+    "ast_hash": "2b4c036408632ecfcb8700c942292a64",
+    "semantic_hash": "2b4c036408632ecfcb8700c942292a64"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/external/query/route.ts": {
+    "mtime": 1779989568.2508047,
+    "ast_hash": "6fdee7b9580178ce09f0917cd7a69255",
+    "semantic_hash": "6fdee7b9580178ce09f0917cd7a69255"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/tts/route.ts": {
+    "mtime": 1774032728.4356318,
+    "ast_hash": "2f617a926939570c9839b9492883b921",
+    "semantic_hash": "2f617a926939570c9839b9492883b921"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/verification/blob-upload/route.ts": {
+    "mtime": 1779479920.4811232,
+    "ast_hash": "bf6898d8acdaf27a9dab81e7cb75da2b",
+    "semantic_hash": "bf6898d8acdaf27a9dab81e7cb75da2b"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/api/verification/run/route.ts": {
+    "mtime": 1780090746.0771666,
+    "ast_hash": "e896f9aa4a22a8d938645af6dff080ec",
+    "semantic_hash": "e896f9aa4a22a8d938645af6dff080ec"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/apple-icon.tsx": {
+    "mtime": 1774033313.4217448,
+    "ast_hash": "1c2e008a68fa1de1922902f9dad0a409",
+    "semantic_hash": "1c2e008a68fa1de1922902f9dad0a409"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/chat/page.tsx": {
+    "mtime": 1774277236.8872132,
+    "ast_hash": "c406e9e3381a02ca311274c0191d03e9",
+    "semantic_hash": "c406e9e3381a02ca311274c0191d03e9"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/icon.tsx": {
+    "mtime": 1773432458.645739,
+    "ast_hash": "240b741af493f701024732bdd39d9288",
+    "semantic_hash": "240b741af493f701024732bdd39d9288"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/layout.tsx": {
+    "mtime": 1773432477.5385585,
+    "ast_hash": "311fa57832a757691ee6b5e1f4120ecd",
+    "semantic_hash": "311fa57832a757691ee6b5e1f4120ecd"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/manifest.ts": {
+    "mtime": 1773432471.6041567,
+    "ast_hash": "fa58400668074391e7ff676f8505f779",
+    "semantic_hash": "fa58400668074391e7ff676f8505f779"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/page.tsx": {
+    "mtime": 1780089255.6674235,
+    "ast_hash": "8eb1088539f604e498ecc7434910ff62",
+    "semantic_hash": "8eb1088539f604e498ecc7434910ff62"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/verification/engine.py": {
+    "mtime": 1779977181.3090265,
+    "ast_hash": "3b766ca6e991f48bdd60a00691cd228f",
+    "semantic_hash": "3b766ca6e991f48bdd60a00691cd228f"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/verification/page.tsx": {
+    "mtime": 1774302796.7651155,
+    "ast_hash": "0f1128da27c87af72862e0248f55d42e",
+    "semantic_hash": "0f1128da27c87af72862e0248f55d42e"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/verification/parsers/category_map.py": {
+    "mtime": 1779464392.6601658,
+    "ast_hash": "428056471ae1dfa420c709a598412fab",
+    "semantic_hash": "428056471ae1dfa420c709a598412fab"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/verification/parsers/parser_00px.py": {
+    "mtime": 1779975708.5498497,
+    "ast_hash": "174fdcc72feef9a50dece0a8ad49cf30",
+    "semantic_hash": "174fdcc72feef9a50dece0a8ad49cf30"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/verification/parsers/parser_adforce.py": {
+    "mtime": 1779976977.9064443,
+    "ast_hash": "824a3b2bd6802b648f85e280f854f978",
+    "semantic_hash": "824a3b2bd6802b648f85e280f854f978"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/verification/parsers/parser_admotion.py": {
+    "mtime": 1779974252.3299177,
+    "ast_hash": "efbdcbc58f9c395ed01754bf64e847fc",
+    "semantic_hash": "efbdcbc58f9c395ed01754bf64e847fc"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/verification/parsers/parser_adserver_verif.py": {
+    "mtime": 1779891829.1202195,
+    "ast_hash": "dd47ed7ceed1d3c1a62b3b1c9e2ead55",
+    "semantic_hash": "dd47ed7ceed1d3c1a62b3b1c9e2ead55"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/verification/parsers/parser_ahead.py": {
+    "mtime": 1779974261.5084312,
+    "ast_hash": "00bcb7130220cb2dfc5d8c0485072735",
+    "semantic_hash": "00bcb7130220cb2dfc5d8c0485072735"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/verification/parsers/parser_brz.py": {
+    "mtime": 1779910371.5042522,
+    "ast_hash": "d73573a7239fc77e5262eeeae03a95a8",
+    "semantic_hash": "d73573a7239fc77e5262eeeae03a95a8"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/verification/parsers/parser_comprovante.py": {
+    "mtime": 1777557573.9292278,
+    "ast_hash": "c19a6b32174b388cd736b9ac4a548a73",
+    "semantic_hash": "c19a6b32174b388cd736b9ac4a548a73"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/verification/parsers/parser_metrike.py": {
+    "mtime": 1779975672.309858,
+    "ast_hash": "95caead06966d4f0896ddf08ed9b11bb",
+    "semantic_hash": "95caead06966d4f0896ddf08ed9b11bb"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/verification/parsers/parser_utils.py": {
+    "mtime": 1777573143.0473847,
+    "ast_hash": "dd10e3df331b1baeab7d67a8da333c32",
+    "semantic_hash": "dd10e3df331b1baeab7d67a8da333c32"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/app/verification/parsers/write_url_info.py": {
+    "mtime": 1777380206.6918428,
+    "ast_hash": "4fc7a97f64a703df0a313d12c9599a06",
+    "semantic_hash": "4fc7a97f64a703df0a313d12c9599a06"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/components/ChartWidget.tsx": {
+    "mtime": 1778079677.6923141,
+    "ast_hash": "6dec8b8067b5081beb3f55b4478deaab",
+    "semantic_hash": "6dec8b8067b5081beb3f55b4478deaab"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/components/ChatContainer.tsx": {
+    "mtime": 1780089242.3762407,
+    "ast_hash": "b6d8e139f40ea135162cb4ecabc5bf7d",
+    "semantic_hash": "b6d8e139f40ea135162cb4ecabc5bf7d"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/components/InputArea.tsx": {
+    "mtime": 1774034350.7032275,
+    "ast_hash": "05248d04ffbe856ae73b3e7f8ca07240",
+    "semantic_hash": "05248d04ffbe856ae73b3e7f8ca07240"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/components/JarvisRing.tsx": {
+    "mtime": 1780089768.4421442,
+    "ast_hash": "98c0c795d32371b955546e49ef50f43b",
+    "semantic_hash": "98c0c795d32371b955546e49ef50f43b"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/components/MenuCard.tsx": {
+    "mtime": 1774277212.382615,
+    "ast_hash": "3d26fb043405b78f9a52eb5f2301679a",
+    "semantic_hash": "3d26fb043405b78f9a52eb5f2301679a"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/components/MessageBubble.tsx": {
+    "mtime": 1773684076.310577,
+    "ast_hash": "d1ee7558bb0ac6fbcb07365170e921b6",
+    "semantic_hash": "d1ee7558bb0ac6fbcb07365170e921b6"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/components/TypingIndicator.tsx": {
+    "mtime": 1773408825.2874737,
+    "ast_hash": "551da1321c66fc64eee81e21c96187df",
+    "semantic_hash": "551da1321c66fc64eee81e21c96187df"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/components/UserMenu.tsx": {
+    "mtime": 1774032572.6098495,
+    "ast_hash": "cd8eaee6985f1959f80c78a4ac5838f7",
+    "semantic_hash": "cd8eaee6985f1959f80c78a4ac5838f7"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/components/VerificationContainer.tsx": {
+    "mtime": 1780090737.9226944,
+    "ast_hash": "3ea64bda721536cea8a397eb7f152fd5",
+    "semantic_hash": "3ea64bda721536cea8a397eb7f152fd5"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/components/VoiceMode.tsx": {
+    "mtime": 1774032644.0026927,
+    "ast_hash": "bdcf1fcdf5d2a22be58c29e4fa3ebd5c",
+    "semantic_hash": "bdcf1fcdf5d2a22be58c29e4fa3ebd5c"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/components/WelcomeCard.tsx": {
+    "mtime": 1773408784.561605,
+    "ast_hash": "062145e82b1f71477b24e02e812b3412",
+    "semantic_hash": "062145e82b1f71477b24e02e812b3412"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/deploy.sh": {
+    "mtime": 1776474554.6159532,
+    "ast_hash": "bd46d235ce00f395f4cb826e83370c2a",
+    "semantic_hash": "bd46d235ce00f395f4cb826e83370c2a"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/drizzle.config.ts": {
+    "mtime": 1776454708.8134592,
+    "ast_hash": "c26b1c38e72addebba878b713114bd65",
+    "semantic_hash": "c26b1c38e72addebba878b713114bd65"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/agent.ts": {
+    "mtime": 1780078331.9843922,
+    "ast_hash": "19ec45377f1e1f68e20242985b7e29df",
+    "semantic_hash": "19ec45377f1e1f68e20242985b7e29df"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/auth.ts": {
+    "mtime": 1774555813.2678201,
+    "ast_hash": "6e0722425513f46c89e9266e8b8817ae",
+    "semantic_hash": "6e0722425513f46c89e9266e8b8817ae"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/authClient.ts": {
+    "mtime": 1774032531.4997056,
+    "ast_hash": "a1d1524bc90fc12570ed77abc357ff30",
+    "semantic_hash": "a1d1524bc90fc12570ed77abc357ff30"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/chatApi.ts": {
+    "mtime": 1774032535.9464343,
+    "ast_hash": "409dfb15b45cbb9be8660916a0393af1",
+    "semantic_hash": "409dfb15b45cbb9be8660916a0393af1"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/db/env.ts": {
+    "mtime": 1776454708.8113306,
+    "ast_hash": "2fe84d54be6245a15cdcfd38852c42f7",
+    "semantic_hash": "2fe84d54be6245a15cdcfd38852c42f7"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/db/index.ts": {
+    "mtime": 1776454708.8133786,
+    "ast_hash": "a3d30451036dc1014549a1c202258c0a",
+    "semantic_hash": "a3d30451036dc1014549a1c202258c0a"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/db/migrate.ts": {
+    "mtime": 1773781794.7802634,
+    "ast_hash": "1e60e0dcafb1816aac551e78bca89c59",
+    "semantic_hash": "1e60e0dcafb1816aac551e78bca89c59"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/db/migrations/0000_long_reptil.sql": {
+    "mtime": 1778079152.3706686,
+    "ast_hash": "8a720294a575b3f9163ade82b2762edd",
+    "semantic_hash": "8a720294a575b3f9163ade82b2762edd"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/db/migrations/meta/0000_snapshot.json": {
+    "mtime": 1778079114.366113,
+    "ast_hash": "db1650d11e0bdc311b698e049084f650",
+    "semantic_hash": "db1650d11e0bdc311b698e049084f650"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/db/migrations/meta/_journal.json": {
+    "mtime": 1778079114.3662355,
+    "ast_hash": "2ee2c6f6bd72e144c7e0447b0f33c286",
+    "semantic_hash": "2ee2c6f6bd72e144c7e0447b0f33c286"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/db/schema.ts": {
+    "mtime": 1778078806.806265,
+    "ast_hash": "81a3d52cc724b0a83deff5dcb1438189",
+    "semantic_hash": "81a3d52cc724b0a83deff5dcb1438189"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/db/seed.ts": {
+    "mtime": 1776454708.8134964,
+    "ast_hash": "7821309ba7c0027637ed30178c2299e9",
+    "semantic_hash": "7821309ba7c0027637ed30178c2299e9"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/email.ts": {
+    "mtime": 1774032747.838841,
+    "ast_hash": "fa9a55ce3be7c31d8043ce02aa48f8a1",
+    "semantic_hash": "fa9a55ce3be7c31d8043ce02aa48f8a1"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/exports/chart-svg.ts": {
+    "mtime": 1778079483.8839457,
+    "ast_hash": "f4da63ab155ec1442a73d84e31121f4a",
+    "semantic_hash": "f4da63ab155ec1442a73d84e31121f4a"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/exports/csv.ts": {
+    "mtime": 1778525415.4914453,
+    "ast_hash": "3a5cf8317ad4c6272a2f9a39922ed32a",
+    "semantic_hash": "3a5cf8317ad4c6272a2f9a39922ed32a"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/exports/generate.ts": {
+    "mtime": 1778612745.91333,
+    "ast_hash": "896ed61b2c2eb626ce33db41b9cc63e0",
+    "semantic_hash": "896ed61b2c2eb626ce33db41b9cc63e0"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/exports/pdf.ts": {
+    "mtime": 1778781916.5336485,
+    "ast_hash": "5f475a91bcae99363437bdec5ff8bf14",
+    "semantic_hash": "5f475a91bcae99363437bdec5ff8bf14"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/exports/types.ts": {
+    "mtime": 1778612740.3014684,
+    "ast_hash": "690a744f36d2775ff1acde2e134905f1",
+    "semantic_hash": "690a744f36d2775ff1acde2e134905f1"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/exports/xlsx.ts": {
+    "mtime": 1778525424.6889067,
+    "ast_hash": "70a3ef36b27eba128974b05eae037650",
+    "semantic_hash": "70a3ef36b27eba128974b05eae037650"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/fetchUtils.ts": {
+    "mtime": 1774032533.1703498,
+    "ast_hash": "d53f78b27e2dc8f7be4653d27c6e34d8",
+    "semantic_hash": "d53f78b27e2dc8f7be4653d27c6e34d8"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/markdown.ts": {
+    "mtime": 1778524669.8755774,
+    "ast_hash": "490dd2db045f19849cbd64fca7e0c209",
+    "semantic_hash": "490dd2db045f19849cbd64fca7e0c209"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/mysql.ts": {
+    "mtime": 1776707738.8680594,
+    "ast_hash": "d79de03e516c11649c99cb58b4ad0896",
+    "semantic_hash": "d79de03e516c11649c99cb58b4ad0896"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/lib/session.ts": {
+    "mtime": 1773408054.9017377,
+    "ast_hash": "4112b3cc07447bcb812193b39b7c4ce0",
+    "semantic_hash": "4112b3cc07447bcb812193b39b7c4ce0"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/next.config.ts": {
+    "mtime": 1779910290.00718,
+    "ast_hash": "bbcde6122b2d37c4bad5c526ad18405f",
+    "semantic_hash": "bbcde6122b2d37c4bad5c526ad18405f"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/package.json": {
+    "mtime": 1780086913.6052227,
+    "ast_hash": "293494aec734bb42261ceed6d7313291",
+    "semantic_hash": "293494aec734bb42261ceed6d7313291"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/postcss.config.mjs": {
+    "mtime": 1773407971.9412794,
+    "ast_hash": "239f3ebf717465dc636818a1a619398d",
+    "semantic_hash": "239f3ebf717465dc636818a1a619398d"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/proxy.ts": {
+    "mtime": 1779480106.4101639,
+    "ast_hash": "ce69335b26fb105fd00c6f3f3aa049d5",
+    "semantic_hash": "ce69335b26fb105fd00c6f3f3aa049d5"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/public/openapi.json": {
+    "mtime": 1775157770.8272347,
+    "ast_hash": "15a5193d4e7a00a75664fd143da10fd7",
+    "semantic_hash": "15a5193d4e7a00a75664fd143da10fd7"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/scripts/tunnel-pg.sh": {
+    "mtime": 1776365829.7092378,
+    "ast_hash": "eae8ff9271fd15bf5993f5b44f63e03d",
+    "semantic_hash": "eae8ff9271fd15bf5993f5b44f63e03d"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/tsconfig.json": {
+    "mtime": 1773407971.934755,
+    "ast_hash": "02fc19ad21338c2ab820a70136310db4",
+    "semantic_hash": "02fc19ad21338c2ab820a70136310db4"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/types/chat.ts": {
+    "mtime": 1774032519.1455607,
+    "ast_hash": "c90bb7fe24d9d1cadf4119cb9391fe4a",
+    "semantic_hash": "c90bb7fe24d9d1cadf4119cb9391fe4a"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/vercel.json": {
+    "mtime": 1777385761.2635596,
+    "ast_hash": "ea99b1538710516cce2d221ae3d2b97f",
+    "semantic_hash": "ea99b1538710516cce2d221ae3d2b97f"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/Framework Performance Analysis v4.md": {
+    "mtime": 1779802946.8108137,
+    "ast_hash": "4d360c5afe25b3f676b5039cb0505ff0",
+    "semantic_hash": "4d360c5afe25b3f676b5039cb0505ff0"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/README.md": {
+    "mtime": 1774277610.003216,
+    "ast_hash": "f48ed9e747002c874792158bb007ac1b",
+    "semantic_hash": "f48ed9e747002c874792158bb007ac1b"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/api/py/requirements.txt": {
+    "mtime": 1779465529.7076266,
+    "ast_hash": "3e657030622d83cc9c2061233a4d3287",
+    "semantic_hash": "3e657030622d83cc9c2061233a4d3287"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/index.html": {
+    "mtime": 1773352120.0521607,
+    "ast_hash": "14803e551ad9dcb5370371ae321a6f72",
+    "semantic_hash": "14803e551ad9dcb5370371ae321a6f72"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/paper-exemples/STATUS GERAL - TPB CALIA - 10.04.26.txt": {
+    "mtime": 1775835116.004731,
+    "ast_hash": "148e734f8a5f6a445295d1ab84238afa",
+    "semantic_hash": "148e734f8a5f6a445295d1ab84238afa"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/performance_rules.md": {
+    "mtime": 1777077363.991571,
+    "ast_hash": "1058c871f250783cd5c26eb38b0f33d2",
+    "semantic_hash": "1058c871f250783cd5c26eb38b0f33d2"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/requirements.txt": {
+    "mtime": 1777402226.2460716,
+    "ast_hash": "3e657030622d83cc9c2061233a4d3287",
+    "semantic_hash": "3e657030622d83cc9c2061233a4d3287"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/KPIs Performance Indicators Sept 25.pdf": {
+    "mtime": 1775151391.7717347,
+    "ast_hash": "ac951e1569de88db541bd04c5718e346",
+    "semantic_hash": "ac951e1569de88db541bd04c5718e346"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/modelos_pdf/Performance Status Geral Always On Feb 26.pdf": {
+    "mtime": 1778612161.6748114,
+    "ast_hash": "8d330fbb3af3163427bc92d0ca2e4616",
+    "semantic_hash": "8d330fbb3af3163427bc92d0ca2e4616"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/modelos_pdf/Performance Status Geral Feb 26.pdf": {
+    "mtime": 1778612148.313462,
+    "ast_hash": "723e3da8cd81ff6ddbf87fe4a6fdb461",
+    "semantic_hash": "723e3da8cd81ff6ddbf87fe4a6fdb461"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/modelos_pdf/Relat_rio Detalhado - Campanha Combust_veis _Abril 2026_.pdf": {
+    "mtime": 1778611182.913928,
+    "ast_hash": "627a6ff3783023b0f3110070d2c17f6e",
+    "semantic_hash": "627a6ff3783023b0f3110070d2c17f6e"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/modelos_pdf/Status Dia\u0301rio Apr 26 2017.pdf": {
+    "mtime": 1778612076.789332,
+    "ast_hash": "01a1d037b5c70a02d1e0d74189cd9fd5",
+    "semantic_hash": "01a1d037b5c70a02d1e0d74189cd9fd5"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/modelos_pdf/Status Dia\u0301rio Apr 26 Combusti\u0301veis.pdf": {
+    "mtime": 1778612293.0662315,
+    "ast_hash": "95c516595306db738d299788de21859e",
+    "semantic_hash": "95c516595306db738d299788de21859e"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/modelos_pdf/Status Dia\u0301rio Apr 30 2026 - Combusti\u0301veis.pdf": {
+    "mtime": 1778612279.421182,
+    "ast_hash": "3309a229b74fb16aba58283b389291ea",
+    "semantic_hash": "3309a229b74fb16aba58283b389291ea"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/modelos_pdf/Status Dia\u0301rio Mar 26 AON.pdf": {
+    "mtime": 1778612095.5283127,
+    "ast_hash": "d56567ddc745f36e8239b529b6434ac8",
+    "semantic_hash": "d56567ddc745f36e8239b529b6434ac8"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/modelos_pdf/Status Dia\u0301rio Nov 5 2026 - Posicionamento SP.pdf": {
+    "mtime": 1778611768.353454,
+    "ast_hash": "93ab3f916c4c0dff451cc05e72298dc9",
+    "semantic_hash": "93ab3f916c4c0dff451cc05e72298dc9"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/modelos_pdf/Status Dia\u0301rio Nov 5 2026.pdf": {
+    "mtime": 1778611992.7488244,
+    "ast_hash": "41180498d3472e03ace6878d13c5896c",
+    "semantic_hash": "41180498d3472e03ace6878d13c5896c"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/modelos_pdf/TPB Calia Status Apr 30 2026.pdf": {
+    "mtime": 1778611817.8678498,
+    "ast_hash": "a0f705151703fde9be63ca196790424c",
+    "semantic_hash": "a0f705151703fde9be63ca196790424c"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/modelos_pdf/TPB Nacional Status Apr 24 2026.pdf": {
+    "mtime": 1778611835.8033981,
+    "ast_hash": "5b700219c9980ad9a7d56b5846385683",
+    "semantic_hash": "5b700219c9980ad9a7d56b5846385683"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/modelos_pdf/TPB Nova Status Apr 26.pdf": {
+    "mtime": 1778611890.4360318,
+    "ast_hash": "6dfa42f495427412bd75d7ddf2efdaf6",
+    "semantic_hash": "6dfa42f495427412bd75d7ddf2efdaf6"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/modelos_pdf/TPB PROPEG Status Apr 24 2026 AL MA RN.pdf": {
+    "mtime": 1778611870.4615464,
+    "ast_hash": "94481590b1b00f7f9702bda55091370c",
+    "semantic_hash": "94481590b1b00f7f9702bda55091370c"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/paper-exemples/STATUS GERAL - TPB CALIA - 10.04.26.pdf": {
+    "mtime": 1776431842.339826,
+    "ast_hash": "d08fd27c6fb4190fad01e56bfd4c297b",
+    "semantic_hash": "d08fd27c6fb4190fad01e56bfd4c297b"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/paper-exemples/STATUS GERAL - TPB MODELO - DATA.pdf": {
+    "mtime": 1776431831.283431,
+    "ast_hash": "7370f037c7c6cb4024ac86ec0548f74e",
+    "semantic_hash": "7370f037c7c6cb4024ac86ec0548f74e"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/paper-exemples/STATUS GERAL - TPB NACIONAL - 10.04.2026.pdf": {
+    "mtime": 1776431907.6250074,
+    "ast_hash": "af2fd4d3cf56d02908d75413d51ac8c3",
+    "semantic_hash": "af2fd4d3cf56d02908d75413d51ac8c3"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/paper-exemples/STATUS GERAL - TPB NOVA - 10.04.26.pdf": {
+    "mtime": 1776431945.7823765,
+    "ast_hash": "a5460fac200cab09181b7302499ce44e",
+    "semantic_hash": "a5460fac200cab09181b7302499ce44e"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/paper-exemples/STATUS GERAL - TPB PROPEG - 10.04.26.pdf": {
+    "mtime": 1776431999.6752298,
+    "ast_hash": "98ebfd4bb25cf21313c21536066bfc9e",
+    "semantic_hash": "98ebfd4bb25cf21313c21536066bfc9e"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/paper-exemples/STATUS_DIA\u0301RIO_06.02.26 - AON.pdf": {
+    "mtime": 1776431632.8459308,
+    "ast_hash": "38e3e8034634d97a946a8f0c99cbc145",
+    "semantic_hash": "38e3e8034634d97a946a8f0c99cbc145"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/paper-exemples/STATUS_DIA\u0301RIO_09.01.26 - AON.pdf": {
+    "mtime": 1776431532.538073,
+    "ast_hash": "bb29d965d4d5f5149e916d2186a1fc12",
+    "semantic_hash": "bb29d965d4d5f5149e916d2186a1fc12"
+  },
+  "/Volumes/SSD_CESAR/Developer/Secom/jarvis_ui/paper-exemples/STATUS_DIA\u0301RIO_16.01.26 - AON.pdf": {
+    "mtime": 1776431432.6812193,
+    "ast_hash": "6d1c5f00334f8002648ffe10ab301622",
+    "semantic_hash": "6d1c5f00334f8002648ffe10ab301622"
+  }
+}

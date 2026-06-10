@@ -1,0 +1,17 @@
+---
+source_file: "performance_rules.md"
+type: "document"
+community: "Chat Message Schema"
+location: "L1"
+tags:
+  - graphify/document
+  - graphify/EXTRACTED
+  - community/Chat_Message_Schema
+---
+
+# performance_rules.md
+
+## Connections
+- [[Regras de Performance — SECOM (Médias Oficiais)]] - `contains` [EXTRACTED]
+
+#graphify/document #graphify/EXTRACTED #community/Chat_Message_Schema
