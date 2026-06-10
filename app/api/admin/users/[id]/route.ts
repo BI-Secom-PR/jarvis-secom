@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod/v3'
+import bcrypt from 'bcryptjs'
 import { eq } from 'drizzle-orm'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdmin, BCRYPT_ROUNDS } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { users, sessions } from '@/lib/db/schema'
 import { sendApprovalEmail } from '@/lib/email'
 
 const schema = z.object({
-  enabled: z.boolean().optional(),
-  name:    z.string().min(2).max(100).optional(),
-  email:   z.string().email().optional(),
-  role:    z.enum(['ADMIN', 'USER']).optional(),
+  enabled:  z.boolean().optional(),
+  name:     z.string().min(2).max(100).optional(),
+  email:    z.string().email().optional(),
+  role:     z.enum(['ADMIN', 'USER']).optional(),
+  password: z.string().min(8).max(100).optional(),
 })
 
 export async function PATCH(
@@ -34,7 +36,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 })
   }
 
-  const { enabled, name, email, role } = parsed.data
+  const { enabled, name, email, role, password } = parsed.data
   const enabledChanged = enabled !== undefined
 
   // Check email uniqueness if changing email
@@ -54,6 +56,7 @@ export async function PATCH(
   if (name !== undefined) patch.name   = name
   if (email !== undefined) patch.email = email.toLowerCase()
   if (role !== undefined)  patch.role  = role
+  if (password)            patch.passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
 
   const updated = await db
     .update(users)
@@ -65,8 +68,8 @@ export async function PATCH(
     return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 })
   }
 
-  // Disabling: kill all active sessions immediately
-  if (enabledChanged && !enabled) {
+  // Disabling or password reset: kill all active sessions immediately
+  if ((enabledChanged && !enabled) || password) {
     await db.delete(sessions).where(eq(sessions.userId, id))
   }
 

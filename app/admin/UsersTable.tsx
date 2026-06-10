@@ -9,9 +9,17 @@ import { patchJson } from '@/lib/fetchUtils'
 type UserRow = Pick<User, 'id' | 'email' | 'name' | 'role' | 'enabled' | 'createdAt'>
 
 type EditState = {
-  name:  string
-  email: string
-  role:  'ADMIN' | 'USER'
+  name:     string
+  email:    string
+  role:     'ADMIN' | 'USER'
+  password: string
+}
+
+function generatePassword(length = 14) {
+  const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*'
+  const bytes = new Uint32Array(length)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, b => charset[b % charset.length]).join('')
 }
 
 export default function UsersTable({
@@ -41,7 +49,7 @@ export default function UsersTable({
 
   function startEdit(user: UserRow) {
     setEditingId(user.id)
-    setEditState({ name: user.name, email: user.email, role: user.role })
+    setEditState({ name: user.name, email: user.email, role: user.role, password: '' })
     setEditError('')
   }
 
@@ -53,10 +61,18 @@ export default function UsersTable({
 
   async function saveEdit(id: string) {
     if (!editState) return
+
+    if (editState.password && editState.password.length < 8) {
+      setEditError('A nova senha deve ter pelo menos 8 caracteres.')
+      return
+    }
+
     setSaving(true)
     setEditError('')
 
-    const res = await patchJson(`/api/admin/users/${id}`, editState)
+    const { password, ...rest } = editState
+    const payload = password ? { ...rest, password } : rest
+    const res = await patchJson(`/api/admin/users/${id}`, payload)
     const data = await res.json()
 
     if (!res.ok) {
@@ -173,7 +189,7 @@ export default function UsersTable({
                   <tr className="border-b border-white/[0.05] last:border-0 bg-white/[0.02]">
                     <td colSpan={5} className="px-6 py-5">
                       <div className="flex flex-col gap-4">
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-4 gap-3">
                           <div className="flex flex-col gap-1.5">
                             <label className="text-xs text-white/40">Nome</label>
                             <input
@@ -203,7 +219,33 @@ export default function UsersTable({
                               <option value="ADMIN" style={{ background: '#0d0d1a' }}>Admin</option>
                             </select>
                           </div>
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between">
+                              <label className="text-xs text-white/40">Nova senha</label>
+                              <button
+                                type="button"
+                                onClick={() => setEditState(s => s ? { ...s, password: generatePassword() } : s)}
+                                className="text-xs text-[rgba(120,180,255,0.7)] hover:text-[rgba(120,180,255,1)] transition-colors cursor-pointer"
+                              >
+                                Gerar
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              autoComplete="off"
+                              value={editState.password}
+                              placeholder="Deixe em branco para manter"
+                              onChange={e => setEditState(s => s ? { ...s, password: e.target.value } : s)}
+                              className="bg-black/30 border-[0.5px] border-white/[0.12] rounded-xl px-3 py-2 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-[rgba(80,160,255,0.5)] transition-colors"
+                            />
+                          </div>
                         </div>
+
+                        {editState.password && (
+                          <p className="text-xs text-amber-300/70">
+                            Ao redefinir a senha, todas as sessões ativas do usuário serão encerradas. Compartilhe a nova senha por um canal seguro e oriente o usuário a trocá-la após o login.
+                          </p>
+                        )}
 
                         {editError && (
                           <p className="text-red-400/80 text-xs">{editError}</p>
