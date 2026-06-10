@@ -9,7 +9,8 @@ import type { User } from '@/lib/db/schema'
 export const SESSION_COOKIE = 'jarvis_session_token'
 export const BCRYPT_ROUNDS = 12
 
-const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
+const SESSION_MAX_AGE_MS  = 30 * 24 * 60 * 60 * 1000 // 30 days (absolute)
+const SESSION_IDLE_MAX_MS = 3 * 24 * 60 * 60 * 1000  // 3 days without activity
 
 export type SessionUser = Pick<User, 'id' | 'email' | 'name' | 'role' | 'enabled'>
 
@@ -19,6 +20,7 @@ export const getSession = cache(async function getSession(): Promise<SessionUser
   if (!token) return null
 
   const thirtyDaysAgo = new Date(Date.now() - SESSION_MAX_AGE_MS)
+  const idleCutoff    = new Date(Date.now() - SESSION_IDLE_MAX_MS)
 
   let rows: { id: string; email: string; name: string; role: 'ADMIN' | 'USER'; enabled: boolean }[]
   try {
@@ -32,7 +34,11 @@ export const getSession = cache(async function getSession(): Promise<SessionUser
       })
       .from(sessions)
       .innerJoin(users, eq(sessions.userId, users.id))
-      .where(and(eq(sessions.token, token), gte(sessions.createdAt, thirtyDaysAgo)))
+      .where(and(
+        eq(sessions.token, token),
+        gte(sessions.createdAt, thirtyDaysAgo),
+        gte(sessions.lastSeen, idleCutoff),
+      ))
       .limit(1)
   } catch (err) {
     const cause = (err as { cause?: { code?: string } })?.cause

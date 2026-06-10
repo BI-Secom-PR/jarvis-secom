@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { users, sessions } from '@/lib/db/schema'
 import { SESSION_COOKIE } from '@/lib/auth'
+import { rateLimit, clientIp, tooManyRequests } from '@/lib/rateLimit'
 
 const schema = z.object({
   email:    z.string().email(),
@@ -16,6 +17,10 @@ const DUMMY_HASH = '$2b$12$invaliddummyhashforconstanttimingXXXXXXXXXXXXXXXXXXXX
 const IS_PROD    = process.env.NODE_ENV === 'production'
 
 export async function POST(req: NextRequest) {
+  const ip = clientIp(req)
+  const ipLimit = rateLimit(`login:ip:${ip}`, 20, 15 * 60_000)
+  if (!ipLimit.ok) return tooManyRequests(ipLimit.retryAfterSec)
+
   const body = await req.json().catch(() => null)
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
@@ -23,6 +28,9 @@ export async function POST(req: NextRequest) {
   }
 
   const { email, password } = parsed.data
+
+  const accountLimit = rateLimit(`login:acct:${ip}:${email.toLowerCase()}`, 5, 15 * 60_000)
+  if (!accountLimit.ok) return tooManyRequests(accountLimit.retryAfterSec)
 
   const rows = await db
     .select()

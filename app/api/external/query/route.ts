@@ -2,8 +2,10 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { generateText, tool, stepCountIs } from 'ai';
 import { z } from 'zod/v3';
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual, createHash } from 'node:crypto';
 import { getPool } from '@/lib/mysql';
 import { getSystemPrompt, parseChartRequest, DEFAULT_MODEL, MODELS, getModelProvider, type ModelId } from '@/lib/agent';
+import { rateLimit, clientIp, tooManyRequests } from '@/lib/rateLimit';
 
 const VALID_MODEL_IDS = new Set(MODELS.map((m) => m.id));
 
@@ -13,11 +15,22 @@ function resolveModel(id: ModelId) {
   return google(id);
 }
 
+// Constant-time comparison; hashing first removes any length leak
+function safeKeyEqual(provided: string, expected: string): boolean {
+  const a = createHash('sha256').update(provided).digest();
+  const b = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(a, b);
+}
+
 export async function POST(req: NextRequest) {
+  const limit = rateLimit(`external:${clientIp(req)}`, 30, 60_000);
+  if (!limit.ok) return tooManyRequests(limit.retryAfterSec);
+
   // Bearer token auth — no session cookie required
   const authHeader = req.headers.get('authorization');
   const key = authHeader?.replace(/^Bearer\s+/i, '');
-  if (!key || key !== process.env.EXTERNAL_API_KEY) {
+  const expected = process.env.EXTERNAL_API_KEY;
+  if (!key || !expected || !safeKeyEqual(key, expected)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -149,8 +149,11 @@ This distinction is universal across all adservers (`adforce`, `metrike`, `00px`
 
 Validation runs in both the JSON Blob branch and the FormData on-prem branch.
 
-### Known Gaps (not yet fixed)
-- No rate limiting on `/api/auth/login`, `/api/auth/register`, `/api/external/query`
-- Account enumeration possible via `/waiting` redirect for pending users
-- CSP uses `'unsafe-inline'` for scripts — nonce-based CSP not yet implemented
-- Sessions have no idle timeout (only 30-day absolute expiry)
+### Hardening in place
+- Rate limiting (`lib/rateLimit.ts`, in-memory fixed-window — per-process; swap for Redis if scaled horizontally): login 20/15min per IP + 5/15min per IP+email, register 5/h per IP, external query 30/min per IP
+- Register is enumeration-safe: identical response and bcrypt work whether the e-mail exists or not (`onConflictDoNothing`)
+- Nonce-based CSP generated per-request in `proxy.ts` (`'strict-dynamic'` in prod; dev keeps `unsafe-inline`/`unsafe-eval` for HMR). Requires all pages to render dynamically — `force-dynamic` is set in `app/layout.tsx`; do not remove it or re-enable static prerendering for HTML pages
+- Static security headers (nosniff, X-Frame-Options, Referrer-Policy, Permissions-Policy, HSTS in prod) in `next.config.ts`
+- Sessions: 30-day absolute expiry + 3-day idle timeout (`lastSeen` checked in `getSession()`)
+- `EXTERNAL_API_KEY` compared in constant time (`timingSafeEqual` over SHA-256)
+- Admin password reset (admin panel edit row) revokes all of the target user's sessions
