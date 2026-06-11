@@ -9,6 +9,7 @@ import { getSession } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { fileExports } from '@/lib/db/schema';
 import { generateExport, MIME, type ChartSpec, type ExportFormat } from '@/lib/exports/generate';
+import { retrieveSimilarExamples } from '@/lib/rag';
 
 const VALID_MODEL_IDS = new Set(MODELS.map((m) => m.id));
 
@@ -227,12 +228,16 @@ export async function POST(req: NextRequest) {
   try {
     let text: string;
 
+    // RAG: append the most similar (question → SQL) examples; '' on any failure
+    const ragBlock = await retrieveSimilarExamples(String(chatInput ?? ''));
+    const systemPrompt = getSystemPrompt() + ragBlock;
+
     if (getModelProvider(modelId) === 'ollama') {
-      text = await runOllamaChat(modelId, getSystemPrompt(), messages, ctx);
+      text = await runOllamaChat(modelId, systemPrompt, messages, ctx);
     } else {
       const result = await generateText({
         model: resolveModel(modelId),
-        system: getSystemPrompt(),
+        system: systemPrompt,
         messages,
         stopWhen: stepCountIs(6),
         tools: {

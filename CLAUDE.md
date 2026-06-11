@@ -121,8 +121,13 @@ See `GOLD_LAYER_DATA_DICTIONARY.md` for full column definitions. Key tables:
 - `gold_platforms_campaigns` — main fact table (platform + campaign + ad + date grain)
 - `gold_platforms_regions` — adds geographic dimension
 - `gold_platforms_age` / `gold_platforms_gender` — demographic dimensions
+- `gold_campaigns_classified` — VIEW: campaigns + Framework v4 creative classification (eixo, programa, formato, segundagem, visual, tom, porta_voz + target_geo/age/gender, dark_feed, person_name, classification_source). Populated by the `creative_classifier` Python job in the mysql repo. Codes only exist since April 2026; `classification_source` tracks provenance ('code' | 'inferred_keyword' | 'inferred_llm').
+- `gold_creative_dim_labels` — sigla → human-readable label lookup
 
 All tables are prefixed `gold_` and the SQL guard enforces this.
+
+### RAG (sql_examples)
+`lib/rag.ts` retrieves the top-3 most similar (question → SQL) pairs from the PG `sql_examples` table (brute-force cosine over JSON-stored embeddings — no pgvector needed at this scale) and appends them to the system prompt in `app/api/chat/route.ts`. Embeddings use Google `gemini-embedding-001` (the project's Ollama is ollama.com cloud, which hosts **no embedding models** — do not switch back to nomic-embed-text without self-hosting). Failure-safe: any error returns `''` and chat proceeds without RAG. Maintain the library by editing `scripts/seed-sql-examples.ts` and running `npm run db:seed-examples` (idempotent upsert by question text; query + library vectors must come from the same model).
 
 ## Security Notes
 

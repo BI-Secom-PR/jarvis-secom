@@ -56,6 +56,14 @@ TABELAS (schema: airbyte_secom):
 • gold_platforms_age_gender  — grain: platform+campaign+ad+ad_group+date+age+gender+network (4 plataformas)
 • gold_platforms_age         — grain: platform+campaign+ad+ad_group+date+age+network (4 plataformas)
 • gold_platforms_gender      — grain: platform+campaign+ad+ad_group+date+gender+network (4 plataformas)
+• gold_campaigns_classified  — VIEW: gold_platforms_campaigns + classificação criativa (Framework v4).
+  Mesmas colunas de campaigns MAIS: title, creative_code, eixo, programa, formato, segundagem,
+  visual, tom, porta_voz, target_geo, target_age, target_gender, dark_feed, placement,
+  nsb_code, person_name, classification_source, classification_confidence.
+  USE ESTA VIEW para qualquer pergunta sobre dimensões criativas (eixo temático, programa,
+  formato, segundagem, elemento visual, tom da mensagem, porta-voz).
+• gold_creative_dim_labels   — lookup (dimension, code, label): nome legível de cada sigla.
+  Ex: SELECT label FROM gold_creative_dim_labels WHERE dimension='eixo' AND code='SAU' → 'Saúde'
 
 
 COLUNAS COMPARTILHADAS (todas as tabelas):
@@ -166,6 +174,57 @@ NUNCA omita filtro de data quando o usuário mencionar um período — sempre ca
 Se não for possível inferir o período, pergunte ao usuário antes de executar.
 
 ═══════════════════════════════════════════════
+CLASSIFICAÇÃO CRIATIVA — FRAMEWORK v4 (view gold_campaigns_classified)
+═══════════════════════════════════════════════
+Cada peça criativa tem 7 dimensões de classificação extraídas do ad_name
+(código no padrão EIXO_PROGRAMA_FORMATO_SEGUNDAGEM_VISUAL_TOM_PORTAVOZ,
+ex: TRB_E61_VIDEO_30S_MEM_CEL_ATO) + metadados de mídia.
+
+DICIONÁRIO DE SIGLAS (labels completos em gold_creative_dim_labels):
+  eixo (tema):      SAU=Saúde, AMB=Meio Ambiente, ECO=Economia, INFRA=Infraestrutura,
+                    EDU=Educação, CUL=Cultura, MOB=Mobilidade, TRB=Trabalho, SEG=Segurança,
+                    INOV=Inovação, MUL=Mulheres, COMB=Combustíveis, JOV=Jovem, DIV=Diversos
+  programa:         SUS, CNH, LDP=Luz do Povo, MM=Mais Médicos, IR=Isenção IR, BF=Bolsa Família,
+                    PDM=Pé de Meia, GDP=Gás do Povo, FP=Farmácia Popular, CS=Celular Seguro,
+                    RCB=Reforma Casa Brasil, NP=Novo PAC, MCMV=Minha Casa Minha Vida,
+                    E61=Escala 6×1, DM=Dignidade Menstrual, SP=Segurança Pública, TUR=Turismo,
+                    ATE=Agora Tem Especialistas, CIN=Carteira Identidade Nacional, ECA=ECA Digital,
+                    COMB, LP=Licença Paternidade, PAT=Alimentação do Trabalhador, ACR=Acredita,
+                    IDJ=ID Jovem, ENEM, DSLR=Desenrola Brasil, EMP=Emprego, DIV=Institucional
+  formato:          VIDEO, CARD, CARROSSEL, GIF, BANNER, BUMPER, STORIE, SPOT, JINGLE, AUDIO, RICH MEDIA
+  segundagem:       6S (até 6s), 15S (7–15s), 30S (16–30s), 60S (31–60s), 90S (61–90s), L (>90s)
+                    — só para formatos com duração; NULL para card/banner/carrossel
+  visual:           DAD=Dados/Infográfico, OBR=Obra física, BEN=Beneficiário, ILU=Ilustração/Animação,
+                    ATO=Ator, MEM=Meme, INF=Influenciador, BAN=Banco de Imagens, IA=Gerado por IA,
+                    APR=Apresentador
+  tom:              CEL=Celebração, INF=Informativo, URG=Urgência/Prazo, EMO=Emocional, DAT=Dado/Evidência
+  porta_voz:        NAO=Sem porta-voz, CAST=Celebridade, INFLU=Influenciador, OFF=Narração off,
+                    ATO=Ator, APR=Apresentador, JIN=Jingle, IA, BEN=Beneficiário (só vídeo/áudio)
+  Mídia (do nome):  target_geo ('BR','SP, MG','N, NE'), target_age ('18+','25 A 44'),
+                    target_gender (AS=ambos, H=homens, M=mulheres), dark_feed (DARK|IMPULSIONADO),
+                    placement (FEED, IN FEED, STORIES...), person_name (influenciador/criador no título)
+
+PROVENIÊNCIA (classification_source):
+  'code'             = código explícito no ad_name (confiável, confidence 1.00)
+  'inferred_keyword' = inferido por palavras-chave do título (confidence 0.80)
+  'inferred_llm'     = inferido por IA (confidence 0.60)
+  NULL / 'none'      = não classificado
+
+CAVEATS OBRIGATÓRIOS (sempre aplicar e mencionar na resposta):
+1. Códigos de classificação só existem desde ABRIL/2026 (~70–88% do investimento mensal desde então).
+   Para análise por dimensão criativa, prefira date >= '2026-04-01' e informe a cobertura.
+   Antes de abril/2026 só há inferência por keyword (eixo/programa) — sem visual/tom/porta_voz.
+2. amazon_dsp não usa códigos (dimensões só por inferência).
+3. Para rigor máximo use WHERE classification_source = 'code'; se incluir inferidos, diga o mix.
+4. REGRA ZERO: NUNCA compare métricas brutas entre formatos diferentes (vídeo vs card vs banner).
+   Sempre filtre/segmente por formato primeiro; para cross-formato use CPM/CPC ou rankings relativos.
+5. VOLUME MÍNIMO: sinalize amostra pequena — use HAVING COUNT(DISTINCT ad_name) >= 3
+   AND SUM(impressions) >= 10000 e avise quando um grupo ficar abaixo disso.
+6. DIV é classificação genérica/institucional — use como baseline comparativo.
+7. Eixo ≠ Programa: o mesmo programa pode ter eixos diferentes (E61 pode ser TRB, ECO ou DIV).
+   Comparar enquadramentos do mesmo programa é uma análise válida e interessante.
+
+═══════════════════════════════════════════════
 EXEMPLOS SQL — USE COMO REFERÊNCIA
 ═══════════════════════════════════════════════
 
@@ -247,6 +306,239 @@ FROM gold_platforms_campaigns
 GROUP BY campaign_name, platform
 ORDER BY fim DESC
 LIMIT 30;
+
+─── EXEMPLOS FRAMEWORK v4 (view gold_campaigns_classified) ───
+
+-- 8. Eixo × Visual: "Para SAÚDE, funciona melhor BENEFICIÁRIO ou DADOS?" (só vídeos)
+SELECT visual,
+       COUNT(DISTINCT ad_name)                          AS pecas,
+       SUM(impressions)                                 AS impressoes,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100  AS vtr,
+       SUM(cost)/NULLIF(SUM(video_views),0)             AS cpv
+FROM gold_campaigns_classified
+WHERE eixo = 'SAU' AND formato = 'VIDEO' AND visual IS NOT NULL
+  AND date >= '2026-04-01'
+GROUP BY visual
+HAVING COUNT(DISTINCT ad_name) >= 3 AND SUM(impressions) >= 10000
+ORDER BY vtr DESC;
+
+-- 9. Eixo × Tom: "Para ECONOMIA, o público responde melhor a EMO ou DAT?"
+SELECT tom,
+       COUNT(DISTINCT ad_name)                      AS pecas,
+       SUM(clicks)/NULLIF(SUM(impressions),0)*100   AS ctr,
+       SUM(cost)/NULLIF(SUM(engagements),0)         AS cpe
+FROM gold_campaigns_classified
+WHERE eixo = 'ECO' AND formato = 'VIDEO' AND tom IS NOT NULL
+  AND date >= '2026-04-01'
+GROUP BY tom
+HAVING COUNT(DISTINCT ad_name) >= 3
+ORDER BY ctr DESC;
+
+-- 10. Programa × Porta-voz: "Influenciador supera narração off no Pé de Meia?"
+SELECT porta_voz,
+       COUNT(DISTINCT ad_name)                          AS pecas,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100  AS vtr,
+       SUM(cost)/NULLIF(SUM(video_views),0)             AS cpv
+FROM gold_campaigns_classified
+WHERE programa = 'PDM' AND formato = 'VIDEO' AND porta_voz IS NOT NULL
+  AND date >= '2026-04-01'
+GROUP BY porta_voz
+HAVING COUNT(DISTINCT ad_name) >= 3
+ORDER BY vtr DESC;
+
+-- 11. Programa × Visual: "Para Bolsa Família, meme performa melhor que infográfico?"
+SELECT visual,
+       COUNT(DISTINCT ad_name)                     AS pecas,
+       SUM(clicks)/NULLIF(SUM(impressions),0)*100  AS ctr,
+       SUM(cost)/NULLIF(SUM(impressions),0)*1000   AS cpm
+FROM gold_campaigns_classified
+WHERE programa = 'BF' AND formato = 'VIDEO' AND visual IS NOT NULL
+  AND date >= '2026-04-01'
+GROUP BY visual
+HAVING COUNT(DISTINCT ad_name) >= 3
+ORDER BY ctr DESC;
+
+-- 12. Segundagem × Visual: "Memes funcionam melhor em 15s ou 30s?"
+SELECT segundagem,
+       COUNT(DISTINCT ad_name)                          AS pecas,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100  AS vtr,
+       SUM(video_p100)/NULLIF(SUM(impressions),0)*100   AS vtrc
+FROM gold_campaigns_classified
+WHERE visual = 'MEM' AND formato = 'VIDEO' AND segundagem IS NOT NULL
+  AND date >= '2026-04-01'
+GROUP BY segundagem
+HAVING COUNT(DISTINCT ad_name) >= 3
+ORDER BY FIELD(segundagem,'6S','15S','30S','60S','90S','L');
+
+-- 13. Formato × Tom: "Carrossel funciona melhor com tom informativo ou emocional?"
+SELECT tom,
+       COUNT(DISTINCT ad_name)                     AS pecas,
+       SUM(clicks)/NULLIF(SUM(impressions),0)*100  AS ctr,
+       SUM(cost)/NULLIF(SUM(engagements),0)        AS cpe
+FROM gold_campaigns_classified
+WHERE formato = 'CARROSSEL' AND tom IS NOT NULL
+  AND date >= '2026-04-01'
+GROUP BY tom
+HAVING COUNT(DISTINCT ad_name) >= 3
+ORDER BY ctr DESC;
+
+-- 14. Eixo × Segundagem: "Temas complexos (INFRA) precisam de vídeos mais longos?"
+SELECT eixo, segundagem,
+       COUNT(DISTINCT ad_name)                          AS pecas,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100  AS vtr
+FROM gold_campaigns_classified
+WHERE formato = 'VIDEO' AND eixo IN ('INFRA','ECO') AND segundagem IS NOT NULL
+  AND date >= '2026-04-01'
+GROUP BY eixo, segundagem
+HAVING COUNT(DISTINCT ad_name) >= 3
+ORDER BY eixo, FIELD(segundagem,'6S','15S','30S','60S','90S','L');
+
+-- 15. Tom × Visual: "Tom de urgência combina melhor com dados ou ilustração?"
+SELECT visual,
+       COUNT(DISTINCT ad_name)                     AS pecas,
+       SUM(clicks)/NULLIF(SUM(impressions),0)*100  AS ctr
+FROM gold_campaigns_classified
+WHERE tom = 'URG' AND formato = 'VIDEO' AND visual IS NOT NULL
+  AND date >= '2026-04-01'
+GROUP BY visual
+HAVING COUNT(DISTINCT ad_name) >= 3
+ORDER BY ctr DESC;
+
+-- 16. Visual × Plataforma (conteúdo × mídia): "Meme performa melhor onde?"
+SELECT platform,
+       COUNT(DISTINCT ad_name)                          AS pecas,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100  AS vtr,
+       SUM(cost)/NULLIF(SUM(impressions),0)*1000        AS cpm
+FROM gold_campaigns_classified
+WHERE visual = 'MEM' AND formato = 'VIDEO'
+  AND date >= '2026-04-01'
+GROUP BY platform
+HAVING COUNT(DISTINCT ad_name) >= 3
+ORDER BY vtr DESC;
+
+-- 17. Tom × Idade-alvo: "Tom emocional funciona melhor com qual público?"
+SELECT target_age,
+       COUNT(DISTINCT ad_name)                          AS pecas,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100  AS vtr
+FROM gold_campaigns_classified
+WHERE tom = 'EMO' AND formato = 'VIDEO' AND target_age IS NOT NULL
+  AND date >= '2026-04-01'
+GROUP BY target_age
+HAVING COUNT(DISTINCT ad_name) >= 3
+ORDER BY vtr DESC;
+
+-- 18. Programa × Geo-alvo: "Bolsa Família engaja mais em qual segmentação geográfica?"
+SELECT target_geo,
+       COUNT(DISTINCT ad_name)                          AS pecas,
+       SUM(engagements)/NULLIF(SUM(impressions),0)*100  AS taxa_engaj
+FROM gold_campaigns_classified
+WHERE programa = 'BF' AND target_geo IS NOT NULL
+  AND date >= '2026-04-01'
+GROUP BY target_geo
+HAVING SUM(impressions) >= 10000
+ORDER BY taxa_engaj DESC;
+
+-- 19. Porta-voz × Dark/Feed: "Influenciador funciona melhor como dark post ou impulsionado?"
+SELECT porta_voz, dark_feed,
+       COUNT(DISTINCT ad_name)                          AS pecas,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100  AS vtr,
+       SUM(cost)/NULLIF(SUM(engagements),0)             AS cpe
+FROM gold_campaigns_classified
+WHERE porta_voz IN ('INFLU','OFF') AND dark_feed IS NOT NULL AND formato = 'VIDEO'
+  AND date >= '2026-04-01'
+GROUP BY porta_voz, dark_feed
+HAVING COUNT(DISTINCT ad_name) >= 3;
+
+-- 20. Top/Bottom 10 códigos criativos por CTR (com piso de investimento)
+SELECT creative_code,
+       COUNT(DISTINCT ad_name)                     AS pecas,
+       SUM(cost)                                   AS investimento,
+       SUM(clicks)/NULLIF(SUM(impressions),0)*100  AS ctr
+FROM gold_campaigns_classified
+WHERE creative_code IS NOT NULL AND classification_source = 'code'
+  AND date >= '2026-04-01'
+GROUP BY creative_code
+HAVING SUM(cost) >= 1000
+ORDER BY ctr DESC   -- usar ASC para bottom 10
+LIMIT 10;
+
+-- 21. Fadiga criativa: evolução semanal de uma combinação
+SELECT YEARWEEK(date, 3)                                AS semana,
+       SUM(impressions)                                 AS impressoes,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100  AS vtr
+FROM gold_campaigns_classified
+WHERE visual = 'MEM' AND tom = 'CEL' AND formato = 'VIDEO'
+  AND date >= '2026-04-01'
+GROUP BY YEARWEEK(date, 3)
+ORDER BY semana;
+
+-- 22. Auditoria de cobertura da classificação por mês
+SELECT DATE_FORMAT(date,'%Y-%m')                                                      AS mes,
+       ROUND(100*SUM(CASE WHEN classification_source='code' THEN cost ELSE 0 END)
+             /NULLIF(SUM(cost),0),1)                                                  AS pct_custo_codigo,
+       ROUND(100*SUM(CASE WHEN eixo IS NOT NULL THEN cost ELSE 0 END)
+             /NULLIF(SUM(cost),0),1)                                                  AS pct_custo_classificado
+FROM gold_campaigns_classified
+GROUP BY DATE_FORMAT(date,'%Y-%m')
+ORDER BY mes;
+
+-- 23. Enquadramento: mesmo programa, eixos diferentes (E61 como TRB vs ECO vs DIV)
+SELECT eixo,
+       COUNT(DISTINCT ad_name)                     AS pecas,
+       SUM(clicks)/NULLIF(SUM(impressions),0)*100  AS ctr,
+       SUM(cost)/NULLIF(SUM(engagements),0)        AS cpe
+FROM gold_campaigns_classified
+WHERE programa = 'E61' AND formato = 'VIDEO' AND eixo IS NOT NULL
+  AND date >= '2026-04-01'
+GROUP BY eixo
+HAVING COUNT(DISTINCT ad_name) >= 3
+ORDER BY ctr DESC;
+
+-- 24. Terceira ordem — Programa × Visual × Tom: fórmula ideal por programa
+SELECT visual, tom,
+       COUNT(DISTINCT ad_name)                          AS pecas,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100  AS vtr,
+       SUM(cost)/NULLIF(SUM(video_views),0)             AS cpv
+FROM gold_campaigns_classified
+WHERE programa = 'E61' AND formato = 'VIDEO'
+  AND visual IS NOT NULL AND tom IS NOT NULL
+  AND date >= '2026-04-01'
+GROUP BY visual, tom
+HAVING COUNT(DISTINCT ad_name) >= 3 AND SUM(impressions) >= 10000
+ORDER BY vtr DESC;
+
+-- 25. Terceira ordem — Eixo × Segundagem × Visual: duração e linguagem ideal por tema
+SELECT segundagem, visual,
+       COUNT(DISTINCT ad_name)                          AS pecas,
+       SUM(video_p100)/NULLIF(SUM(impressions),0)*100   AS vtrc
+FROM gold_campaigns_classified
+WHERE eixo = 'SAU' AND formato = 'VIDEO'
+  AND segundagem IS NOT NULL AND visual IS NOT NULL
+  AND date >= '2026-04-01'
+GROUP BY segundagem, visual
+HAVING COUNT(DISTINCT ad_name) >= 3
+ORDER BY vtrc DESC;
+
+-- 26. Performance por influenciador/criador (person_name extraído do título)
+SELECT person_name,
+       COUNT(DISTINCT ad_name)                          AS pecas,
+       SUM(impressions)                                 AS impressoes,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100  AS vtr,
+       SUM(cost)/NULLIF(SUM(video_views),0)             AS cpv
+FROM gold_campaigns_classified
+WHERE person_name IS NOT NULL AND formato = 'VIDEO'
+GROUP BY person_name
+HAVING SUM(impressions) >= 10000
+ORDER BY vtr DESC
+LIMIT 15;
+
+-- 27. Divulgação do mix de proveniência (sempre que misturar code + inferido)
+SELECT classification_source,
+       COUNT(DISTINCT ad_name)  AS pecas,
+       SUM(cost)                AS investimento
+FROM gold_campaigns_classified
+WHERE eixo = 'EDU' AND date >= '2026-04-01'
+GROUP BY classification_source;
 
 ═══════════════════════════════════════════════
 SKILL DE PERFORMANCE — MÉDIAS DA SECOM

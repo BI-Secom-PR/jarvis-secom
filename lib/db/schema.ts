@@ -55,8 +55,24 @@ export const fileExports = pgTable('file_exports', {
   expiresAt:      timestamp('expires_at', { withTimezone: true }).notNull(),
 })
 
+// RAG: (question → SQL) example library, retrieved by embedding similarity
+// and injected into the chat system prompt. Embeddings are 768-dim vectors
+// (nomic-embed-text via Ollama) stored as JSON — at <5k rows, brute-force
+// cosine in TS beats a pgvector dependency.
+export const sqlExamples = pgTable('sql_examples', {
+  id:        uuid('id').primaryKey().defaultRandom(),
+  question:  text('question').notNull().unique(),
+  sql:       text('sql').notNull(),
+  dims:      json('dims').$type<string[]>(),
+  embedding: json('embedding').$type<number[]>(),
+  enabled:   boolean('enabled').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export type User        = typeof users.$inferSelect
 export type Session     = typeof sessions.$inferSelect
 export type ChatSession = typeof chatSessions.$inferSelect
 export type ChatMessage = typeof chatMessages.$inferSelect
 export type FileExport  = typeof fileExports.$inferSelect
+export type SqlExample  = typeof sqlExamples.$inferSelect

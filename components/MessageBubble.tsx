@@ -66,7 +66,7 @@ export default function MessageBubble({ message }: Props) {
         className={`px-[15px] py-[11px] rounded-[18px] text-sm leading-[1.65] tracking-[-0.1px] break-words max-w-full bubble-content ${
           isAi
             ? 'bg-white/[0.06] border-[0.5px] border-white/[0.12] text-white/[0.88] rounded-bl-[5px] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]'
-            : 'bg-[rgba(41,151,255,0.28)] border-[0.5px] border-[rgba(80,170,255,0.45)] text-white rounded-br-[5px] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_2px_16px_rgba(41,151,255,0.18)]'
+            : 'bg-[rgba(41,151,255,0.28)] border-[0.5px] border-[rgba(80,170,255,0.45)] text-white rounded-br-[5px] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_2px_16px_rgba(41,151,255,0.18)] whitespace-pre-wrap'
         }`}
       >
         {isAi ? (
