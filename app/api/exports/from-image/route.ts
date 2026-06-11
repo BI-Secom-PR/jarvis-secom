@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import PDFDocument from 'pdfkit'
 import { requireAuth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { fileExports } from '@/lib/db/schema'
+import { escapeHtml, wrapPrintableHtml } from '@/lib/exports/html'
 import { sanitizeFilename, MIME } from '@/lib/exports/types'
 
 const EXPIRY_DAYS = 7
@@ -16,23 +16,16 @@ function pngFromDataUrl(dataUrl: string): Buffer | null {
   return buf
 }
 
-async function buildPdf(png: Buffer, title?: string): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 40, info: { Title: title || 'Grafico' } })
-    const chunks: Buffer[] = []
-    doc.on('data', (c: Buffer) => chunks.push(c))
-    doc.on('end', () => resolve(Buffer.concat(chunks)))
-    doc.on('error', reject)
-    if (title) {
-      doc.font('Helvetica-Bold').fontSize(16).fillColor('#111').text(title)
-      doc.moveDown(0.3)
-    }
-    doc.font('Helvetica').fontSize(9).fillColor('#666').text(`Gerado em ${new Date().toLocaleString('pt-BR')}`)
-    doc.moveDown(1)
-    const pageW = doc.page.width - doc.page.margins.left - doc.page.margins.right
-    doc.image(png, { fit: [pageW, 460], align: 'center' })
-    doc.end()
-  })
+// Printable HTML page with the chart PNG embedded as a data URI — opens in a
+// browser tab where the user saves it as PDF via the print dialog. The data
+// URI is rebuilt from the validated Buffer, never from the raw client string.
+function buildHtml(png: Buffer, title?: string): Buffer {
+  const bodyHtml = [
+    title ? `<h1>${escapeHtml(title)}</h1>` : '',
+    `<p class="gen">Gerado em ${escapeHtml(new Date().toLocaleString('pt-BR'))}</p>`,
+    `<div class="chart"><img src="data:image/png;base64,${png.toString('base64')}" alt="${escapeHtml(title || 'Gráfico')}"></div>`,
+  ].filter(Boolean).join('\n')
+  return Buffer.from(wrapPrintableHtml({ title: title || 'Gráfico', bodyHtml }), 'utf8')
 }
 
 export async function POST(req: NextRequest) {
@@ -45,8 +38,8 @@ export async function POST(req: NextRequest) {
   if (!png) return NextResponse.json({ error: 'invalid or oversized png' }, { status: 400 })
   const title: string | undefined = typeof body.title === 'string' ? body.title.slice(0, 200) : undefined
   const sessionId: string | undefined = typeof body.chatSessionId === 'string' ? body.chatSessionId : undefined
-  const buffer = await buildPdf(png, title)
-  const filename = sanitizeFilename(title || 'grafico', 'pdf')
+  const buffer = buildHtml(png, title)
+  const filename = sanitizeFilename(title || 'grafico', 'html')
   const expiresAt = new Date(Date.now() + EXPIRY_DAYS * 24 * 60 * 60 * 1000)
   const [row] = await db
     .insert(fileExports)
@@ -54,7 +47,7 @@ export async function POST(req: NextRequest) {
       userId: user.id,
       chatSessionId: sessionId ?? null,
       filename,
-      mimeType: MIME.pdf,
+      mimeType: MIME.html,
       bytes: buffer,
       sizeBytes: buffer.byteLength,
       expiresAt,

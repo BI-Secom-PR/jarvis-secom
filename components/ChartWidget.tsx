@@ -31,7 +31,7 @@ const STROKE_COLORS = ["#78b4ff", "#78dc78", "#ffa03c", "#c850c8", "#50dcdc"];
 
 export default function ChartWidget({ chart }: Props) {
   const captureRef = useRef<HTMLDivElement>(null);
-  const [busy, setBusy] = useState<null | "png" | "pdf">(null);
+  const [busy, setBusy] = useState<null | "png" | "print">(null);
 
   const data = chart.labels.map((label, i) => {
     const row: Record<string, string | number> = { name: label };
@@ -76,9 +76,9 @@ export default function ChartWidget({ chart }: Props) {
     }
   };
 
-  const handleDownloadPdf = async () => {
+  const handlePrintPage = async () => {
     if (busy) return;
-    setBusy("pdf");
+    setBusy("print");
     try {
       const dataUrl = await capturePng();
       if (!dataUrl) return;
@@ -155,8 +155,14 @@ export default function ChartWidget({ chart }: Props) {
         <button type="button" className={btn} onClick={handleDownloadPng} disabled={busy !== null}>
           {busy === "png" ? "Gerando…" : "↓ PNG"}
         </button>
-        <button type="button" className={btn} onClick={handleDownloadPdf} disabled={busy !== null}>
-          {busy === "pdf" ? "Gerando…" : "↓ PDF"}
+        <button
+          type="button"
+          className={btn}
+          onClick={handlePrintPage}
+          disabled={busy !== null}
+          title="Abre uma página para imprimir ou salvar como PDF"
+        >
+          {busy === "print" ? "Gerando…" : "🖨 Imprimir / PDF"}
         </button>
       </div>
     </div>

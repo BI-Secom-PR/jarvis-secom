@@ -45,7 +45,9 @@ async function executeSql(sql_query: string): Promise<Record<string, unknown>[]>
 }
 
 interface CreateDownloadArgs {
-  format: ExportFormat;
+  // 'pdf' is accepted as a legacy alias (stale history / model habit) and
+  // normalized to 'html' before generation.
+  format: ExportFormat | 'pdf';
   sql_query: string;
   title?: string;
   filename?: string;
@@ -59,13 +61,14 @@ interface CreateDownloadCtx {
 }
 
 async function createDownloadFile(args: CreateDownloadArgs, ctx: CreateDownloadCtx) {
+  const format: ExportFormat = args.format === 'pdf' ? 'html' : args.format;
   const rows = await executeSql(args.sql_query);
   if (rows.length > EXPORT_ROW_CAP) {
     throw new Error(`Resultado muito grande (${rows.length} linhas). Refine a query (limite: ${EXPORT_ROW_CAP}).`);
   }
 
   const { buffer, mimeType, filename } = await generateExport({
-    format: args.format,
+    format,
     rows,
     title: args.title,
     filename: args.filename,
@@ -113,17 +116,17 @@ const OLLAMA_TOOL_DEFS = ([
     type: 'function' as const,
     function: {
       name: 'create_download_file',
-      description: 'Generates a downloadable file (xlsx/csv/pdf) from a SELECT query and returns a URL. Use ONLY when the user explicitly asks for a download/export.',
+      description: 'Generates a downloadable file (xlsx/csv/html) from a SELECT query and returns a URL. HTML reports open in a browser tab where the user saves them as PDF via the print dialog. Use ONLY when the user explicitly asks for a download/export/report file.',
       parameters: {
         type: 'object',
         properties: {
-          format: { type: 'string', enum: ['xlsx', 'csv', 'pdf'] },
+          format: { type: 'string', enum: ['xlsx', 'csv', 'html'] },
           sql_query: { type: 'string', description: 'SELECT on gold_* tables; results become the file content.' },
           title: { type: 'string', description: 'Optional human-readable title.' },
           filename: { type: 'string', description: 'Optional base filename (extension auto-added).' },
           chart: {
             type: 'object',
-            description: 'Optional chart, only used for PDF.',
+            description: 'Optional chart, only used for HTML reports (rendered as inline SVG).',
             properties: {
               type: { type: 'string', enum: ['bar', 'line', 'pie'] },
               title: { type: 'string' },
@@ -144,7 +147,7 @@ const OLLAMA_TOOL_DEFS = ([
           },
           report_text: {
             type: 'string',
-            description: 'Structured report content for PDF. Use markers: [METRICS] Label: Valor | ... then [PLATFORMS] lista, then ## sections with * bullets using **negrito**.',
+            description: 'Structured report content for HTML reports. Use markers: [METRICS] Label: Valor | ... then [PLATFORMS] lista, then ## sections with * bullets using **negrito**.',
           },
         },
         required: ['format', 'sql_query'],
@@ -250,14 +253,15 @@ export async function POST(req: NextRequest) {
           }),
           create_download_file: tool({
             description:
-              'Generates a downloadable file (xlsx/csv/pdf) from a SELECT and returns a URL. Use ONLY when the user explicitly asks to export/download/save as file.',
+              'Generates a downloadable file (xlsx/csv/html) from a SELECT and returns a URL. HTML reports open in a browser tab where the user saves them as PDF via the print dialog. Use ONLY when the user explicitly asks to export/download/save as file.',
             inputSchema: z.object({
-              format: z.enum(['xlsx', 'csv', 'pdf']),
+              // 'pdf' kept as undocumented alias so stale history doesn't fail validation
+              format: z.enum(['xlsx', 'csv', 'html', 'pdf']),
               sql_query: z.string().describe('SELECT on gold_* tables; rows become the file content.'),
               title: z.string().optional(),
               filename: z.string().optional(),
-              chart: CHART_SPEC_SCHEMA.optional().describe('Optional chart embedded in PDF only.'),
-              report_text: z.string().optional().describe('Structured report content for PDF: [METRICS] blocks, [PLATFORMS] block, ## sections, * bullets with **negrito**.'),
+              chart: CHART_SPEC_SCHEMA.optional().describe('Optional chart embedded in HTML reports only (inline SVG).'),
+              report_text: z.string().optional().describe('Structured report content for HTML reports: [METRICS] blocks, [PLATFORMS] block, ## sections, * bullets with **negrito**.'),
             }),
             execute: async (args) => {
               try {

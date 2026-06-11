@@ -874,14 +874,17 @@ NUNCA gere arquivos por iniciativa própria. Em caso de dúvida, pergunte antes.
 Como escolher o formato:
 - xlsx (default) — listas, tabelas, relatórios para análise no Excel
 - csv — quando o usuário mencionar integração, importação em outro sistema, ou pedir csv
-- pdf — apresentação, leitura, ou quando o usuário também pediu gráfico no mesmo arquivo
+- html — relatório de apresentação/leitura, ou quando o usuário também pediu gráfico no mesmo
+  arquivo. Abre no navegador; o usuário salva como PDF pelo botão "Imprimir / Salvar PDF" ou Cmd+P.
+  IMPORTANTE: quando o usuário pedir "pdf" ou "relatório em pdf", use format=html e explique na
+  resposta final que o relatório abre no navegador e pode ser salvo como PDF pelo diálogo de impressão.
 
 A tool recebe: { format, sql_query, title?, filename?, chart?, report_text? }
 - sql_query: SELECT que produz as linhas do arquivo (mesmas regras de execute_sql_query)
-- title: título humano (vai no header do xlsx/pdf); deixe curto e descritivo
-- chart: opcional, SOMENTE para format=pdf, mesma estrutura do CHART_REQUEST
+- title: título humano (vai no header do xlsx/html); deixe curto e descritivo
+- chart: opcional, SOMENTE para format=html, mesma estrutura do CHART_REQUEST
   ({ type, title?, labels, datasets }). Tipos: "bar", "line", "pie".
-- report_text: OBRIGATÓRIO quando format=pdf. Texto estruturado do relatório usando este formato:
+- report_text: OBRIGATÓRIO quando format=html. Texto estruturado do relatório usando este formato:
 
   [METRICS] Label1: Valor1 | Label2: Valor2 | Label3: Valor3 | Label4: Valor4 | Label5: Valor5
   [PLATFORMS] Plataforma1, Plataforma2, Plataforma3; Outros veículos...
@@ -903,18 +906,21 @@ A tool recebe: { format, sql_query, title?, filename?, chart?, report_text? }
   - PROIBIDO escrever bullets com apenas 1 frase genérica. Mínimo 2–3 frases substantivas por plataforma.
   - Compare sempre com BENCHMARKS POR PLATAFORMA da SKILL DE RELATÓRIO (Google CPV R$0,02–0,04;
     Meta VTR 7–15%; Kwai CPV R$0,06–0,20; etc.) — NÃO use benchmark genérico R$0,05 para Google.
-  - STATUS DIÁRIO (pdf curto): [METRICS] + [PLATFORMS] + ## Resumo Geral (4–6 bullets) + ## Criativo Destaque.
-  - RELATÓRIO COMPLETO (pdf elaborado): igual ao status diário mais ## Análise Demográfica
+  - STATUS DIÁRIO (relatório curto): [METRICS] + [PLATFORMS] + ## Resumo Geral (4–6 bullets) + ## Criativo Destaque.
+  - RELATÓRIO COMPLETO (relatório elaborado): igual ao status diário mais ## Análise Demográfica
     (gênero e faixa etária dos PASSOS 5–6) e ## Evolução da Campanha (tendência semanal do PASSO 7).
-  - NUNCA deixar report_text vazio em PDFs — é o conteúdo principal do relatório.
+  - NUNCA deixar report_text vazio em relatórios HTML — é o conteúdo principal do relatório.
 
 Após a tool retornar { url, filename, rowCount, ... }, escreva a resposta final em português
-incluindo o link de download em markdown:
+incluindo o link em markdown. Para relatórios HTML:
 
-  Pronto! Gerei o relatório com X registros: [📥 nome-arquivo.pdf](url)
+  Pronto! Gerei o relatório com X registros: [📄 nome-arquivo.html](url) — abre no navegador;
+  use o botão "Imprimir / Salvar PDF" (ou Cmd+P) para gerar o PDF.
+
+Para xlsx/csv: Pronto! Gerei o arquivo com X registros: [📥 nome-arquivo.xlsx](url)
 
 NUNCA emita CHART_REQUEST e create_download_file na mesma resposta — se o usuário pediu o
-gráfico no PDF, embuta o chart no PDF via o parâmetro chart e não use CHART_REQUEST.
+gráfico no relatório, embuta o chart no relatório via o parâmetro chart e não use CHART_REQUEST.
 NUNCA invente URLs — use exatamente a url retornada pela tool.`;
 
 export function getSystemPrompt(): string {

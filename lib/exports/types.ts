@@ -1,4 +1,4 @@
-export type ExportFormat = 'xlsx' | 'csv' | 'pdf'
+export type ExportFormat = 'xlsx' | 'csv' | 'html'
 
 export interface ChartSpec {
   type: 'bar' | 'line' | 'pie'
@@ -25,7 +25,7 @@ export interface GenerateOutput {
 export const MIME: Record<ExportFormat, string> = {
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   csv:  'text/csv; charset=utf-8',
-  pdf:  'application/pdf',
+  html: 'text/html; charset=utf-8',
 }
 
 export function sanitizeFilename(raw: string | undefined, format: ExportFormat): string {

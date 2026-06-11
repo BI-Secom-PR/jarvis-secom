@@ -16,7 +16,7 @@ const maxUploadBodySize: SizeLimit = (process.env.MAX_UPLOAD_BODY_SIZE ?? '200mb
 const nextConfig: NextConfig = {
   allowedDevOrigins,
   devIndicators: false,
-  serverExternalPackages: ['pdfkit', 'svg-to-pdfkit', 'exceljs'],
+  serverExternalPackages: ['exceljs'],
   experimental: {
     serverActions: {
       bodySizeLimit: maxUploadBodySize,

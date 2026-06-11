@@ -35,7 +35,7 @@ function renderBar(spec: ChartSpec): string {
     bars.push(`<text x="${tx.toFixed(1)}" y="${(H - PAD.bottom + 16).toFixed(1)}" text-anchor="middle" font-size="11" fill="#444">${esc(label)}</text>`)
   })
 
-  return bars.join('') + axes(max)
+  return axes(max) + bars.join('')
 }
 
 function renderLine(spec: ChartSpec): string {
@@ -57,7 +57,7 @@ function renderLine(spec: ChartSpec): string {
     const x = PAD.left + stepX * i
     out.push(`<text x="${x.toFixed(1)}" y="${(H - PAD.bottom + 16).toFixed(1)}" text-anchor="middle" font-size="11" fill="#444">${esc(label)}</text>`)
   })
-  return out.join('') + axes(max)
+  return axes(max) + out.join('')
 }
 
 function renderPie(spec: ChartSpec): string {

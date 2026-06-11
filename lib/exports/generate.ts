@@ -1,6 +1,6 @@
 import { generateXlsx } from './xlsx'
 import { generateCsv } from './csv'
-import { generatePdf } from './pdf'
+import { generateHtml } from './html'
 import { MIME, sanitizeFilename, type GenerateInput, type GenerateOutput } from './types'
 
 export async function generateExport(input: GenerateInput): Promise<GenerateOutput> {
@@ -13,7 +13,7 @@ export async function generateExport(input: GenerateInput): Promise<GenerateOutp
   } else if (input.format === 'csv') {
     buffer = generateCsv(input.rows)
   } else {
-    buffer = await generatePdf({ rows: input.rows, title: input.title, chart: input.chart, report_text: input.report_text })
+    buffer = generateHtml({ rows: input.rows, title: input.title, chart: input.chart, report_text: input.report_text })
   }
 
   return { buffer, mimeType, filename }
