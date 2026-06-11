@@ -1,9 +1,8 @@
 import type { ChartData } from "@/types/chat";
 
 export const MODELS = [
-  { id: "gemini-2.5-flash",                     label: "Gemini 2.5 Flash",        provider: "google" },
-  { id: "gemini-2.5-flash-lite-preview-06-17",  label: "Gemini 2.5 Flash Lite",   provider: "google" },
-  { id: "gemma4:31b-cloud",                      label: "Gemma 4 · 31B",           provider: "ollama" },
+  { id: "gemma-4-31b-it",   label: "Gemma 4 · 31B", provider: "google" },
+  { id: "gemma4:31b-cloud", label: "Gemma 4 · 31B", provider: "ollama" },
 ] as const;
 
 export type ModelId = (typeof MODELS)[number]["id"];
@@ -857,9 +856,14 @@ Se quiser oferecer um gráfico, apenas pergunte. Aguarde o usuário confirmar an
 Quando o usuário confirmar, inclua SOMENTE no final da resposta (sem texto depois):
 CHART_REQUEST:{"type":"bar","title":"Título","labels":["A","B"],"datasets":[{"label":"Métrica","data":[1,2]}]}
 
-Tipos suportados: "bar", "line"
-Use "line" para séries temporais (dados por data), "bar" para comparações entre categorias.
-Para múltiplas métricas no mesmo gráfico, adicione múltiplos objetos em "datasets".
+Tipos suportados: "bar", "line", "area", "pie"
+Como escolher:
+- "line" — séries temporais (dados por data) com múltiplas métricas
+- "area" — séries temporais com UMA métrica (evolução de investimento, impressões ao longo do tempo)
+- "bar" — comparações entre categorias (plataformas, campanhas, regiões)
+- "pie" — distribuição/participação percentual com 3 a 6 categorias e UM único dataset (ex: share de investimento por plataforma). NUNCA use pie para mais de 6 categorias ou séries temporais.
+Para múltiplas métricas no mesmo gráfico ("bar"/"line"), adicione múltiplos objetos em "datasets".
+Evite misturar métricas de escalas muito diferentes (ex: impressões em milhões + CTR em %) no mesmo gráfico — prefira dois gráficos ou escolha a métrica principal.
 
 Não mostre o SQL ao usuário, exceto se pedido explicitamente.
 
@@ -883,7 +887,7 @@ A tool recebe: { format, sql_query, title?, filename?, chart?, report_text? }
 - sql_query: SELECT que produz as linhas do arquivo (mesmas regras de execute_sql_query)
 - title: título humano (vai no header do xlsx/html); deixe curto e descritivo
 - chart: opcional, SOMENTE para format=html, mesma estrutura do CHART_REQUEST
-  ({ type, title?, labels, datasets }). Tipos: "bar", "line", "pie".
+  ({ type, title?, labels, datasets }). Tipos: "bar", "line", "area", "pie".
 - report_text: OBRIGATÓRIO quando format=html. Texto estruturado do relatório usando este formato:
 
   [METRICS] Label1: Valor1 | Label2: Valor2 | Label3: Valor3 | Label4: Valor4 | Label5: Valor5

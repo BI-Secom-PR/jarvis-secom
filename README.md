@@ -8,7 +8,7 @@ AI chat assistant for SECOM marketing analytics. Query ad platform data across M
 |---|---|
 | Framework | Next.js 16 (App Router) |
 | UI | React 19, Tailwind CSS 4 |
-| AI (text) | Groq (Llama, Mixtral) + Google (Gemini) via Vercel AI SDK |
+| AI (text) | Ollama (Gemma 4 · 31B) via Ollama API |
 | AI (voice) | Google Gemini 2.5 Flash TTS |
 | Auth DB | PostgreSQL 18 + Drizzle ORM |
 | Data warehouse | MySQL (`airbyte_secom`, read-only) |
@@ -145,7 +145,7 @@ npm run db:seed
 
 | Feature | Description |
 |---|---|
-| Multi-model | Switch between Groq and Gemini models in the header |
+| Model | Gemma 4 · 31B (Ollama) |
 | SQL queries | AI generates and executes SELECT queries against `airbyte_secom` |
 | Charts | AI renders bar/line charts on request |
 | Voice mode | Speech recognition input + TTS audio response |
