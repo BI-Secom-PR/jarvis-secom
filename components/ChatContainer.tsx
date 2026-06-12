@@ -31,8 +31,14 @@ async function callChatApi(
     body: JSON.stringify({ chatInput: text, messages: conversationHistory, model, chatSessionId }),
   });
   if (res.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
-  if (res.redirected || !res.headers.get("content-type")?.includes("application/json")) {
+  if (res.redirected) {
     throw Object.assign(new Error("Sessão expirada"), { status: 401 });
+  }
+  // Gateway timeouts (function killed mid-response) return plain-text bodies
+  if (!res.headers.get("content-type")?.includes("application/json")) {
+    throw new Error(
+      "O servidor demorou demais para responder. Tente novamente ou faça uma pergunta mais simples.",
+    );
   }
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);

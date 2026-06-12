@@ -11,6 +11,11 @@ import { fileExports } from '@/lib/db/schema';
 import { generateExport, MIME, type ChartSpec, type ExportFormat } from '@/lib/exports/generate';
 import { retrieveSimilarExamples } from '@/lib/rag';
 
+// Ollama-cloud Gemma with the multi-step SQL tool loop routinely runs past
+// Vercel's default function duration; the platform then kills the function
+// and returns a plain-text body the client can't JSON-parse.
+export const maxDuration = 300;
+
 const VALID_MODEL_IDS = new Set(MODELS.map((m) => m.id));
 
 const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
