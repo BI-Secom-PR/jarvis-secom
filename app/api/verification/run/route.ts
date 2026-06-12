@@ -8,7 +8,7 @@ import os from 'os';
 import { del } from '@vercel/blob';
 import { Ollama } from 'ollama';
 
-const VALID_ADSERVERS = new Set(['00px', 'adforce', 'admotion', 'ahead', 'metrike', 'brz']);
+const VALID_ADSERVERS = new Set(['00px', 'adforce', 'admotion', 'ahead', 'metrike', 'brz', 'sense']);
 const DATE_RE = /^\d{2}\/\d{2}\/\d{4}$/;
 
 function validateAdserver(adserver: string): string | null {

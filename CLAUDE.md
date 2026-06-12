@@ -145,11 +145,17 @@ Every adserver parser under `app/verification/parsers/` implements **two distinc
 - **`parse_comprovante()`** — reads the **delivery receipt** provided by the adserver. Confirms that the ad was actually served (impressions, dates, vehicles). This is the adserver's own output.
 - **`parse_verif()`** — reads the **URL/category audit sheet**. Contains the URLs where the ad ran and the SECOM category each URL was classified under (brand safety verification). This is produced by the verification team, not the adserver.
 
-This distinction is universal across all adservers (`adforce`, `metrike`, `00px`, `ahead`, `admotion`, `brz`). Never conflate the two — they parse different files with different schemas for different stages of the verification process.
+This distinction is universal across all adservers (`adforce`, `metrike`, `00px`, `ahead`, `admotion`, `brz`, `sense`). Never conflate the two — they parse different files with different schemas for different stages of the verification process.
+
+### Verification quick contracts (check these before re-reading the files)
+- **`engine.py`** — `verificar()` + CLI (`--adserver --comp --verif --ini/--fim DD/MM/YYYY --url-pct --view-rules --praca`). Consolidado template: header row 8, data row 9+, columns re-detected from header (hardcoded indexes are fallbacks); devolutiva → col 28, saved as `<nome> - Verificado.xlsx`. Vehicle match: normalize + exact-first, then rapidfuzz token_set_ratio ≥85. Devolutiva lines follow the grammar `OK|DIV|DIF|ALERTA|? campo: detalhe` — JSON result on stdout, human log on stderr.
+- **`parsers/parser_adforce.py`** — comprovante: single sheet, prefers "Impressões" over "Entregues", viewability = impression-weighted average of decimals, aggregates keyed by (veículo, duração from `Linha Criativa`). verif: auto-detects flat (header row 1, cpm/cpc/cpv/cpcv) vs multitab (one sheet per veículo, skips `ABAT*`). `_load_workbook_safe` strips `<v>NaN</v>` XML that crashes openpyxl.
+- **`parsers/parser_sense.py`** — one file per veículo in both formats; veículo name from the `Veículo:` metadata cell (col B, rows 1–8). comprovante: sheets titled `<TIPO> - Contabilizações`, header detected dynamically (~row 10), skips the `Total` row and sums daily rows (entregue = `Válidas`, fallback `Impressões`). verif: sheet `RELATÓRIO SIMPLIFICADO`, header ~row 9, **column order varies between files** — always detect via header; impression headers embed totals after `\n` (match first line only). No Data/Estado columns → date/praça filters are no-ops.
+- **`components/VerificationContainer.tsx`** — two submit branches: Vercel Blob (`NEXT_PUBLIC_USE_BLOB_UPLOAD`, JSON with blob URLs) vs on-prem (multipart FormData). Reads an SSE stream of progress events (`engine_start`→`done`); `DevolutivaLines` parses engine output with `/^(OK|DIV|DIF|ALERTA|\?)\s+([^:]+):(.*)$/` — this regex is a contract with engine.py's output format.
 
 ### Verification Subprocess Inputs
 `app/api/verification/run/route.ts` validates inputs before spawning `engine.py`:
-- `adserver` must be one of: `00px`, `adforce`, `admotion`, `ahead`, `metrike`, `brz` (lowercase — matches `engine.py` argparse choices)
+- `adserver` must be one of: `00px`, `adforce`, `admotion`, `ahead`, `metrike`, `brz`, `sense` (lowercase — matches `engine.py` argparse choices)
 - `ini` / `fim` (date range) must match `DD/MM/YYYY` (the format `engine.py` expects)
 
 Validation runs in both the JSON Blob branch and the FormData on-prem branch.

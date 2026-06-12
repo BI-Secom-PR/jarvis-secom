@@ -244,6 +244,7 @@ const ADSERVERS: { id: string; label: string; disabled?: boolean }[] = [
   { id: "admotion", label: "ADMOTION" },
   { id: "ahead", label: "AHEAD" },
   { id: "metrike", label: "METRIKE" },
+  { id: "sense", label: "SENSE" },
   { id: "brz", label: "BRZ", disabled: true },
 ];
 

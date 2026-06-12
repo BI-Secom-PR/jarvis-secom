@@ -24,6 +24,7 @@ CATEGORY_MAP: dict[str, str] = {
     "sensitive content":                "conteudo_sensivel",
     "sensível":                         "conteudo_sensivel",
     "sensivel":                         "conteudo_sensivel",
+    "drogas":                           "conteudo_sensivel",
     # Acidente (col 15)
     "acidente":                         "acidente",
     "acidentes violentos":              "acidente",

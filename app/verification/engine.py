@@ -51,6 +51,7 @@ PARSER_MAP: dict[str, str] = {
     "ahead":    "parser_ahead",
     "metrike":  "parser_metrike",
     "brz":      "parser_brz",
+    "sense":    "parser_sense",
 }
 
 # ── Constantes ─────────────────────────────────────────────────────────────────
