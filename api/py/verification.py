@@ -143,6 +143,14 @@ def _run_engine(body: dict) -> dict:
         output_filename = f"{consol_path_obj.stem}_verificado{suffix}"
         output_path = os.path.join(tmpdir, output_filename)
 
+        # Parse view rules if provided as a JSON string
+        view_rules = body.get("view_rules")
+        if isinstance(view_rules, str) and view_rules:
+            try:
+                view_rules = json.loads(view_rules)
+            except Exception:
+                view_rules = None
+
         result = verificar(
             consolidado_path=consol_path,
             adserver=adserver,
@@ -151,6 +159,8 @@ def _run_engine(body: dict) -> dict:
             data_ini=data_ini,
             data_fim=data_fim,
             output_path=output_path,
+            url_sample_pct=body.get("url_sample_pct", 10),
+            view_rules=view_rules,
             praca=body.get("praca") or None,
         )
 
