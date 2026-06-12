@@ -1,7 +1,7 @@
 export type ExportFormat = 'xlsx' | 'csv' | 'html'
 
 export interface ChartSpec {
-  type: 'bar' | 'line' | 'pie'
+  type: 'bar' | 'line' | 'area' | 'pie'
   title?: string
   labels: string[]
   datasets: { label: string; data: number[] }[]

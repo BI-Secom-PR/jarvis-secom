@@ -1,17 +1,21 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
   LineChart,
+  AreaChart,
+  PieChart,
   Bar,
   Line,
+  Area,
+  Pie,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
 } from "recharts";
 import { ChartData } from "@/types/chat";
 
@@ -19,19 +23,97 @@ interface Props {
   chart: ChartData;
 }
 
-const COLORS = [
-  "rgba(41,151,255,0.8)",
-  "rgba(120,220,120,0.8)",
-  "rgba(255,160,60,0.8)",
-  "rgba(200,80,200,0.8)",
-  "rgba(80,220,220,0.8)",
+/* Nebula palette — tuned to the app's violet/blue identity, high contrast on dark */
+const PALETTE = [
+  { stroke: "#6ea8ff", from: "#6ea8ff", to: "#3b5bdb" }, // electric blue
+  { stroke: "#b197fc", from: "#b197fc", to: "#7048e8" }, // violet
+  { stroke: "#3bd4c0", from: "#3bd4c0", to: "#0ca678" }, // teal
+  { stroke: "#f783ac", from: "#f783ac", to: "#d6336c" }, // magenta
+  { stroke: "#ffd43b", from: "#ffd43b", to: "#f08c00" }, // amber
+  { stroke: "#66d9e8", from: "#66d9e8", to: "#1098ad" }, // cyan
 ];
 
-const STROKE_COLORS = ["#78b4ff", "#78dc78", "#ffa03c", "#c850c8", "#50dcdc"];
+/* pt-BR compact numbers: 1.234.567 → "1,2 Mi", 4.500 → "4,5 Mil" */
+function formatCompact(v: number): string {
+  const abs = Math.abs(v);
+  if (abs >= 1e9) return `${(v / 1e9).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} Bi`;
+  if (abs >= 1e6) return `${(v / 1e6).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} Mi`;
+  if (abs >= 1e3) return `${(v / 1e3).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} Mil`;
+  return v.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+}
+
+function formatFull(v: number): string {
+  return v.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+}
+
+interface TooltipEntry {
+  name?: string | number;
+  value?: number | string | Array<number | string>;
+  color?: string;
+  payload?: Record<string, unknown> & { fill?: string };
+}
+
+function GlassTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: TooltipEntry[];
+  label?: string | number;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl border border-white/12 bg-[rgba(11,13,26,0.92)] px-3.5 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.55)] backdrop-blur-md">
+      {label !== undefined && label !== "" && (
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/45">
+          {label}
+        </p>
+      )}
+      <div className="space-y-1">
+        {payload.map((entry, i) => (
+          <div key={i} className="flex items-center gap-2 text-[12px]">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{
+                background: entry.color || entry.payload?.fill || PALETTE[i % PALETTE.length].stroke,
+                boxShadow: `0 0 6px ${entry.color || PALETTE[i % PALETTE.length].stroke}66`,
+              }}
+            />
+            <span className="text-white/60">{entry.name}</span>
+            <span className="ml-auto pl-4 font-semibold tabular-nums text-white/92">
+              {typeof entry.value === "number" ? formatFull(entry.value) : String(entry.value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LegendRow({ items }: { items: { label: string; color: string }[] }) {
+  return (
+    <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5">
+      {items.map((it) => (
+        <span key={it.label} className="flex items-center gap-1.5 text-[11px] text-white/55">
+          <span
+            className="h-2 w-2 rounded-full"
+            style={{ background: it.color, boxShadow: `0 0 6px ${it.color}55` }}
+          />
+          {it.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const AXIS_TICK = { fill: "rgba(255,255,255,0.45)", fontSize: 11 };
+const GRID = { stroke: "rgba(255,255,255,0.05)" };
 
 export default function ChartWidget({ chart }: Props) {
   const captureRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState<null | "png" | "print">(null);
+  const gid = useId().replace(/[^a-zA-Z0-9]/g, "");
 
   const data = chart.labels.map((label, i) => {
     const row: Record<string, string | number> = { name: label };
@@ -41,21 +123,25 @@ export default function ChartWidget({ chart }: Props) {
     return row;
   });
 
-  const tooltipStyle = {
-    background: "rgba(10,10,20,0.95)",
-    border: "0.5px solid rgba(255,255,255,0.15)",
-    borderRadius: 8,
-    color: "rgba(255,255,255,0.88)",
-    fontSize: 12,
-  };
-  const axisStyle = { fill: "rgba(255,255,255,0.5)", fontSize: 11 };
-  const legendStyle = { fontSize: 11, color: "rgba(255,255,255,0.5)" };
+  const pieValues = chart.datasets[0]?.data ?? [];
+  const pieSum = pieValues.reduce((s, v) => s + (v ?? 0), 0) || 1;
+  const legendItems =
+    chart.type === "pie"
+      ? chart.labels.map((label, i) => ({
+          label: `${label} · ${(((pieValues[i] ?? 0) / pieSum) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`,
+          color: PALETTE[i % PALETTE.length].stroke,
+        }))
+      : chart.datasets.map((ds, i) => ({
+          label: ds.label,
+          color: PALETTE[i % PALETTE.length].stroke,
+        }));
+  const showLegend = chart.type === "pie" || chart.datasets.length > 1;
 
   const capturePng = async (): Promise<string | null> => {
     if (!captureRef.current) return null;
     const { toPng } = await import("html-to-image");
     return toPng(captureRef.current, {
-      backgroundColor: "#0d1018",
+      backgroundColor: "#0b0d1a",
       pixelRatio: 2,
       cacheBust: true,
     });
@@ -98,60 +184,195 @@ export default function ChartWidget({ chart }: Props) {
   const btn =
     "px-2.5 py-1 text-[11px] rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white/95 transition disabled:opacity-50 disabled:cursor-not-allowed";
 
-  return (
-    <div className="mt-3 rounded-xl bg-black/40 border border-white/9 p-4">
-      <div ref={captureRef}>
-        {chart.title && (
-          <p className="text-[rgba(120,180,255,0.92)] text-[13px] font-semibold mb-3">
-            {chart.title}
-          </p>
-        )}
-        <ResponsiveContainer width="100%" height={240}>
-          {chart.type === "line" ? (
-            <LineChart data={data}>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="rgba(255,255,255,0.06)"
-              />
-              <XAxis dataKey="name" tick={axisStyle} />
-              <YAxis tick={axisStyle} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Legend wrapperStyle={legendStyle} />
-              {chart.datasets.map((ds, i) => (
+  const gradientDefs = (
+    <defs>
+      {PALETTE.map((c, i) => (
+        <linearGradient key={i} id={`${gid}-bar-${i}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={c.from} stopOpacity={0.95} />
+          <stop offset="100%" stopColor={c.to} stopOpacity={0.45} />
+        </linearGradient>
+      ))}
+      {PALETTE.map((c, i) => (
+        <linearGradient key={`a${i}`} id={`${gid}-area-${i}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={c.stroke} stopOpacity={0.32} />
+          <stop offset="100%" stopColor={c.stroke} stopOpacity={0.02} />
+        </linearGradient>
+      ))}
+      {PALETTE.map((c, i) => (
+        <linearGradient key={`p${i}`} id={`${gid}-pie-${i}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={c.from} stopOpacity={0.95} />
+          <stop offset="100%" stopColor={c.to} stopOpacity={0.8} />
+        </linearGradient>
+      ))}
+    </defs>
+  );
+
+  const xAxis = (
+    <XAxis
+      dataKey="name"
+      tick={AXIS_TICK}
+      tickLine={false}
+      axisLine={false}
+      dy={8}
+      interval="preserveStartEnd"
+      minTickGap={24}
+    />
+  );
+  const yAxis = (
+    <YAxis
+      tick={AXIS_TICK}
+      tickLine={false}
+      axisLine={false}
+      width={52}
+      tickFormatter={formatCompact}
+    />
+  );
+  const grid = <CartesianGrid strokeDasharray="3 6" vertical={false} {...GRID} />;
+  const tooltip = (
+    <Tooltip content={<GlassTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+  );
+
+  const pieTotal = pieValues.reduce((s, v) => s + (v ?? 0), 0);
+
+  const renderChart = () => {
+    switch (chart.type) {
+      case "line":
+        return (
+          <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            {gradientDefs}
+            {grid}
+            {xAxis}
+            {yAxis}
+            <Tooltip content={<GlassTooltip />} cursor={{ stroke: "rgba(255,255,255,0.15)", strokeDasharray: "3 3" }} />
+            {chart.datasets.map((ds, i) => {
+              const c = PALETTE[i % PALETTE.length];
+              return (
                 <Line
                   key={ds.label}
                   type="monotone"
                   dataKey={ds.label}
-                  stroke={STROKE_COLORS[i % STROKE_COLORS.length]}
-                  strokeWidth={2}
+                  stroke={c.stroke}
+                  strokeWidth={2.5}
                   dot={false}
+                  activeDot={{ r: 4.5, fill: c.stroke, stroke: "#0b0d1a", strokeWidth: 2 }}
+                  style={{ filter: `drop-shadow(0 0 5px ${c.stroke}59)` }}
                 />
-              ))}
-            </LineChart>
-          ) : (
-            <BarChart data={data}>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="rgba(255,255,255,0.06)"
-              />
-              <XAxis dataKey="name" tick={axisStyle} />
-              <YAxis tick={axisStyle} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Legend wrapperStyle={legendStyle} />
-              {chart.datasets.map((ds, i) => (
-                <Bar
+              );
+            })}
+          </LineChart>
+        );
+      case "area":
+        return (
+          <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            {gradientDefs}
+            {grid}
+            {xAxis}
+            {yAxis}
+            <Tooltip content={<GlassTooltip />} cursor={{ stroke: "rgba(255,255,255,0.15)", strokeDasharray: "3 3" }} />
+            {chart.datasets.map((ds, i) => {
+              const c = PALETTE[i % PALETTE.length];
+              return (
+                <Area
                   key={ds.label}
+                  type="monotone"
                   dataKey={ds.label}
-                  fill={COLORS[i % COLORS.length]}
-                  radius={[4, 4, 0, 0]}
+                  stroke={c.stroke}
+                  strokeWidth={2.5}
+                  fill={`url(#${gid}-area-${i})`}
+                  dot={false}
+                  activeDot={{ r: 4.5, fill: c.stroke, stroke: "#0b0d1a", strokeWidth: 2 }}
+                  style={{ filter: `drop-shadow(0 0 5px ${c.stroke}59)` }}
                 />
+              );
+            })}
+          </AreaChart>
+        );
+      case "pie": {
+        const pieData = chart.labels.map((label, i) => ({
+          name: label,
+          value: chart.datasets[0]?.data[i] ?? 0,
+        }));
+        return (
+          <PieChart margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
+            {gradientDefs}
+            <Tooltip content={<GlassTooltip />} />
+            <Pie
+              data={pieData}
+              dataKey="value"
+              nameKey="name"
+              innerRadius="62%"
+              outerRadius="92%"
+              paddingAngle={2.5}
+              cornerRadius={6}
+              stroke="none"
+            >
+              {pieData.map((_, i) => (
+                <Cell key={i} fill={`url(#${gid}-pie-${i % PALETTE.length})`} />
               ))}
-            </BarChart>
-          )}
+            </Pie>
+            <text
+              x="50%"
+              y="47%"
+              textAnchor="middle"
+              fill="rgba(255,255,255,0.92)"
+              fontSize={20}
+              fontWeight={700}
+            >
+              {formatCompact(pieTotal)}
+            </text>
+            <text
+              x="50%"
+              y="56%"
+              textAnchor="middle"
+              fill="rgba(255,255,255,0.4)"
+              fontSize={10.5}
+              letterSpacing="0.08em"
+            >
+              TOTAL
+            </text>
+          </PieChart>
+        );
+      }
+      default:
+        return (
+          <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="28%">
+            {gradientDefs}
+            {grid}
+            {xAxis}
+            {yAxis}
+            {tooltip}
+            {chart.datasets.map((ds, i) => (
+              <Bar
+                key={ds.label}
+                dataKey={ds.label}
+                fill={`url(#${gid}-bar-${i % PALETTE.length})`}
+                radius={[6, 6, 2, 2]}
+                maxBarSize={44}
+              />
+            ))}
+          </BarChart>
+        );
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.05] to-white/[0.015] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_8px_24px_rgba(0,0,0,0.25)]">
+      <div ref={captureRef} className="rounded-xl">
+        {chart.title && (
+          <div className="mb-3.5 flex items-center gap-2.5">
+            <span className="h-4 w-1 rounded-full bg-gradient-to-b from-[#6ea8ff] to-[#7048e8]" />
+            <p className="text-[13px] font-semibold tracking-[-0.01em] text-white/90">
+              {chart.title}
+            </p>
+          </div>
+        )}
+        <ResponsiveContainer width="100%" height={chart.type === "pie" ? 260 : 248}>
+          {renderChart()}
         </ResponsiveContainer>
+        {showLegend && <LegendRow items={legendItems} />}
       </div>
 
-      <div className="flex justify-end gap-2 mt-3">
+      <div className="mt-3 flex justify-end gap-2">
         <button type="button" className={btn} onClick={handleDownloadPng} disabled={busy !== null}>
           {busy === "png" ? "Gerando…" : "↓ PNG"}
         </button>

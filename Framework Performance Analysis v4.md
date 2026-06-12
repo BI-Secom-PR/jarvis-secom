@@ -19,7 +19,7 @@ Dados calculados: CTR, CPC, CPM,, VTR,, etc.
 | Eixo Temático | Grande tema de governo, e.g.  |
 | Programa / Entrega | Programa governamental específico, e.g. “Trabalho pelo Brasil”, “Pé de meia”. |
 | Formato de Mídia | Tipo da peça (e.g. vídeo, card, carrossel, etc.) |
-| Segundagem | Faixa de duração (obrigatório para vídeos, e.g. 30s, 30” |
+| Secundagem | Faixa de duração (obrigatório para vídeos, e.g. 30s, 30” |
 | Elemento Visual | Linguagem visual dominante, e.g.  |
 | Tom da Mensagem | Estratégia retórica e/ou intenção comunicacional, e.g.  |
 | Porta-Voz | Quem fala ou representa na peça (apenas para vídeos), e.g. “CREATOR PABLO”, “APRESENTADOR”, “APRESENTADOR \- BE MACHADO” |
@@ -49,7 +49,7 @@ Essas dimensões são **independentes entre si**. É no cruzamento entre classif
 
 Cada peça possui um código único que concatena as siglas das dimensões de conteúdo:
 
-\[EIXO\]\_\[PROGRAMA\]\_\[FORMATO\]\_\[SEGUNDAGEM\]\_\[VISUAL\]\_\[TOM\]\_\[PORTAVOZ\]
+\[EIXO\]\_\[PROGRAMA\]\_\[FORMATO\]\_\[SEcUNDAGEM\]\_\[VISUAL\]\_\[TOM\]\_\[PORTAVOZ\]
 
 Exemplos:
 
@@ -58,7 +58,7 @@ Exemplos:
 | `DIV_E61_VIDEO_90S_BAN_EMO_OFF` | Diversos, Escala 6×1, Vídeo 90s, Banco de Imagens, Emocional, Narração Off |
 | `TRB_E61_VIDEO_15S_BEN_CEL` | Trabalho, Escala 6×1, Vídeo 15s, Beneficiário, Celebração, Sem Porta-Voz |
 | `ECO_E61_VIDEO_60S_ILU_DAT_OFF` | Economia, Escala 6×1, Vídeo 60s, Ilustração, Dado/Evidência, Narração Off |
-| `TRB_E61_CARROSSEL_MEM_EMO` | Trabalho, Escala 6×1, Carrossel, Meme, Emocional (sem segundagem nem porta-voz) |
+| `TRB_E61_CARROSSEL_MEM_EMO` | Trabalho, Escala 6×1, Carrossel, Meme, Emocional (sem secundagem nem porta-voz) |
 | `SAU_FP_CARD_BEN_INF` | Saúde, Farmácia Popular, Card, Beneficiário, Informativo |
 | `TRB_E61_BUMPER_6S_ILU_URG` | Trabalho, Escala 6×1, Bumper 6s, Ilustração, Urgência |
 
@@ -140,7 +140,7 @@ Granular. Permite avaliar performance por programa específico.
 
 Define o formato da peça criativa. É estrutural e condiciona quais métricas fazem sentido e quais outros campos se aplicam.
 
-| Formato | Descrição | Segundagem? | Porta-voz? | Métricas-chave |
+| Formato | Descrição | Secundagem? | Porta-voz? | Métricas-chave |
 | :---- | :---- | :---- | :---- | :---- |
 | `VIDEO` | Vídeo (reels, VTs, in-feed, pre-roll) | Sim | Sim | VTR, retenção, CPV |
 | `CARD` | Imagem estática única | Não | Não | CTR, CPC, engajamento |
@@ -158,7 +158,7 @@ Define o formato da peça criativa. É estrutural e condiciona quais métricas f
 
 ---
 
-### 2.4 Segundagem — "Quanto tempo dura a peça"
+### 2.4 Secundagem — "Quanto tempo dura a peça"
 
 Aplica-se a formatos com duração (vídeo, bumper, storie, spot, jingle, audio). Um dos campos mais impactantes em performance.
 
@@ -242,9 +242,9 @@ Os cruzamentos de 2 dimensões de conteúdo são o coração da análise criativ
 | Programa × Visual | "Para Bolsa Família, meme performa melhor que infográfico?" |
 | Programa × Porta-voz | "Influenciador gera mais resultado para Pé de Meia que narração off?" |
 | Tom × Visual | "Tom de urgência combina melhor com dados ou ilustração?" |
-| Segundagem × Visual | "Memes funcionam melhor em 15s ou 30s?" |
+| Secundagem × Visual | "Memes funcionam melhor em 15s ou 30s?" |
 | Formato × Tom | "Carrossel funciona melhor com tom informativo ou emocional?" |
-| Eixo × Segundagem | "Temas complexos (INFRA) precisam de vídeos mais longos?" |
+| Eixo × Secundagem | "Temas complexos (INFRA) precisam de vídeos mais longos?" |
 
 ### 3.3 Cruzamentos Conteúdo × Mídia
 
@@ -257,7 +257,7 @@ Quando os metadados de mídia estão disponíveis, cruze-os com as dimensões de
 | Programa × Região | "Bolsa Família engaja mais no Nordeste que no Sudeste?" |
 | Formato × Plataforma | "Card performa melhor no Instagram ou em portais via display?" |
 | Porta-voz × Dark/Feed | "Influenciador funciona melhor como dark post ou publicação orgânica?" |
-| Segundagem × Posicionamento | "Vídeo de 6s é melhor em Stories, 30s é melhor no Feed?" |
+| Secundagem × Posicionamento | "Vídeo de 6s é melhor em Stories, 30s é melhor no Feed?" |
 | Eixo × Objetivo de Mídia | "Tema SAÚDE converte mais quando o objetivo é Alcance ou Conversão?" |
 | Visual × Dimensão (aspect ratio) | "Dados/infográfico funcionam melhor em 9x16 ou 4x5?" |
 
@@ -266,7 +266,7 @@ Quando os metadados de mídia estão disponíveis, cruze-os com as dimensões de
 Para recomendações de criação aprofundadas:
 
 - **Programa × Visual × Tom** → combinação visual \+ tom ideal por programa  
-- **Eixo × Segundagem × Visual** → duração e linguagem ideal por tema  
+- **Eixo × Secundagem × Visual** → duração e linguagem ideal por tema  
 - **Formato × Porta-voz × Tom** → melhor fórmula por tipo de peça  
 - **Visual × Posicionamento × Idade** → criativo ideal por contexto de veiculação e público
 
@@ -294,7 +294,7 @@ Siga esta hierarquia:
 2. **Segmente por formato** — Separe vídeos de cards, carrosseis, banners, spots, etc.  
 3. **Controle por mídia** — Se disponível, normalize por objetivo, posicionamento e segmentação antes de julgar o criativo.  
 4. **Outliers** — Quais combinações performam muito acima ou abaixo da média?  
-5. **Cruze dimensões** — O outlier é explicado pelo visual? Tom? Segundagem? Porta-voz? Ou pelo posicionamento/segmentação?  
+5. **Cruze dimensões** — O outlier é explicado pelo visual? Tom? Secundagem? Porta-voz? Ou pelo posicionamento/segmentação?  
 6. **Contextualize** — Fatores externos? Notícia? Sazonalidade? Investimento de mídia?  
 7. **Recomende** — Combinações a escalar, testar ou descontinuar.
 
@@ -336,7 +336,7 @@ Siga esta hierarquia:
 
 - **Formato primeiro.** Nunca compare métricas brutas entre formatos diferentes (vídeo vs. card vs. banner vs. spot).  
 - **Mídia vs. Criativo.** Se os dados de mídia estão disponíveis, isole o efeito do posicionamento, segmentação e objetivo antes de atribuir performance ao criativo. Uma peça pode parecer vencedora porque foi veiculada em Stories para jovens com objetivo de engajamento, não pelo conteúdo em si.  
-- **Segundagem importa.** VTR de 30% em vídeo de 90s pode ser melhor que 60% em 6s se o objetivo for profundidade de mensagem.  
+- **Secundagem importa.** VTR de 30% em vídeo de 90s pode ser melhor que 60% em 6s se o objetivo for profundidade de mensagem.  
 - **Volume mínimo.** Não conclua com poucas peças. Sinalize amostra pequena.  
 - **Correlação ≠ causalidade.** Performance pode vir de investimento de mídia, posicionamento, momento político ou sazonalidade, não do criativo.  
 - **DIV como baseline.** Peças classificadas como DIV são genéricas — use como referência comparativa.  

@@ -6,7 +6,7 @@ export interface ChartDataset {
 }
 
 export interface ChartData {
-  type: 'bar' | 'line';
+  type: 'bar' | 'line' | 'area' | 'pie';
   title?: string;
   labels: string[];
   datasets: ChartDataset[];

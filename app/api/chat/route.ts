@@ -133,7 +133,7 @@ const OLLAMA_TOOL_DEFS = ([
             type: 'object',
             description: 'Optional chart, only used for HTML reports (rendered as inline SVG).',
             properties: {
-              type: { type: 'string', enum: ['bar', 'line', 'pie'] },
+              type: { type: 'string', enum: ['bar', 'line', 'area', 'pie'] },
               title: { type: 'string' },
               labels: { type: 'array', items: { type: 'string' } },
               datasets: {
@@ -210,7 +210,7 @@ async function runOllamaChat(
 }
 
 const CHART_SPEC_SCHEMA = z.object({
-  type: z.enum(['bar', 'line', 'pie']),
+  type: z.enum(['bar', 'line', 'area', 'pie']),
   title: z.string().optional(),
   labels: z.array(z.string()),
   datasets: z.array(z.object({ label: z.string(), data: z.array(z.number()) })),
