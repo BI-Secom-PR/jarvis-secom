@@ -49,25 +49,25 @@ const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend
   };
 
   return (
-    <div className="px-5 pt-3.5 pb-[18px] bg-black/[0.12] border-t-[0.5px] border-white/[0.08] flex-shrink-0">
+    <div className="px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-5 md:pt-3.5 md:pb-[18px] bg-fill border-t-[0.5px] border-separator flex-shrink-0">
       {/* Input row — visionOS inset bezel */}
-      <div className="flex gap-2 items-end bg-black/[0.35] border-[0.5px] border-white/[0.12] rounded-2xl px-4 py-2.5 pr-2.5 transition-[border-color,box-shadow] duration-200 shadow-[inset_0_2px_8px_rgba(0,0,0,0.4),inset_0_0.5px_0_rgba(255,255,255,0.04)] focus-within:border-[rgba(80,160,255,0.5)] focus-within:shadow-[inset_0_2px_8px_rgba(0,0,0,0.4),0_0_0_2.5px_rgba(41,151,255,0.18)]">
+      <div className="flex gap-1.5 md:gap-2 items-end bg-surface-input border-[0.5px] border-separator rounded-3xl md:rounded-2xl px-4 py-1.5 pr-1.5 md:py-2.5 md:pr-2.5 transition-[border-color,box-shadow] duration-200 shadow-(--shadow-bezel) focus-within:border-accent-border focus-within:shadow-(--shadow-bezel-focus)">
         <textarea
           ref={textareaRef}
           rows={1}
           placeholder="Pergunte sobre campanhas, regiões, audiência..."
           onKeyDown={handleKeyDown}
           onInput={autoResize}
-          className="flex-1 bg-transparent border-none outline-none text-white/[0.92] text-[15px] font-[inherit] resize-none min-h-[22px] max-h-[120px] leading-[1.5] tracking-[-0.1px] py-0.5 placeholder:text-white/20"
+          className="flex-1 bg-transparent border-none outline-none text-ink text-[16px] md:text-[15px] font-[inherit] resize-none min-h-[22px] max-h-[120px] leading-[1.5] tracking-[-0.1px] py-0.5 self-center placeholder:text-ink-4"
           style={{ height: 22 }}
         />
         <button
           onClick={onVoiceClick}
           title="Modo de voz"
           type="button"
-          className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white/35 hover:text-white/70 hover:bg-white/[0.07] active:scale-95 transition-all duration-150"
+          className="w-11 h-11 md:w-9 md:h-9 rounded-full flex items-center justify-center flex-shrink-0 text-ink-3 hover:text-ink-2 hover:bg-fill active:scale-95 transition-all duration-150"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-[17px] h-[17px]">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px] md:w-[17px] md:h-[17px]">
             <rect x="9" y="2" width="6" height="12" rx="3" />
             <path d="M5 10a7 7 0 0 0 14 0" />
             <line x1="12" y1="19" x2="12" y2="22" />
@@ -78,7 +78,7 @@ const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend
           onClick={handleSend}
           disabled={disabled}
           title="Enviar"
-          className="w-9 h-9 rounded-full border-[0.5px] border-[rgba(80,170,255,0.45)] bg-[rgba(41,151,255,0.32)] text-white flex items-center justify-center flex-shrink-0 cursor-pointer transition-[background,border-color] duration-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_2px_10px_rgba(0,0,0,0.25)] hover:bg-[rgba(41,151,255,0.46)] hover:border-[rgba(80,170,255,0.6)] active:opacity-75 disabled:bg-white/[0.06] disabled:border-white/10 disabled:shadow-none disabled:opacity-100 disabled:cursor-not-allowed"
+          className="w-11 h-11 md:w-9 md:h-9 rounded-full bg-accent text-accent-ink flex items-center justify-center flex-shrink-0 cursor-pointer transition-[background,opacity] duration-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_2px_10px_rgba(0,0,0,0.18)] hover:opacity-90 active:opacity-75 disabled:bg-fill-2 disabled:text-ink-4 disabled:shadow-none disabled:cursor-not-allowed"
         >
           <svg
             viewBox="0 0 24 24"
@@ -95,7 +95,7 @@ const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend
           </svg>
         </button>
       </div>
-      <p className="text-[11px] text-white/[0.18] text-center mt-2.5 tracking-[0.1px]">
+      <p className="hidden md:block text-[11px] text-ink-4 text-center mt-2.5 tracking-[0.1px]">
         Enter para enviar &nbsp;·&nbsp; Shift+Enter para nova linha &nbsp;·&nbsp; ⌘N nova sessão
       </p>
     </div>

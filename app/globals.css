@@ -56,6 +56,30 @@
   --dif-ok:   light-dark(#0a7e74, #00fff7);
   --dif-warn: light-dark(#b36b00, #ffae00);
   --dif-bad:  light-dark(#d70015, #ff1c1c);
+
+  /* Composite shadows — light-dark() per color component, referenced via
+     Tailwind's shadow-(--var) arbitrary syntax */
+  --shadow-card:
+    0 0 0 0.5px light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.07)),
+    0 40px 100px light-dark(rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.85)),
+    0 0 60px light-dark(rgba(120, 140, 255, 0.10), rgba(100, 40, 200, 0.12)),
+    inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.2)),
+    inset 0 -1px 0 light-dark(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.04));
+  --shadow-modal:
+    0 40px 100px light-dark(rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.85)),
+    inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.08));
+  --shadow-bezel:
+    inset 0 2px 8px light-dark(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.4)),
+    inset 0 0.5px 0 light-dark(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.04));
+  --shadow-bezel-focus:
+    inset 0 2px 8px light-dark(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.4)),
+    0 0 0 2.5px var(--accent-soft);
+  --shadow-bubble:
+    inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.10));
+  --bubble-user-border: light-dark(rgba(0, 122, 255, 0), rgba(80, 170, 255, 0.45));
+  --shadow-bubble-user:
+    inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.22)),
+    0 2px 16px light-dark(rgba(0, 122, 255, 0.25), rgba(41, 151, 255, 0.18));
 }
 
 /* ── Custom theme tokens ──────────────────────────────────────────────────── */

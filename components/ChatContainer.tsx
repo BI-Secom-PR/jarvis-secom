@@ -64,6 +64,18 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
     scrollBottom();
   }, [messages, isTyping]);
 
+  // iOS Safari ignores interactive-widget=resizes-content: when the software
+  // keyboard opens, keep the conversation pinned to the bottom by hand.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
+    };
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, []);
+
   const createChatSession = useCallback(async () => {
     const id = await chatApi.createSession("Nova conversa");
     if (id) {
@@ -143,37 +155,40 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
   );
 
   return (
-    <div className="w-full max-w-9/12 h-[92vh] max-h-225 flex flex-col bg-[rgba(10,10,20,0.82)] backdrop-blur-[60px] backdrop-saturate-180 border-[0.5px] border-white/[0.14] rounded-[28px] overflow-hidden shadow-[0_0_0_0.5px_rgba(255,255,255,0.07),0_40px_100px_rgba(0,0,0,0.85),0_0_60px_rgba(100,40,200,0.12),inset_0_1px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(255,255,255,0.04)] relative z-10 mx-5">
+    <div className="w-full h-full flex flex-col bg-surface-opaque rounded-none border-0 overflow-hidden relative z-10 md:mx-5 md:max-w-9/12 md:h-[92dvh] md:max-h-225 md:bg-surface md:backdrop-blur-[60px] md:backdrop-saturate-180 md:border-[0.5px] md:border-separator md:rounded-[28px] md:shadow-(--shadow-card)">
       {/* Header */}
-      <div className="flex items-center gap-3 px-6 py-4.5 bg-white/3 border-b-[0.5px] border-white/10 shrink-0">
+      <div className="flex items-center gap-2 md:gap-3 px-3 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] md:px-6 md:py-4.5 bg-fill border-b-[0.5px] border-separator shrink-0">
         <a
           href="/"
           title="Voltar ao início"
-          className="w-8 h-8 rounded-xl flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/[0.07] transition-all duration-150 shrink-0 -ml-1 mr-0.5"
+          className="w-11 h-11 md:w-8 md:h-8 rounded-xl flex items-center justify-center text-ink-3 hover:text-ink-2 hover:bg-fill-2 transition-all duration-150 shrink-0 -ml-2 md:-ml-1 md:mr-0.5"
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </a>
-        <div className="shrink-0">
+        <div className="shrink-0 md:hidden">
+          <JarvisRing size={34} />
+        </div>
+        <div className="shrink-0 hidden md:block">
           <JarvisRing size={44} />
         </div>
-        <div>
-          <h1 className="text-[17px] font-semibold text-white tracking-[-0.2px]">
+        <div className="min-w-0">
+          <h1 className="text-[17px] font-semibold text-ink tracking-[-0.2px]">
             Jarvis
           </h1>
-          <p className="text-xs text-white/40 mt-0.5">
+          <p className="text-xs text-ink-3 mt-0.5 hidden md:block">
             Assistente de dados da SECOM
           </p>
         </div>
-        <div className="ml-auto flex items-center gap-2.5">
+        <div className="ml-auto flex items-center gap-2 md:gap-2.5">
           <select
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value as ModelId)}
             disabled={isTyping}
-            className="appearance-none bg-white/6 border-[0.5px] border-white/[0.14] rounded-lg px-3 py-1.5 text-[12px] text-white/60 font-[inherit] tracking-[-0.1px] cursor-pointer outline-none transition-[border-color,background] duration-150 hover:bg-white/9 hover:text-white/80 focus:border-[rgba(80,160,255,0.4)] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="appearance-none bg-fill border-[0.5px] border-separator rounded-lg px-3 py-2 md:py-1.5 text-[16px] md:text-[12px] text-ink-2 font-[inherit] tracking-[-0.1px] cursor-pointer outline-none transition-[border-color,background] duration-150 hover:bg-fill-2 hover:text-ink focus:border-accent-border disabled:opacity-40 disabled:cursor-not-allowed max-w-[42vw] md:max-w-none"
             style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.3)' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(128,128,140,0.6)' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
               backgroundRepeat: "no-repeat",
               backgroundPosition: "right 10px center",
               paddingRight: "28px",
@@ -183,20 +198,9 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
               <optgroup
                 key={provider}
                 label={provider === "google" ? "✦ Google" : "🦙 Ollama"}
-                style={{
-                  background: "#0d0d1a",
-                  color: "rgba(255,255,255,0.45)",
-                }}
               >
                 {MODELS.filter((m) => m.provider === provider).map((m) => (
-                  <option
-                    key={m.id}
-                    value={m.id}
-                    style={{
-                      background: "#0d0d1a",
-                      color: "rgba(255,255,255,0.8)",
-                    }}
-                  >
+                  <option key={m.id} value={m.id}>
                     {m.label}
                   </option>
                 ))}
@@ -205,14 +209,14 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
           </select>
           <div
             title="Online"
-            className="w-2 h-2 bg-[#34c759] rounded-full shadow-[0_0_6px_rgba(52,199,89,0.55)] animate-pulse-green"
+            className="w-2 h-2 bg-success rounded-full shadow-[0_0_6px_rgba(52,199,89,0.55)] animate-pulse-green hidden md:block"
           />
           <UserMenu user={user} />
         </div>
       </div>
 
       {/* Messages */}
-      <div className="messages-scroll flex-1 overflow-y-auto px-6 py-7 flex flex-col gap-3.5 scroll-smooth">
+      <div className="messages-scroll flex-1 overflow-y-auto px-3.5 py-4 md:px-6 md:py-7 flex flex-col gap-3 md:gap-3.5 scroll-smooth">
         <WelcomeCard />
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
