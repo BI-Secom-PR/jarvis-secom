@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -18,20 +18,42 @@ import {
   Tooltip,
 } from "recharts";
 import { ChartData } from "@/types/chat";
+import { CHART_HUES } from "@/lib/exports/chart-palette";
 
 interface Props {
   chart: ChartData;
 }
 
-/* Nebula palette — tuned to the app's violet/blue identity, high contrast on dark */
-const PALETTE = [
-  { stroke: "#6ea8ff", from: "#6ea8ff", to: "#3b5bdb" }, // electric blue
-  { stroke: "#b197fc", from: "#b197fc", to: "#7048e8" }, // violet
-  { stroke: "#3bd4c0", from: "#3bd4c0", to: "#0ca678" }, // teal
-  { stroke: "#f783ac", from: "#f783ac", to: "#d6336c" }, // magenta
-  { stroke: "#ffd43b", from: "#ffd43b", to: "#f08c00" }, // amber
-  { stroke: "#66d9e8", from: "#66d9e8", to: "#1098ad" }, // cyan
-];
+/* Series palettes from the shared hue table (lib/exports/chart-palette.ts):
+   bright hues pop on dark; the deep print-safe variants carry light mode,
+   matching the SVG/PDF export exactly. */
+type SeriesColor = { stroke: string; from: string; to: string };
+const DARK_PALETTE: SeriesColor[] = CHART_HUES.map((h) => ({ stroke: h.bright, from: h.bright, to: h.deep }));
+const LIGHT_PALETTE: SeriesColor[] = CHART_HUES.map((h) => ({ stroke: h.deep, from: h.bright, to: h.deep }));
+
+/* Tracks the resolved scheme: html.dark / html.light wins, otherwise the OS.
+   Rendered client-only (ssr:false), so document is available on first render. */
+function useIsDark(): boolean {
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof document === "undefined") return true;
+    const cls = document.documentElement.classList;
+    return cls.contains("dark") || (!cls.contains("light") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  });
+  useEffect(() => {
+    const root = document.documentElement;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const compute = () =>
+      setIsDark(root.classList.contains("dark") || (!root.classList.contains("light") && mq.matches));
+    mq.addEventListener("change", compute);
+    const obs = new MutationObserver(compute);
+    obs.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => {
+      mq.removeEventListener("change", compute);
+      obs.disconnect();
+    };
+  }, []);
+  return isDark;
+}
 
 /* pt-BR compact numbers: 1.234.567 → "1,2 Mi", 4.500 → "4,5 Mil" */
 function formatCompact(v: number): string {
@@ -57,16 +79,18 @@ function GlassTooltip({
   active,
   payload,
   label,
+  palette = DARK_PALETTE,
 }: {
   active?: boolean;
   payload?: TooltipEntry[];
   label?: string | number;
+  palette?: SeriesColor[];
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-xl border border-white/12 bg-[rgba(11,13,26,0.92)] px-3.5 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.55)] backdrop-blur-md">
+    <div className="rounded-xl border border-separator bg-surface-opaque px-3.5 py-2.5 shadow-(--shadow-modal) backdrop-blur-md">
       {label !== undefined && label !== "" && (
-        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/45">
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-3">
           {label}
         </p>
       )}
@@ -76,12 +100,12 @@ function GlassTooltip({
             <span
               className="h-2 w-2 shrink-0 rounded-full"
               style={{
-                background: entry.color || entry.payload?.fill || PALETTE[i % PALETTE.length].stroke,
-                boxShadow: `0 0 6px ${entry.color || PALETTE[i % PALETTE.length].stroke}66`,
+                background: entry.color || entry.payload?.fill || palette[i % palette.length].stroke,
+                boxShadow: `0 0 6px ${entry.color || palette[i % palette.length].stroke}66`,
               }}
             />
-            <span className="text-white/60">{entry.name}</span>
-            <span className="ml-auto pl-4 font-semibold tabular-nums text-white/92">
+            <span className="text-ink-2">{entry.name}</span>
+            <span className="ml-auto pl-4 font-semibold tabular-nums text-ink">
               {typeof entry.value === "number" ? formatFull(entry.value) : String(entry.value)}
             </span>
           </div>
@@ -95,7 +119,7 @@ function LegendRow({ items }: { items: { label: string; color: string }[] }) {
   return (
     <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5">
       {items.map((it) => (
-        <span key={it.label} className="flex items-center gap-1.5 text-[11px] text-white/55">
+        <span key={it.label} className="flex items-center gap-1.5 text-[11px] text-ink-3">
           <span
             className="h-2 w-2 rounded-full"
             style={{ background: it.color, boxShadow: `0 0 6px ${it.color}55` }}
@@ -107,13 +131,19 @@ function LegendRow({ items }: { items: { label: string; color: string }[] }) {
   );
 }
 
-const AXIS_TICK = { fill: "rgba(255,255,255,0.45)", fontSize: 11 };
-const GRID = { stroke: "rgba(255,255,255,0.05)" };
-
 export default function ChartWidget({ chart }: Props) {
   const captureRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState<null | "png" | "print">(null);
   const gid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const isDark = useIsDark();
+  const PALETTE = isDark ? DARK_PALETTE : LIGHT_PALETTE;
+
+  /* SVG presentation attributes can't resolve var(), so theme-dependent
+     colors inside the chart are picked as literals from the active scheme */
+  const AXIS_TICK = { fill: isDark ? "rgba(255,255,255,0.45)" : "rgba(60,60,67,0.55)", fontSize: 11 };
+  const GRID = { stroke: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.06)" };
+  const dotStroke = isDark ? "#0b0d1a" : "#ffffff";
+  const cursorLine = { stroke: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)", strokeDasharray: "3 3" };
 
   const data = chart.labels.map((label, i) => {
     const row: Record<string, string | number> = { name: label };
@@ -141,7 +171,7 @@ export default function ChartWidget({ chart }: Props) {
     if (!captureRef.current) return null;
     const { toPng } = await import("html-to-image");
     return toPng(captureRef.current, {
-      backgroundColor: "#0b0d1a",
+      backgroundColor: isDark ? "#0b0d1a" : "#ffffff",
       pixelRatio: 2,
       cacheBust: true,
     });
@@ -182,7 +212,7 @@ export default function ChartWidget({ chart }: Props) {
   };
 
   const btn =
-    "px-2.5 py-1 text-[11px] rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white/95 transition disabled:opacity-50 disabled:cursor-not-allowed";
+    "px-3 py-2 md:px-2.5 md:py-1 text-[11px] rounded-md border border-separator bg-fill hover:bg-fill-2 text-ink-2 hover:text-ink transition disabled:opacity-50 disabled:cursor-not-allowed";
 
   const gradientDefs = (
     <defs>
@@ -229,7 +259,7 @@ export default function ChartWidget({ chart }: Props) {
   );
   const grid = <CartesianGrid strokeDasharray="3 6" vertical={false} {...GRID} />;
   const tooltip = (
-    <Tooltip content={<GlassTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+    <Tooltip content={<GlassTooltip palette={PALETTE} />} cursor={{ fill: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)" }} />
   );
 
   const pieTotal = pieValues.reduce((s, v) => s + (v ?? 0), 0);
@@ -243,7 +273,7 @@ export default function ChartWidget({ chart }: Props) {
             {grid}
             {xAxis}
             {yAxis}
-            <Tooltip content={<GlassTooltip />} cursor={{ stroke: "rgba(255,255,255,0.15)", strokeDasharray: "3 3" }} />
+            <Tooltip content={<GlassTooltip palette={PALETTE} />} cursor={cursorLine} />
             {chart.datasets.map((ds, i) => {
               const c = PALETTE[i % PALETTE.length];
               return (
@@ -254,7 +284,7 @@ export default function ChartWidget({ chart }: Props) {
                   stroke={c.stroke}
                   strokeWidth={2.5}
                   dot={false}
-                  activeDot={{ r: 4.5, fill: c.stroke, stroke: "#0b0d1a", strokeWidth: 2 }}
+                  activeDot={{ r: 4.5, fill: c.stroke, stroke: dotStroke, strokeWidth: 2 }}
                   style={{ filter: `drop-shadow(0 0 5px ${c.stroke}59)` }}
                 />
               );
@@ -268,7 +298,7 @@ export default function ChartWidget({ chart }: Props) {
             {grid}
             {xAxis}
             {yAxis}
-            <Tooltip content={<GlassTooltip />} cursor={{ stroke: "rgba(255,255,255,0.15)", strokeDasharray: "3 3" }} />
+            <Tooltip content={<GlassTooltip palette={PALETTE} />} cursor={cursorLine} />
             {chart.datasets.map((ds, i) => {
               const c = PALETTE[i % PALETTE.length];
               return (
@@ -280,7 +310,7 @@ export default function ChartWidget({ chart }: Props) {
                   strokeWidth={2.5}
                   fill={`url(#${gid}-area-${i})`}
                   dot={false}
-                  activeDot={{ r: 4.5, fill: c.stroke, stroke: "#0b0d1a", strokeWidth: 2 }}
+                  activeDot={{ r: 4.5, fill: c.stroke, stroke: dotStroke, strokeWidth: 2 }}
                   style={{ filter: `drop-shadow(0 0 5px ${c.stroke}59)` }}
                 />
               );
@@ -295,7 +325,7 @@ export default function ChartWidget({ chart }: Props) {
         return (
           <PieChart margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
             {gradientDefs}
-            <Tooltip content={<GlassTooltip />} />
+            <Tooltip content={<GlassTooltip palette={PALETTE} />} />
             <Pie
               data={pieData}
               dataKey="value"
@@ -314,7 +344,7 @@ export default function ChartWidget({ chart }: Props) {
               x="50%"
               y="47%"
               textAnchor="middle"
-              fill="rgba(255,255,255,0.92)"
+              fill={isDark ? "rgba(255,255,255,0.92)" : "rgba(0,0,0,0.88)"}
               fontSize={20}
               fontWeight={700}
             >
@@ -324,7 +354,7 @@ export default function ChartWidget({ chart }: Props) {
               x="50%"
               y="56%"
               textAnchor="middle"
-              fill="rgba(255,255,255,0.4)"
+              fill={isDark ? "rgba(255,255,255,0.4)" : "rgba(60,60,67,0.45)"}
               fontSize={10.5}
               letterSpacing="0.08em"
             >
@@ -356,12 +386,12 @@ export default function ChartWidget({ chart }: Props) {
   };
 
   return (
-    <div className="mt-3 rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.05] to-white/[0.015] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_8px_24px_rgba(0,0,0,0.25)]">
+    <div className="mt-3 rounded-2xl border border-separator bg-fill p-3 md:p-4 shadow-(--shadow-bubble)">
       <div ref={captureRef} className="rounded-xl">
         {chart.title && (
           <div className="mb-3.5 flex items-center gap-2.5">
             <span className="h-4 w-1 rounded-full bg-gradient-to-b from-[#6ea8ff] to-[#7048e8]" />
-            <p className="text-[13px] font-semibold tracking-[-0.01em] text-white/90">
+            <p className="text-[13px] font-semibold tracking-[-0.01em] text-ink">
               {chart.title}
             </p>
           </div>
