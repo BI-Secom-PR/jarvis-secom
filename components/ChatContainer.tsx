@@ -31,6 +31,9 @@ async function callChatApi(
     body: JSON.stringify({ chatInput: text, messages: conversationHistory, model, chatSessionId }),
   });
   if (res.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
+  if (res.redirected || !res.headers.get("content-type")?.includes("application/json")) {
+    throw Object.assign(new Error("Sessão expirada"), { status: 401 });
+  }
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
   return { output: data.output ?? "", chartData: data.chartData ?? undefined };

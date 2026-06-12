@@ -64,6 +64,11 @@ export function proxy(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value
 
   if (!token) {
+    // APIs must fail in-band: a redirect makes fetch() swallow the 401 and
+    // hand the client login-page HTML, which then fails JSON parsing.
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const url = req.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
