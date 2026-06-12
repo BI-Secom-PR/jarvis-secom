@@ -140,28 +140,32 @@
   }
 }
 
-/* ── Nebula background on the page wrapper ────────────────────────────────── */
-.nebula-bg::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 75% 60% at 15% 35%,  light-dark(rgba(165, 140, 255, 0.20), rgba(110, 20, 220, 0.62)) 0%, transparent 52%),
-    radial-gradient(ellipse 65% 55% at 82% 65%,  light-dark(rgba(120, 170, 255, 0.20), rgba(15, 55, 210, 0.58))  0%, transparent 52%),
-    radial-gradient(ellipse 55% 50% at 50% 50%,  light-dark(rgba(190, 160, 255, 0.14), rgba(80, 10, 170, 0.42))  0%, transparent 58%),
-    radial-gradient(ellipse 45% 65% at 5%  85%,  light-dark(rgba(110, 180, 255, 0.16), rgba(0, 70, 180, 0.38))   0%, transparent 52%),
-    radial-gradient(ellipse 60% 40% at 90% 10%,  light-dark(rgba(255, 150, 190, 0.12), rgba(160, 15, 90, 0.34))  0%, transparent 50%),
-    radial-gradient(ellipse 40% 35% at 65% 25%,  light-dark(rgba(150, 150, 255, 0.10), rgba(50, 10, 130, 0.28))  0%, transparent 48%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* Phones: 2 gradients instead of 6 — same mood, far cheaper to composite */
-@media (max-width: 767px) {
-  .nebula-bg::before {
+/* ── Nebula background on the page wrapper ────────────────────────────────
+   Registered as a Tailwind utility so responsive variants (md:nebula-bg)
+   work — the chat page skips it on phones where the surface covers it. */
+@utility nebula-bg {
+  &::before {
+    content: '';
+    position: fixed;
+    inset: 0;
     background:
-      radial-gradient(ellipse 90% 70% at 20% 30%, light-dark(rgba(165, 140, 255, 0.18), rgba(100, 20, 210, 0.5)) 0%, transparent 60%),
-      radial-gradient(ellipse 80% 65% at 80% 75%, light-dark(rgba(120, 170, 255, 0.18), rgba(10, 55, 200, 0.46)) 0%, transparent 60%);
+      radial-gradient(ellipse 75% 60% at 15% 35%,  light-dark(rgba(165, 140, 255, 0.20), rgba(110, 20, 220, 0.62)) 0%, transparent 52%),
+      radial-gradient(ellipse 65% 55% at 82% 65%,  light-dark(rgba(120, 170, 255, 0.20), rgba(15, 55, 210, 0.58))  0%, transparent 52%),
+      radial-gradient(ellipse 55% 50% at 50% 50%,  light-dark(rgba(190, 160, 255, 0.14), rgba(80, 10, 170, 0.42))  0%, transparent 58%),
+      radial-gradient(ellipse 45% 65% at 5%  85%,  light-dark(rgba(110, 180, 255, 0.16), rgba(0, 70, 180, 0.38))   0%, transparent 52%),
+      radial-gradient(ellipse 60% 40% at 90% 10%,  light-dark(rgba(255, 150, 190, 0.12), rgba(160, 15, 90, 0.34))  0%, transparent 50%),
+      radial-gradient(ellipse 40% 35% at 65% 25%,  light-dark(rgba(150, 150, 255, 0.10), rgba(50, 10, 130, 0.28))  0%, transparent 48%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Phones: 2 gradients instead of 6 — same mood, far cheaper to composite */
+  @media (max-width: 767px) {
+    &::before {
+      background:
+        radial-gradient(ellipse 90% 70% at 20% 30%, light-dark(rgba(165, 140, 255, 0.18), rgba(100, 20, 210, 0.5)) 0%, transparent 60%),
+        radial-gradient(ellipse 80% 65% at 80% 75%, light-dark(rgba(120, 170, 255, 0.18), rgba(10, 55, 200, 0.46)) 0%, transparent 60%);
+    }
   }
 }
 

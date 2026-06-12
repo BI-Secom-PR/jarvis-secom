@@ -9,7 +9,7 @@ export default async function LoginPage() {
   if (user) redirect('/')
 
   return (
-    <main className="nebula-bg h-screen w-screen flex items-center justify-center overflow-hidden relative">
+    <main className="nebula-bg h-dvh w-full flex items-center justify-center overflow-hidden relative px-4">
       <LoginForm />
     </main>
   )

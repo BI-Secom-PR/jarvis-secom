@@ -6,7 +6,7 @@ export const metadata = { title: 'Chat — Jarvis SECOM' }
 export default async function ChatPage() {
   const user = await requireAuth()
   return (
-    <main className="h-screen w-screen flex items-center justify-center overflow-hidden relative nebula-bg">
+    <main className="h-dvh w-full flex items-center justify-center overflow-hidden relative md:nebula-bg bg-base">
       <ChatContainer user={user} />
     </main>
   )

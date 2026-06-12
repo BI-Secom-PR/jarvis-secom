@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { SessionUser } from "@/lib/auth";
 import { logout } from "@/lib/authClient";
 import { postJson } from "@/lib/fetchUtils";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function UserMenu({ user }: { user: SessionUser }) {
   const router = useRouter();
@@ -55,6 +56,7 @@ export default function UserMenu({ user }: { user: SessionUser }) {
   return (
     <>
       <div className="flex items-center gap-3">
+        <ThemeToggle />
         {user.role === "ADMIN" && (
           <a
             href="/admin"

@@ -48,7 +48,7 @@ export default async function Home() {
   const user = await requireAuth();
 
   return (
-    <main className="h-screen w-screen flex flex-col items-center justify-center overflow-hidden relative nebula-bg">
+    <main className="h-dvh w-full flex flex-col items-center justify-center overflow-hidden relative nebula-bg">
       <div className="absolute top-5 right-6 z-20">
         <UserMenu user={user} />
       </div>
