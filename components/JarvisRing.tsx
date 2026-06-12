@@ -4,12 +4,26 @@ import { useEffect, useRef } from "react";
 
 // HUD energy ring rendered on canvas: segmented rotating rings, tick marks,
 // orbiting dots, a pulsing core, and drifting energy particles.
-const CYAN = (a: number) => `rgba(120,180,255,${a})`;
-const MAGENTA = (a: number) => `rgba(255,80,120,${a})`;
-const PURPLE = (a: number) => `rgba(160,90,255,${a})`;
-const PALETTE = [CYAN, MAGENTA, PURPLE];
+// Two palettes: bright neon for dark surfaces, deeper saturated hues that
+// stay visible on the light theme.
+type ColorFn = (a: number) => string;
+const DARK_RING: ColorFn[] = [
+  (a) => `rgba(120,180,255,${a})`, // cyan
+  (a) => `rgba(255,80,120,${a})`, // magenta
+  (a) => `rgba(160,90,255,${a})`, // purple
+];
+const LIGHT_RING: ColorFn[] = [
+  (a) => `rgba(0,100,210,${a})`, // deep blue
+  (a) => `rgba(214,51,108,${a})`, // deep magenta
+  (a) => `rgba(110,40,220,${a})`, // deep purple
+];
 
-type Particle = { angle: number; r: number; speed: number; alpha: number; color: (a: number) => string };
+function isDarkScheme(): boolean {
+  const cls = document.documentElement.classList;
+  return cls.contains("dark") || (!cls.contains("light") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+}
+
+type Particle = { angle: number; r: number; speed: number; alpha: number; colorIdx: number };
 
 export default function JarvisRing({ size = 180 }: { size?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -27,6 +41,25 @@ export default function JarvisRing({ size = 180 }: { size?: number }) {
     const R = c - 4; // outer radius with a little padding for glow
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const mobile = window.matchMedia("(max-width: 767px)").matches;
+
+    // Palette tracks the active scheme live (toggle or OS change)
+    let dark = isDarkScheme();
+    const schemeMq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onScheme = () => {
+      dark = isDarkScheme();
+      if (reduced) draw();
+    };
+    schemeMq.addEventListener("change", onScheme);
+    const obs = new MutationObserver(onScheme);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+
+    const pal = (i: number): ColorFn => (dark ? DARK_RING : LIGHT_RING)[i % 3];
+    const CYAN: ColorFn = (a) => pal(0)(a);
+    const MAGENTA: ColorFn = (a) => pal(1)(a);
+    const PURPLE: ColorFn = (a) => pal(2)(a);
+    // Glow is expensive and washes out on light backgrounds
+    const blur = (n: number) => (dark ? n : n * 0.4);
 
     // Orbiting dots
     const DOT_COUNT = 12;
@@ -34,18 +67,18 @@ export default function JarvisRing({ size = 180 }: { size?: number }) {
       angle: (i / DOT_COUNT) * Math.PI * 2,
       r: R * (0.55 + (i % 3) * 0.18),
       speed: 0.012 + (i % 4) * 0.006 * (i % 2 ? -1 : 1),
-      color: PALETTE[i % PALETTE.length],
+      colorIdx: i % 3,
     }));
 
-    // Energy particles drifting outward
-    const particles: Particle[] = Array.from({ length: 70 }, () => spawn());
+    // Energy particles drifting outward — fewer on phones (GPU budget)
+    const particles: Particle[] = Array.from({ length: mobile ? 30 : 70 }, () => spawn());
     function spawn(): Particle {
       return {
         angle: Math.random() * Math.PI * 2,
         r: R * (0.7 + Math.random() * 0.2),
         speed: 0.15 + Math.random() * 0.4,
         alpha: 0.5 + Math.random() * 0.5,
-        color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+        colorIdx: Math.floor(Math.random() * 3),
       };
     }
 
@@ -56,7 +89,7 @@ export default function JarvisRing({ size = 180 }: { size?: number }) {
       const ctx2 = ctx!;
       ctx2.lineWidth = lineWidth;
       ctx2.strokeStyle = color(0.85);
-      ctx2.shadowBlur = 8;
+      ctx2.shadowBlur = blur(8);
       ctx2.shadowColor = color(0.9);
       const seg = (Math.PI * 2) / segments;
       for (let i = 0; i < segments; i++) {
@@ -77,7 +110,7 @@ export default function JarvisRing({ size = 180 }: { size?: number }) {
       // Mid tick marks — magenta/red, counter-clockwise
       ctx2.lineWidth = 1.2;
       ctx2.strokeStyle = MAGENTA(0.8);
-      ctx2.shadowBlur = 6;
+      ctx2.shadowBlur = blur(6);
       ctx2.shadowColor = MAGENTA(0.9);
       const ticks = 24;
       const midR = R * 0.78;
@@ -95,13 +128,13 @@ export default function JarvisRing({ size = 180 }: { size?: number }) {
       ring(R * 0.55, 1.5, PURPLE, t * 0.9, 1, 0.5);
 
       // Orbiting dots
-      ctx2.shadowBlur = 8;
+      ctx2.shadowBlur = blur(8);
       for (const d of dots) {
         d.angle += d.speed;
         const x = Math.cos(d.angle) * d.r;
         const y = Math.sin(d.angle) * d.r;
-        ctx2.fillStyle = d.color(0.95);
-        ctx2.shadowColor = d.color(1);
+        ctx2.fillStyle = pal(d.colorIdx)(0.95);
+        ctx2.shadowColor = pal(d.colorIdx)(1);
         ctx2.beginPath();
         ctx2.arc(x, y, 1.6, 0, Math.PI * 2);
         ctx2.fill();
@@ -114,9 +147,9 @@ export default function JarvisRing({ size = 180 }: { size?: number }) {
         if (p.alpha <= 0 || p.r > R + 6) Object.assign(p, spawn(), { r: R * 0.7, alpha: 0.7 });
         const x = Math.cos(p.angle) * p.r;
         const y = Math.sin(p.angle) * p.r;
-        ctx2.fillStyle = p.color(Math.max(p.alpha, 0));
-        ctx2.shadowBlur = 4;
-        ctx2.shadowColor = p.color(p.alpha);
+        ctx2.fillStyle = pal(p.colorIdx)(Math.max(p.alpha, 0));
+        ctx2.shadowBlur = blur(4);
+        ctx2.shadowColor = pal(p.colorIdx)(p.alpha);
         ctx2.beginPath();
         ctx2.arc(x, y, 0.9, 0, Math.PI * 2);
         ctx2.fill();
@@ -136,7 +169,7 @@ export default function JarvisRing({ size = 180 }: { size?: number }) {
       ctx2.fill();
 
       ctx2.fillStyle = CYAN(0.85);
-      ctx2.shadowBlur = 10;
+      ctx2.shadowBlur = blur(10);
       ctx2.shadowColor = CYAN(1);
       ctx2.beginPath();
       ctx2.arc(0, 0, 2.4, 0, Math.PI * 2);
@@ -145,7 +178,10 @@ export default function JarvisRing({ size = 180 }: { size?: number }) {
 
     if (reduced) {
       draw();
-      return;
+      return () => {
+        schemeMq.removeEventListener("change", onScheme);
+        obs.disconnect();
+      };
     }
 
     const loop = () => {
@@ -155,7 +191,11 @@ export default function JarvisRing({ size = 180 }: { size?: number }) {
     };
     raf = requestAnimationFrame(loop);
 
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      schemeMq.removeEventListener("change", onScheme);
+      obs.disconnect();
+    };
   }, [size]);
 
   return <canvas ref={ref} style={{ width: size, height: size }} />;
