@@ -176,6 +176,14 @@ export async function POST(req: NextRequest) {
 
     const allBlobUrls = [consolidado_url, ...comp_urls, ...verif_urls];
     const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
+    // proxy.ts gates /api/py/: shared secret when configured, else the
+    // forwarded session cookie satisfies the token-presence check.
+    const pyHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(process.env.INTERNAL_API_KEY
+        ? { 'x-internal-key': process.env.INTERNAL_API_KEY }
+        : { cookie: req.headers.get('cookie') ?? '' }),
+    };
     const pyBody: Record<string, unknown> = {
       consolidado_url,
       consolidado_name,
@@ -198,7 +206,7 @@ export async function POST(req: NextRequest) {
         try {
           pyResp = await fetch(pyUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: pyHeaders,
             body: JSON.stringify(pyBody),
           });
         } catch (fetchErr) {
@@ -273,11 +281,17 @@ export async function POST(req: NextRequest) {
         ...(pracaRaw ? { praca: pracaRaw } : {}),
         ...(process.env.BLOB_READ_WRITE_TOKEN ? { blob_token: process.env.BLOB_READ_WRITE_TOKEN } : {}),
       };
+      const pyHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(process.env.INTERNAL_API_KEY
+          ? { 'x-internal-key': process.env.INTERNAL_API_KEY }
+          : { cookie: req.headers.get('cookie') ?? '' }),
+      };
       let pyResp: Response;
       try {
         pyResp = await fetch(pyUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: pyHeaders,
           body: JSON.stringify(pyBody),
         });
       } catch (fetchErr) {

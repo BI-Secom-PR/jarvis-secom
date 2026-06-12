@@ -43,8 +43,36 @@ function withCsp(req: NextRequest): NextResponse {
   return res
 }
 
-export function proxy(req: NextRequest) {
+// Constant-time-ish comparison for the edge runtime (no node:crypto here):
+// hashing both sides first means the byte-compare timing leaks nothing useful.
+async function safeEqual(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder()
+  const [ha, hb] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(a)),
+    crypto.subtle.digest('SHA-256', enc.encode(b)),
+  ])
+  const va = new Uint8Array(ha)
+  const vb = new Uint8Array(hb)
+  let diff = 0
+  for (let i = 0; i < va.length; i++) diff |= va[i] ^ vb[i]
+  return diff === 0
+}
+
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
+
+  // Python engine: called server-to-server by /api/verification/run, never by
+  // browsers. With INTERNAL_API_KEY set, only the shared secret gets through;
+  // without it, fall through to the session-cookie check below (the caller
+  // forwards the user's cookie).
+  if (pathname.startsWith('/api/py/')) {
+    const secret = process.env.INTERNAL_API_KEY
+    if (secret) {
+      const key = req.headers.get('x-internal-key')
+      if (key && (await safeEqual(key, secret))) return NextResponse.next()
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+  }
 
   // Allow public pages, static assets, and auth API routes
   if (
