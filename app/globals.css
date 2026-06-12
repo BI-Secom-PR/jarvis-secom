@@ -57,6 +57,9 @@
   --dif-warn: light-dark(#b36b00, #ffae00);
   --dif-bad:  light-dark(#d70015, #ff1c1c);
 
+  /* AI/violet accent (URL anomaly section) */
+  --ai: light-dark(#6d28d9, #c4b5fd);
+
   /* Composite shadows — light-dark() per color component, referenced via
      Tailwind's shadow-(--var) arbitrary syntax */
   --shadow-card:
