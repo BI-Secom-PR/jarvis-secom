@@ -1,7 +1,86 @@
 @import "tailwindcss";
 
+/* ── Theme variant: `dark:` utilities match .dark (manual) — system mode is
+     handled by light-dark(), which needs no class at all ─────────────────── */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Semantic design tokens ───────────────────────────────────────────────
+   Every token is defined once via light-dark(). The active scheme comes from
+   `color-scheme`: `light dark` on :root follows the OS, and the .light/.dark
+   classes (set server-side from the theme cookie) force one scheme. This also
+   themes native form controls, scrollbars and <select> popovers for free. */
+:root       { color-scheme: light dark; }
+:root.light { color-scheme: light; }
+:root.dark  { color-scheme: dark; }
+
+:root {
+  /* Backgrounds & surfaces */
+  --bg-base:        light-dark(#f2f2f7, #03030a);
+  --surface:        light-dark(rgba(255, 255, 255, 0.78), rgba(10, 10, 20, 0.82));
+  --surface-opaque: light-dark(#ffffff, #0d0d1a);
+  --surface-input:  light-dark(rgba(118, 118, 128, 0.12), rgba(0, 0, 0, 0.35));
+
+  /* Text hierarchy (iOS label / secondary / tertiary / quaternary) */
+  --ink:   light-dark(rgba(0, 0, 0, 0.88),    rgba(255, 255, 255, 0.92));
+  --ink-2: light-dark(rgba(60, 60, 67, 0.6),  rgba(255, 255, 255, 0.6));
+  --ink-3: light-dark(rgba(60, 60, 67, 0.36), rgba(255, 255, 255, 0.4));
+  --ink-4: light-dark(rgba(60, 60, 67, 0.22), rgba(255, 255, 255, 0.25));
+
+  /* Separators & fills */
+  --separator:        light-dark(rgba(60, 60, 67, 0.14), rgba(255, 255, 255, 0.10));
+  --separator-strong: light-dark(rgba(60, 60, 67, 0.24), rgba(255, 255, 255, 0.18));
+  --fill:   light-dark(rgba(120, 120, 128, 0.10), rgba(255, 255, 255, 0.06));
+  --fill-2: light-dark(rgba(120, 120, 128, 0.16), rgba(255, 255, 255, 0.10));
+
+  /* Accent (iOS system blue) */
+  --accent:        light-dark(#007aff, #0a84ff);
+  --accent-ink:    #ffffff;
+  --accent-soft:   light-dark(rgba(0, 122, 255, 0.12), rgba(10, 132, 255, 0.22));
+  --accent-border: light-dark(rgba(0, 122, 255, 0.32), rgba(80, 170, 255, 0.45));
+  --accent-text:   light-dark(#0066d6, rgba(120, 180, 255, 0.95));
+
+  /* Status */
+  --success: light-dark(#34c759, #30d158);
+  --warning: light-dark(#ff9500, #ff9f0a);
+  --danger:  light-dark(#ff3b30, #ff453a);
+
+  /* Chat bubbles */
+  --bubble-user: light-dark(rgba(0, 122, 255, 0.92), rgba(41, 151, 255, 0.32));
+
+  /* Charts */
+  --chart-tick:     light-dark(rgba(60, 60, 67, 0.55), rgba(255, 255, 255, 0.45));
+  --chart-grid:     light-dark(rgba(0, 0, 0, 0.06),    rgba(255, 255, 255, 0.05));
+  --chart-contrast: light-dark(#ffffff, #0b0d1a);
+
+  /* Verification DIF heat scale (cyan/amber/red are unreadable on white) */
+  --dif-ok:   light-dark(#0a7e74, #00fff7);
+  --dif-warn: light-dark(#b36b00, #ffae00);
+  --dif-bad:  light-dark(#d70015, #ff1c1c);
+}
+
 /* ── Custom theme tokens ──────────────────────────────────────────────────── */
 @theme inline {
+  --color-base: var(--bg-base);
+  --color-surface: var(--surface);
+  --color-surface-opaque: var(--surface-opaque);
+  --color-surface-input: var(--surface-input);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
+  --color-separator: var(--separator);
+  --color-separator-strong: var(--separator-strong);
+  --color-fill: var(--fill);
+  --color-fill-2: var(--fill-2);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-border: var(--accent-border);
+  --color-accent-text: var(--accent-text);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
   --animate-pulse-green: pulse-green 2.5s ease-in-out infinite;
   --animate-msg-appear: msg-appear 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   --animate-bounce-dot: bounce-dot 1.2s ease-in-out infinite;
@@ -55,7 +134,9 @@
 
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
-    background: #03030a;
+    background: var(--bg-base);
+    color: var(--ink);
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
@@ -65,20 +146,30 @@
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(ellipse 75% 60% at 15% 35%,  rgba(110,20,220,0.62)  0%, transparent 52%),
-    radial-gradient(ellipse 65% 55% at 82% 65%,  rgba(15,55,210,0.58)   0%, transparent 52%),
-    radial-gradient(ellipse 55% 50% at 50% 50%,  rgba(80,10,170,0.42)   0%, transparent 58%),
-    radial-gradient(ellipse 45% 65% at 5%  85%,  rgba(0,70,180,0.38)    0%, transparent 52%),
-    radial-gradient(ellipse 60% 40% at 90% 10%,  rgba(160,15,90,0.34)   0%, transparent 50%),
-    radial-gradient(ellipse 40% 35% at 65% 25%,  rgba(50,10,130,0.28)   0%, transparent 48%);
+    radial-gradient(ellipse 75% 60% at 15% 35%,  light-dark(rgba(165, 140, 255, 0.20), rgba(110, 20, 220, 0.62)) 0%, transparent 52%),
+    radial-gradient(ellipse 65% 55% at 82% 65%,  light-dark(rgba(120, 170, 255, 0.20), rgba(15, 55, 210, 0.58))  0%, transparent 52%),
+    radial-gradient(ellipse 55% 50% at 50% 50%,  light-dark(rgba(190, 160, 255, 0.14), rgba(80, 10, 170, 0.42))  0%, transparent 58%),
+    radial-gradient(ellipse 45% 65% at 5%  85%,  light-dark(rgba(110, 180, 255, 0.16), rgba(0, 70, 180, 0.38))   0%, transparent 52%),
+    radial-gradient(ellipse 60% 40% at 90% 10%,  light-dark(rgba(255, 150, 190, 0.12), rgba(160, 15, 90, 0.34))  0%, transparent 50%),
+    radial-gradient(ellipse 40% 35% at 65% 25%,  light-dark(rgba(150, 150, 255, 0.10), rgba(50, 10, 130, 0.28))  0%, transparent 48%);
   pointer-events: none;
   z-index: 0;
 }
 
+/* Phones: 2 gradients instead of 6 — same mood, far cheaper to composite */
+@media (max-width: 767px) {
+  .nebula-bg::before {
+    background:
+      radial-gradient(ellipse 90% 70% at 20% 30%, light-dark(rgba(165, 140, 255, 0.18), rgba(100, 20, 210, 0.5)) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 65% at 80% 75%, light-dark(rgba(120, 170, 255, 0.18), rgba(10, 55, 200, 0.46)) 0%, transparent 60%);
+  }
+}
+
 /* ── Messages scrollbar ───────────────────────────────────────────────────── */
+.messages-scroll { overscroll-behavior: contain; }
 .messages-scroll::-webkit-scrollbar { width: 3px; }
 .messages-scroll::-webkit-scrollbar-track { background: transparent; }
-.messages-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.messages-scroll::-webkit-scrollbar-thumb { background: var(--separator); border-radius: 2px; }
 
 /* ── Animation utility classes ────────────────────────────────────────────── */
 .animate-pulse-green {
@@ -93,29 +184,29 @@
   display: inline-block;
   width: 5px;
   height: 5px;
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--ink-3);
   border-radius: 9999px;
   animation: bounce-dot 1.2s ease-in-out infinite;
 }
 
 /* ── Markdown content styles (inside .bubble-content) ────────────────────── */
-.bubble-content strong { color: rgba(120, 180, 255, 0.95); font-weight: 600; }
-.bubble-content em     { color: rgba(255, 255, 255, 0.62); font-style: italic; }
+.bubble-content strong { color: var(--accent-text); font-weight: 600; }
+.bubble-content em     { color: var(--ink-2); font-style: italic; }
 
 .bubble-content code {
-  background: rgba(0, 0, 0, 0.3);
+  background: light-dark(rgba(120, 120, 128, 0.12), rgba(0, 0, 0, 0.3));
   padding: 2px 6px;
   border-radius: 5px;
   font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
   font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.82);
-  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  border: 0.5px solid var(--separator);
 }
 
 .bubble-content pre {
-  background: rgba(0, 0, 0, 0.45);
-  border: 0.5px solid rgba(255, 255, 255, 0.09);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background: light-dark(rgba(120, 120, 128, 0.10), rgba(0, 0, 0, 0.45));
+  border: 0.5px solid var(--separator);
+  box-shadow: inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.04));
   border-radius: 10px;
   padding: 12px;
   overflow-x: auto;
@@ -125,7 +216,7 @@
   background: none;
   padding: 0;
   border: none;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--ink);
   font-size: 12px;
 }
 
@@ -136,7 +227,7 @@
 .bubble-content h1,
 .bubble-content h2,
 .bubble-content h3 {
-  color: rgba(120, 180, 255, 0.92);
+  color: var(--accent-text);
   margin: 10px 0 4px;
   font-size: 15px;
   font-weight: 600;
@@ -157,7 +248,7 @@
   -webkit-overflow-scrolling: touch;
   margin: 10px 0;
   border-radius: 10px;
-  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  border: 0.5px solid var(--separator);
 }
 .bubble-content table {
   min-width: max-content;
@@ -165,28 +256,28 @@
   font-size: 13px;
 }
 .bubble-content th {
-  background: rgba(41, 151, 255, 0.1);
-  color: rgba(255, 255, 255, 0.82);
+  background: var(--accent-soft);
+  color: var(--ink);
   padding: 6px 14px;
   text-align: left;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.3px;
   white-space: nowrap;
-  border-bottom: 0.5px solid rgba(41, 151, 255, 0.22);
+  border-bottom: 0.5px solid var(--accent-border);
 }
 .bubble-content td {
   padding: 7px 14px;
-  border-bottom: 0.5px solid rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.78);
+  border-bottom: 0.5px solid var(--separator);
+  color: var(--ink-2);
   white-space: nowrap;
 }
 .bubble-content tr:last-child td          { border-bottom: none; }
-.bubble-content tr:hover td               { background: rgba(255, 255, 255, 0.025); }
-.bubble-content tr:nth-child(even) td     { background: rgba(255, 255, 255, 0.02); }
+.bubble-content tr:hover td               { background: var(--fill); }
+.bubble-content tr:nth-child(even) td     { background: light-dark(rgba(120, 120, 128, 0.05), rgba(255, 255, 255, 0.02)); }
 
 .bubble-content a {
-  color: rgba(120, 180, 255, 0.9);
+  color: var(--accent-text);
   text-decoration: none;
 }
 .bubble-content a:hover { text-decoration: underline; }
