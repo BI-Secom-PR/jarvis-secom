@@ -84,21 +84,21 @@ export default function UserMenu({ user }: { user: SessionUser }) {
       {/* Change password modal */}
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={(e) => {
             if (e.target === e.currentTarget) setOpen(false);
           }}
         >
-          <div className="w-full max-w-sm bg-[rgba(10,10,20,0.92)] backdrop-blur-[60px] border-[0.5px] border-white/[0.14] rounded-3xl p-7 shadow-[0_40px_100px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.08)]">
-            <h2 className="text-base font-semibold text-white mb-2 pl-4">
+          <div className="w-full max-w-full sm:max-w-sm bg-surface-opaque sm:bg-surface sm:backdrop-blur-[60px] border-[0.5px] border-separator rounded-t-3xl rounded-b-none sm:rounded-3xl p-6 pb-[max(1.75rem,env(safe-area-inset-bottom))] sm:p-7 shadow-(--shadow-modal)">
+            <h2 className="text-base font-semibold text-ink mb-2 pl-4">
               Alterar senha
             </h2>
-            <p className="text-xs text-white/35 mb-1.5 pt-1.5 pl-4">
+            <p className="text-xs text-ink-3 mb-1.5 pt-1.5 pl-4">
               {user.name}
             </p>
 
             {success ? (
-              <p className="text-green-400/80 text-sm text-center py-4">
+              <p className="text-success text-sm text-center py-4">
                 Senha alterada com sucesso!
               </p>
             ) : (
@@ -112,7 +112,7 @@ export default function UserMenu({ user }: { user: SessionUser }) {
                   value={current}
                   onChange={(e) => setCurrent(e.target.value)}
                   placeholder="Senha atual"
-                  className="bg-black/30 border-[0.5px] border-white/12 rounded-xl px-4 py-3 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-[rgba(80,160,255,0.5)] transition-colors"
+                  className="bg-surface-input border-[0.5px] border-separator rounded-xl px-4 py-3 text-[16px] sm:text-sm text-ink placeholder:text-ink-4 outline-none focus:border-accent-border transition-colors"
                 />
                 <input
                   type="password"
@@ -121,7 +121,7 @@ export default function UserMenu({ user }: { user: SessionUser }) {
                   value={next}
                   onChange={(e) => setNext(e.target.value)}
                   placeholder="Nova senha (mín. 8 caracteres)"
-                  className="bg-black/30 border-[0.5px] border-white/12 rounded-xl px-4 py-3 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-[rgba(80,160,255,0.5)] transition-colors"
+                  className="bg-surface-input border-[0.5px] border-separator rounded-xl px-4 py-3 text-[16px] sm:text-sm text-ink placeholder:text-ink-4 outline-none focus:border-accent-border transition-colors"
                 />
                 <input
                   type="password"
@@ -129,25 +129,25 @@ export default function UserMenu({ user }: { user: SessionUser }) {
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                   placeholder="Confirmar nova senha"
-                  className="bg-black/30 border-[0.5px] border-white/12 rounded-xl px-4 py-3 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-[rgba(80,160,255,0.5)] transition-colors"
+                  className="bg-surface-input border-[0.5px] border-separator rounded-xl px-4 py-3 text-[16px] sm:text-sm text-ink placeholder:text-ink-4 outline-none focus:border-accent-border transition-colors"
                 />
 
                 {error && (
-                  <p className="text-red-400/80 text-xs px-1">{error}</p>
+                  <p className="text-danger text-xs px-1">{error}</p>
                 )}
 
                 <div className="flex gap-2 mt-1">
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
-                    className="flex-1 bg-white/5 border-[0.5px] border-white/10 rounded-xl py-3 text-sm text-white/50 hover:text-white/70 transition-colors cursor-pointer"
+                    className="flex-1 bg-fill border-[0.5px] border-separator rounded-xl py-3 text-sm text-ink-2 hover:text-ink transition-colors cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={loading}
-                    className="flex-1 bg-[rgba(41,151,255,0.22)] border-[0.5px] border-[rgba(80,170,255,0.35)] rounded-xl py-3 text-sm text-white font-medium hover:bg-[rgba(41,151,255,0.36)] transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                    className="flex-1 bg-accent text-accent-ink rounded-xl py-3 text-sm font-medium hover:opacity-90 active:opacity-80 transition-opacity disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                   >
                     {loading ? "Salvando..." : "Salvar"}
                   </button>

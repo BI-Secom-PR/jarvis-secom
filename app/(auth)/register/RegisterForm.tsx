@@ -40,15 +40,15 @@ export default function RegisterForm() {
 
   if (done) {
     return (
-      <div className="w-full max-w-sm bg-[rgba(10,10,20,0.82)] backdrop-blur-[60px] border-[0.5px] border-white/[0.14] rounded-[28px] p-8 text-center shadow-[0_40px_100px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.1)]">
-        <div className="w-12 h-12 rounded-full bg-[rgba(41,151,255,0.12)] border-[0.5px] border-[rgba(80,170,255,0.3)] flex items-center justify-center mx-auto mb-4 text-2xl">
+      <div className="w-full max-w-sm bg-surface md:backdrop-blur-[60px] border-[0.5px] border-separator rounded-[28px] p-6 sm:p-8 text-center shadow-(--shadow-modal)">
+        <div className="w-12 h-12 rounded-full bg-accent-soft border-[0.5px] border-accent-border flex items-center justify-center mx-auto mb-4 text-2xl">
           ⏳
         </div>
-        <h2 className="text-lg font-semibold text-white mb-2">Aguardando aprovação!</h2>
-        <p className="text-sm text-white/50 leading-relaxed">
+        <h2 className="text-lg font-semibold text-ink mb-2">Aguardando aprovação!</h2>
+        <p className="text-sm text-ink-2 leading-relaxed">
           Assim que for aprovado você receberá um e-mail.
         </p>
-        <a href="/login" className="mt-6 inline-block text-xs text-white/30 hover:text-white/50 transition-colors">
+        <a href="/login" className="mt-6 inline-block text-xs text-ink-4 hover:text-ink-2 transition-colors py-2">
           Voltar ao login
         </a>
       </div>
@@ -56,10 +56,10 @@ export default function RegisterForm() {
   }
 
   return (
-    <div className="w-full max-w-sm bg-[rgba(10,10,20,0.82)] backdrop-blur-[60px] border-[0.5px] border-white/[0.14] rounded-[28px] p-8 shadow-[0_40px_100px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.1)]">
+    <div className="w-full max-w-sm bg-surface md:backdrop-blur-[60px] border-[0.5px] border-separator rounded-[28px] p-6 sm:p-8 shadow-(--shadow-modal)">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-white tracking-[-0.3px]">Solicitar acesso</h1>
-        <p className="text-sm text-white/40 mt-1">Jarvis SECOM</p>
+        <h1 className="text-xl font-semibold text-ink tracking-[-0.3px]">Solicitar acesso</h1>
+        <p className="text-sm text-ink-3 mt-1">Jarvis SECOM</p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -70,7 +70,7 @@ export default function RegisterForm() {
           onChange={e => setName(e.target.value)}
           placeholder="Seu nome"
           minLength={2}
-          className="bg-black/30 border-[0.5px] border-white/[0.12] rounded-xl px-4 py-3 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-[rgba(80,160,255,0.5)] transition-colors"
+          className="bg-surface-input border-[0.5px] border-separator rounded-xl px-4 py-3 text-[16px] sm:text-sm text-ink placeholder:text-ink-4 outline-none focus:border-accent-border transition-colors"
         />
         <input
           type="email"
@@ -78,7 +78,7 @@ export default function RegisterForm() {
           value={email}
           onChange={e => setEmail(e.target.value)}
           placeholder="seu@email.com"
-          className="bg-black/30 border-[0.5px] border-white/[0.12] rounded-xl px-4 py-3 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-[rgba(80,160,255,0.5)] transition-colors"
+          className="bg-surface-input border-[0.5px] border-separator rounded-xl px-4 py-3 text-[16px] sm:text-sm text-ink placeholder:text-ink-4 outline-none focus:border-accent-border transition-colors"
         />
         <input
           type="password"
@@ -87,7 +87,7 @@ export default function RegisterForm() {
           onChange={e => setPassword(e.target.value)}
           placeholder="Senha (mín. 8 caracteres)"
           minLength={8}
-          className="bg-black/30 border-[0.5px] border-white/[0.12] rounded-xl px-4 py-3 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-[rgba(80,160,255,0.5)] transition-colors"
+          className="bg-surface-input border-[0.5px] border-separator rounded-xl px-4 py-3 text-[16px] sm:text-sm text-ink placeholder:text-ink-4 outline-none focus:border-accent-border transition-colors"
         />
         <input
           type="password"
@@ -95,25 +95,25 @@ export default function RegisterForm() {
           value={confirm}
           onChange={e => setConfirm(e.target.value)}
           placeholder="Confirmar senha"
-          className="bg-black/30 border-[0.5px] border-white/[0.12] rounded-xl px-4 py-3 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-[rgba(80,160,255,0.5)] transition-colors"
+          className="bg-surface-input border-[0.5px] border-separator rounded-xl px-4 py-3 text-[16px] sm:text-sm text-ink placeholder:text-ink-4 outline-none focus:border-accent-border transition-colors"
         />
 
         {error && (
-          <p className="text-red-400/80 text-xs px-1">{error}</p>
+          <p className="text-danger text-xs px-1">{error}</p>
         )}
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[rgba(41,151,255,0.22)] border-[0.5px] border-[rgba(80,170,255,0.35)] rounded-xl py-3 text-sm text-white font-medium hover:bg-[rgba(41,151,255,0.36)] transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+          className="w-full bg-accent text-accent-ink rounded-xl py-3 text-sm font-medium hover:opacity-90 active:opacity-80 transition-opacity disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
           {loading ? 'Enviando...' : 'Solicitar acesso'}
         </button>
       </form>
 
-      <p className="text-center text-xs text-white/30 mt-6">
+      <p className="text-center text-xs text-ink-4 mt-6">
         Já tem conta?{' '}
-        <a href="/login" className="text-[rgba(120,180,255,0.8)] hover:underline">
+        <a href="/login" className="text-accent-text hover:underline">
           Entrar
         </a>
       </p>

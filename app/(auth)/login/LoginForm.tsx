@@ -37,10 +37,10 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="w-full max-w-sm bg-[rgba(10,10,20,0.82)] backdrop-blur-[60px] border-[0.5px] border-white/[0.14] rounded-[28px] p-8 shadow-[0_40px_100px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.1)]">
+    <div className="w-full max-w-sm bg-surface md:backdrop-blur-[60px] border-[0.5px] border-separator rounded-[28px] p-6 sm:p-8 shadow-(--shadow-modal)">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-white tracking-[-0.3px]">Entrar</h1>
-        <p className="text-sm text-white/40 mt-1">Jarvis SECOM</p>
+        <h1 className="text-xl font-semibold text-ink tracking-[-0.3px]">Entrar</h1>
+        <p className="text-sm text-ink-3 mt-1">Jarvis SECOM</p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -50,7 +50,7 @@ export default function LoginForm() {
           value={email}
           onChange={e => setEmail(e.target.value)}
           placeholder="seu@email.com"
-          className="bg-black/30 border-[0.5px] border-white/[0.12] rounded-xl px-4 py-3 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-[rgba(80,160,255,0.5)] transition-colors"
+          className="bg-surface-input border-[0.5px] border-separator rounded-xl px-4 py-3 text-[16px] sm:text-sm text-ink placeholder:text-ink-4 outline-none focus:border-accent-border transition-colors"
         />
         <input
           type="password"
@@ -58,25 +58,25 @@ export default function LoginForm() {
           value={password}
           onChange={e => setPassword(e.target.value)}
           placeholder="Senha"
-          className="bg-black/30 border-[0.5px] border-white/[0.12] rounded-xl px-4 py-3 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-[rgba(80,160,255,0.5)] transition-colors"
+          className="bg-surface-input border-[0.5px] border-separator rounded-xl px-4 py-3 text-[16px] sm:text-sm text-ink placeholder:text-ink-4 outline-none focus:border-accent-border transition-colors"
         />
 
         {error && (
-          <p className="text-red-400/80 text-xs px-1">{error}</p>
+          <p className="text-danger text-xs px-1">{error}</p>
         )}
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[rgba(41,151,255,0.22)] border-[0.5px] border-[rgba(80,170,255,0.35)] rounded-xl py-3 text-sm text-white font-medium hover:bg-[rgba(41,151,255,0.36)] transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+          className="w-full bg-accent text-accent-ink rounded-xl py-3 text-sm font-medium hover:opacity-90 active:opacity-80 transition-opacity disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
           {loading ? 'Entrando...' : 'Entrar'}
         </button>
       </form>
 
-      <p className="text-center text-xs text-white/30 mt-6">
+      <p className="text-center text-xs text-ink-4 mt-6">
         Não tem conta?{' '}
-        <a href="/register" className="text-[rgba(120,180,255,0.8)] hover:underline">
+        <a href="/register" className="text-accent-text hover:underline">
           Solicitar acesso
         </a>
       </p>
