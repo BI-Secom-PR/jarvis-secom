@@ -1,11 +1,13 @@
 """
-Mapeamento centralizado de categorias de indevidas → chaves internas SECOM.
+Mapeamento de categorias de indevidas → chaves internas SECOM.
 
-Importado por parser_vetta, parser_adserver_verif e qualquer parser futuro
-que precise mapear nomes de categoria para as 9 chaves do template (29 colunas).
+Cada adserver usa nomenclatura própria para categorias. Este módulo fornece:
+  - Mapas por adserver (SENSE_CATEGORY_MAP, METRIKE_CATEGORY_MAP, ADFORCE_CATEGORY_MAP)
+  - CATEGORY_MAP global como fallback para adservers sem mapa dedicado
+  - normaliza_categoria(texto, adserver=None) — resolução com prioridade adserver-específico
 
 Colunas no template (1-indexed):
-  14 = Conteúdo Sensível  (agregado geral)
+  14 = Conteúdo Sensível
   15 = Acidente
   16 = Violência e Crime
   17 = Língua Estrangeira
@@ -14,17 +16,70 @@ Colunas no template (1-indexed):
   20 = Aplicativo Móvel
   21 = Teste de Tag
   22 = Não Classificado
+  23 = Drogas
 """
 
-# Mapeamento: nome normalizado (lowercase, strip) → chave interna SECOM
+# ── Mapas por adserver ────────────────────────────────────────────────────────
+# Apenas categorias indevidas — categorias de conteúdo válido (Política, Economia…)
+# não figuram aqui e retornam None, caindo no verif_extras.
+
+SENSE_CATEGORY_MAP: dict[str, str] = {
+    "sensível":    "conteudo_sensivel",
+    "sensivel":    "conteudo_sensivel",
+    "violência":   "violencia",
+    "violencia":   "violencia",
+    "drogas":      "drogas",
+    "pornografia": "pornografia",
+    "pornography": "pornografia",
+    "safeframe":   "safeframe",
+}
+
+METRIKE_CATEGORY_MAP: dict[str, str] = {
+    "conteúdo sensível": "conteudo_sensivel",
+    "conteudo sensivel": "conteudo_sensivel",
+    "policial":          "violencia",
+    "polícia":           "violencia",
+    "policia":           "violencia",
+    "safeframe":         "safeframe",
+    "teste banner":      "teste_tag",
+    "teste de tag":      "teste_tag",
+}
+
+ADFORCE_CATEGORY_MAP: dict[str, str] = {
+    # Compound safety strings geradas pelo ADFORCE
+    "acidentes, violência, crime":      "violencia",
+    "acidentes, violencia, crime":      "violencia",
+    "acidentes,violência,crime":        "violencia",
+    "acidentes,violencia,crime":        "violencia",
+    "acidente, crime, violencia":       "violencia",
+    "acidente, violência, crime":       "violencia",
+    "acidente, violencia, crime":       "violencia",
+    "violência, crime":                 "violencia",
+    "violencia, crime":                 "violencia",
+    "sexo e sexualidade, pornografia":  "pornografia",
+    "sexo, sexualidade e pornografia":  "pornografia",
+    "pornografia, sexo, sexualidade":   "pornografia",
+    "sexo e sexualidade":               "pornografia",
+    "sexo, sexualidade, pornografia":   "pornografia",
+    "safeframe":                        "safeframe",
+}
+
+ADSERVER_MAPS: dict[str, dict[str, str]] = {
+    "sense":   SENSE_CATEGORY_MAP,
+    "metrike": METRIKE_CATEGORY_MAP,
+    "adforce": ADFORCE_CATEGORY_MAP,
+}
+
+# ── Fallback global (00px, admotion, ahead, brz e adservers sem mapa próprio) ─
 CATEGORY_MAP: dict[str, str] = {
-    # Conteúdo Sensível (col 14 — agregado geral)
+    # Conteúdo Sensível (col 14)
     "conteúdo sensível":                "conteudo_sensivel",
     "conteudo sensivel":                "conteudo_sensivel",
     "sensitive content":                "conteudo_sensivel",
     "sensível":                         "conteudo_sensivel",
     "sensivel":                         "conteudo_sensivel",
-    "drogas":                           "conteudo_sensivel",
+    # Drogas (col 23) — chave própria, não agregado em conteudo_sensivel
+    "drogas":                           "drogas",
     # Acidente (col 15)
     "acidente":                         "acidente",
     "acidentes violentos":              "acidente",
@@ -40,6 +95,9 @@ CATEGORY_MAP: dict[str, str] = {
     "violência e crime":                "violencia",
     "violencia e crime":                "violencia",
     "violence":                         "violencia",
+    "policial":                         "violencia",
+    "policia":                          "violencia",
+    "polícia":                          "violencia",
     # Língua Estrangeira (col 17)
     "conteúdo em língua estrangeira":   "lingua_estrangeira",
     "conteudo em lingua estrangeira":   "lingua_estrangeira",
@@ -56,34 +114,15 @@ CATEGORY_MAP: dict[str, str] = {
     "conteudo adulto e sexual":         "pornografia",
     "adult":                            "pornografia",
     "sexuality":                        "pornografia",
-    # ADFORCE compound safety strings
-    "acidentes, violência, crime":      "violencia",
-    "acidentes, violencia, crime":      "violencia",
-    "acidentes,violência,crime":        "violencia",   # no-space variant (verif file)
-    "acidentes,violencia,crime":        "violencia",   # no-space variant (verif file)
-    "acidente, crime, violencia":       "violencia",   # ADFORCE flat export order
-    "acidente, violência, crime":       "violencia",
-    "acidente, violencia, crime":       "violencia",
-    "violência, crime":                 "violencia",
-    "violencia, crime":                 "violencia",
-    "sexo e sexualidade, pornografia":  "pornografia",
-    "sexo, sexualidade e pornografia":  "pornografia",
-    "pornografia, sexo, sexualidade":   "pornografia", # ADFORCE verif order
-    "sexo e sexualidade":               "pornografia",
-    "sexo, sexualidade, pornografia":   "pornografia", # ADFORCE flat export order
     # Safeframe (col 19)
     "safeframe":                        "safeframe",
     # Aplicativo Móvel (col 20)
     "aplicativo móvel":                 "app_movel",
     "aplicativo movel":                 "app_movel",
     "mobile app":                       "app_movel",
-    # Teste de Tag (col 21) — inclui variante METRIKE "Teste Banner"
+    # Teste de Tag (col 21)
     "teste de tag":                     "teste_tag",
     "teste banner":                     "teste_tag",
-    # Policial/Polícia — conteúdo policial/crime → violência
-    "policial":                         "violencia",
-    "policia":                          "violencia",
-    "polícia":                          "violencia",
     # Não Classificado (col 22)
     "não classificado":                 "nao_classificado",
     "nao classificado":                 "nao_classificado",
@@ -94,6 +133,7 @@ CATEGORY_MAP: dict[str, str] = {
 # Todas as chaves internas zeradas — base para inicializar indevidas
 INDEVIDAS_ZERO: dict[str, int] = {
     "conteudo_sensivel":  0,
+    "drogas":             0,
     "acidente":           0,
     "violencia":          0,
     "lingua_estrangeira": 0,
@@ -105,12 +145,21 @@ INDEVIDAS_ZERO: dict[str, int] = {
 }
 
 
-def normaliza_categoria(texto: str) -> str | None:
+def normaliza_categoria(texto: str, adserver: str | None = None) -> str | None:
     """
     Mapeia um nome de categoria para a chave interna SECOM.
-    Retorna None se a categoria não for reconhecida.
+
+    Se adserver for informado e tiver mapa dedicado, usa esse mapa exclusivamente
+    (categorias não listadas retornam None — são conteúdo válido, não indevidas).
+    Caso contrário usa o CATEGORY_MAP global como fallback.
+
+    Retorna None se a categoria não for reconhecida como indevida.
     """
     if not texto or not isinstance(texto, str):
         return None
     key = texto.split('\n')[0].strip().lower()
+    if adserver:
+        adserver_map = ADSERVER_MAPS.get(adserver.lower())
+        if adserver_map is not None:
+            return adserver_map.get(key)
     return CATEGORY_MAP.get(key)

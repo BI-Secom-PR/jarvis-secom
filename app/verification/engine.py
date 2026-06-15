@@ -79,7 +79,7 @@ COL_VIEWABLES      = 11
 COL_VIEWABILITY    = 12
 COL_ENTREGAS_VAL   = 13
 COL_INDEVIDAS = {
-    "conteudo_sensivel":  14,   # Conteúdo Sensível (agregado)
+    "conteudo_sensivel":  14,
     "acidente":           15,
     "violencia":          16,
     "lingua_estrangeira": 17,
@@ -88,6 +88,7 @@ COL_INDEVIDAS = {
     "app_movel":          20,
     "teste_tag":          21,
     "nao_classificado":   22,
+    "drogas":             23,
 }
 COL_DEVOLUTIVA_BI      = 28
 COL_DEVOLUTIVA_AGENCIA = 29
@@ -324,6 +325,8 @@ def _compare(
     comp_result: dict | None,
     verif_result: dict | None,
     verif_result_dif: dict | None = None,
+    *,
+    adserver: str | None = None,
 ) -> tuple[str, list[str]]:
     """
     Compara métricas de uma linha do consolidado com comprovante e verification.
@@ -388,7 +391,7 @@ def _compare(
         verif_indev: dict[str, int] = {}
         verif_extras: dict[str, int] = {}
         for raw_cat, count in verif_indev_raw.items():
-            cat_key = normaliza_categoria(raw_cat)
+            cat_key = normaliza_categoria(raw_cat, adserver=adserver)
             if cat_key:
                 verif_indev[cat_key] = verif_indev.get(cat_key, 0) + count
             else:
@@ -681,7 +684,7 @@ def verificar(
                 match_name = None
                 score = 0
             else:
-                status, linhas = _compare(crow, comp_match, verif_match, verif_match_dif)
+                status, linhas = _compare(crow, comp_match, verif_match, verif_match_dif, adserver=adserver)
                 devolutiva = "\n".join(linhas)
                 match_name = (verif_match or comp_match or {}).get("veiculo")
                 score = verif_score or comp_score
