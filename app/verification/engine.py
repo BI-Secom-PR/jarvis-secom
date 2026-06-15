@@ -58,6 +58,8 @@ PARSER_MAP: dict[str, str] = {
 FUZZY_THRESHOLD  = 85     # % mínimo para aceitar match de veículo
 HEADER_ROW       = 8      # linha 1-indexed do cabeçalho no template
 DATA_START_ROW   = 9      # primeira linha de dados (1-indexed)
+URL_MIN_IMPRESSOES = 100  # URLs abaixo disso são ruído — não vão para a IA
+URL_MAX_SAMPLE     = 1000 # teto absoluto de URLs enviadas à IA (Vercel-safe)
 
 # Cores para a Devolutiva no Excel (Standard Excel Theme: Green/Red/Yellow/Gray)
 COLOR_OK       = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid") # Verde claro
@@ -764,17 +766,35 @@ def verificar(
             item["impressoes"] = item.get("cpm") or 0
         elif tipo == "CPV" and "cpv" in item:
             item["impressoes"] = item.get("cpv") or 0
+    # Seleção orientada por impressões: só URLs com volume relevante (> threshold)
+    # vão para a IA, priorizando as de maior alcance e respeitando um teto absoluto
+    # para caber no tempo de função da Vercel. O knob url_sample_pct vira um
+    # afunilamento secundário por categoria (top-pct% por impressões).
     if url_pool:
-        if url_sample_pct == 0:
-            url_sample: list[dict] = list(url_pool)
-        else:
-            by_cat: dict[str, list] = defaultdict(list)
-            for item in url_pool:
-                by_cat[item["categoria"]].append(item)
+        by_cat: dict[str, list] = defaultdict(list)
+        for item in url_pool:
+            by_cat[item["categoria"]].append(item)
+
+        eligible_by_cat: dict[str, list] = {}
+        for cat, items in by_cat.items():
+            qual = [i for i in items if (i.get("impressoes") or 0) > URL_MIN_IMPRESSOES]
+            if not qual:  # fallback: nenhuma URL relevante — mantém a de maior alcance
+                qual = [max(items, key=lambda i: i.get("impressoes") or 0)]
+            qual.sort(key=lambda i: i.get("impressoes") or 0, reverse=True)
+            if url_sample_pct and url_sample_pct > 0:
+                qual = qual[: max(1, len(qual) * url_sample_pct // 100)]
+            eligible_by_cat[cat] = qual
+
+        total = sum(len(v) for v in eligible_by_cat.values())
+        if total <= URL_MAX_SAMPLE:
+            url_sample: list[dict] = [i for v in eligible_by_cat.values() for i in v]
+        else:  # corte proporcional por categoria, preservando as de maior impressão
             url_sample = []
-            for items in by_cat.values():
-                n = max(1, len(items) * url_sample_pct // 100)
-                url_sample.extend(random.sample(items, min(n, len(items))))
+            for qual in eligible_by_cat.values():
+                n = max(1, round(URL_MAX_SAMPLE * len(qual) / total))
+                url_sample.extend(qual[:n])
+            url_sample.sort(key=lambda i: i.get("impressoes") or 0, reverse=True)
+            url_sample = url_sample[:URL_MAX_SAMPLE]
     else:
         url_sample = []
 

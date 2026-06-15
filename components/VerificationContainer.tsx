@@ -618,7 +618,7 @@ export default function VerificationContainer() {
               </button>
             </div>
             <span className="text-xs text-ink-3">
-              {urlSamplePct === 0 ? "analisa todas as URLs" : `${urlSamplePct}% por categoria`}
+              {urlSamplePct === 0 ? "todas as URLs · só > 100 imp · máx 1000" : `${urlSamplePct}% por categoria · só > 100 imp · máx 1000`}
             </span>
           </div>
           {/* Filtro de Praça */}

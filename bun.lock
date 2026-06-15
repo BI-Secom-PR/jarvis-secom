@@ -42,7 +42,7 @@
     },
   },
   "overrides": {
-    "esbuild": "~0.25.0",
+    "esbuild": ">=0.28.1",
     "postcss": "~8.5.10",
     "protobufjs": "~7.5.8",
     "svix": ">=1.91.2",

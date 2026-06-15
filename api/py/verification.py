@@ -176,13 +176,16 @@ def _run_engine(body: dict) -> dict:
             pass
 
         return {
-            "veiculos":         result.get("veiculos", []),
-            "sem_comprovante":  result.get("sem_comprovante", []),
-            "sem_consolidado":  result.get("sem_consolidado", []),
-            "parse_errors":     result.get("parse_errors", []),
-            "url_sample":       result.get("url_sample", []),
-            "output_b64":       output_b64,
-            "output_name":      output_name,
+            "veiculos":              result.get("veiculos", []),
+            "sem_comprovante":       result.get("sem_comprovante", []),
+            "sem_consolidado":       result.get("sem_consolidado", []),
+            "sem_consolidado_verif": result.get("sem_consolidado_verif", []),
+            "sem_consolidado_comp":  result.get("sem_consolidado_comp", []),
+            "parse_errors":          result.get("parse_errors", []),
+            "url_sample":            result.get("url_sample", []),
+            "url_categorias":        result.get("url_categorias", []),
+            "output_b64":            output_b64,
+            "output_name":           output_name,
         }
 
     finally:

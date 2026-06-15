@@ -8,6 +8,8 @@ import os from 'os';
 import { del } from '@vercel/blob';
 import { Ollama } from 'ollama';
 
+export const maxDuration = 300;
+
 const VALID_ADSERVERS = new Set(['00px', 'adforce', 'admotion', 'ahead', 'metrike', 'brz', 'sense']);
 const DATE_RE = /^\d{2}\/\d{2}\/\d{4}$/;
 
@@ -380,7 +382,7 @@ async function buildEngineResponse(
   const urlSample: UrlSampleItem[] = (engineResult.url_sample as UrlSampleItem[]) ?? [];
   const urlCategorias: string[] = (engineResult.url_categorias as string[]) ?? [];
   if (urlSample.length > 0 && process.env.OLLAMA_BASE_URL) {
-    const BATCH = 10;
+    const BATCH = 20;
     send({ type: 'url_check_start', total: urlSample.length });
     let done = 0;
     for (let i = 0; i < urlSample.length; i += BATCH) {
