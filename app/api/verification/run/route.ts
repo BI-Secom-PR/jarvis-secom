@@ -46,7 +46,7 @@ async function checkUrlCategory(item: UrlSampleItem, categoriasDisponiveis: stri
   try {
     const response = await ollamaClient.chat({
       model: 'gemma4:31b-cloud',
-      options: { num_predict: 100 },
+      options: { num_predict: 350 },
       messages: [{ role: 'user', content: `Você é um classificador especialista em Brand Safety e auditoria de mídia programática para a SECOM (Secretaria de Comunicação Social do Governo Federal do Brasil). 
 
 Sua missão é auditar a classificação de conteúdo feita por um adserver. Dado uma URL, o título/conteúdo da página e a categoria atribuída pelo adserver, avalie se a classificação está CORRETA ou INCORRETA.
@@ -110,23 +110,33 @@ Categorias usadas neste arquivo de verificação (prefira sugerir uma destas, ou
 ${categoriasDisponiveis.map((c) => `- ${c}`).join('\n')}
 ` : ''}
 URL: ${item.url}
-Categoria atribuída: ${item.categoria}
-
-Responda com exatamente uma das opções:
-- "CORRETA" (a URL realmente pertence à categoria atribuída, ou a categoria é uma limitação técnica)
-- "INCORRETA: <categoria sugerida> | <uma frase explicando por que a classificação parece incorreta>"` }],
+Categoria atribuída: ${item.categoria}` }],
     });
 
     const trimmed = response.message.content.trim();
-    const match = trimmed.match(/^INCORRETA[:\s]*(.*)$/i) ?? trimmed.match(/^N[ÃA]O[:\s]*(.*)$/i);
-    if (match) {
-      const tail = match[1].trim();
-      const pipeIdx = tail.indexOf('|');
-      const categoriaSugerida = pipeIdx >= 0 ? tail.slice(0, pipeIdx).trim() || null : null;
-      const reason = (pipeIdx >= 0 ? tail.slice(pipeIdx + 1).trim() : tail) || 'Classificação suspeita';
-      return { url: item.url, categoria: item.categoria, categoria_sugerida: categoriaSugerida, veiculo: item.veiculo, reason, impressoes: item.impressoes, pct: 0 };
+    let status: string | null = null;
+    let categoriaSugerida: string | null = null;
+    let reason: string | null = null;
+
+    try {
+      const json = JSON.parse(trimmed) as { status?: string; categoria_sugerida?: string; justificativa_brand_safety?: string };
+      status = (json.status ?? '').trim().toUpperCase();
+      categoriaSugerida = json.categoria_sugerida?.trim() || null;
+      reason = json.justificativa_brand_safety?.trim() || null;
+    } catch {
+      // fallback: plain-text "INCORRETA: cat | reason"
+      const match = trimmed.match(/^INCORRETA[:\s]*(.*)$/i) ?? trimmed.match(/^N[ÃA]O[:\s]*(.*)$/i);
+      if (match) {
+        status = 'INCORRETA';
+        const tail = match[1].trim();
+        const pipeIdx = tail.indexOf('|');
+        categoriaSugerida = pipeIdx >= 0 ? tail.slice(0, pipeIdx).trim() || null : null;
+        reason = (pipeIdx >= 0 ? tail.slice(pipeIdx + 1).trim() : tail) || 'Classificação suspeita';
+      }
     }
-    return null;
+
+    if (status !== 'INCORRETA') return null;
+    return { url: item.url, categoria: item.categoria, categoria_sugerida: categoriaSugerida, veiculo: item.veiculo, reason: reason ?? 'Classificação suspeita', impressoes: item.impressoes, pct: 0 };
   } catch {
     return null;
   }
