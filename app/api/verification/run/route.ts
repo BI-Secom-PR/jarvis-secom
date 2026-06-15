@@ -114,12 +114,14 @@ Categoria atribuída: ${item.categoria}` }],
     });
 
     const trimmed = response.message.content.trim();
+    console.log(`[url-check] model raw (first 120): ${trimmed.slice(0, 120).replace(/\n/g, '↵')}`);
     let status: string | null = null;
     let categoriaSugerida: string | null = null;
     let reason: string | null = null;
 
     try {
-      const json = JSON.parse(trimmed) as { status?: string; categoria_sugerida?: string; justificativa_brand_safety?: string };
+      const raw = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+      const json = JSON.parse(raw) as { status?: string; categoria_sugerida?: string; justificativa_brand_safety?: string };
       status = (json.status ?? '').trim().toUpperCase();
       categoriaSugerida = json.categoria_sugerida?.trim() || null;
       reason = json.justificativa_brand_safety?.trim() || null;
@@ -433,6 +435,7 @@ async function buildEngineResponse(
   let urlCheckAnomalies: UrlAnomalyItem[] = [];
   const urlSample: UrlSampleItem[] = (engineResult.url_sample as UrlSampleItem[]) ?? [];
   const urlCategorias: string[] = (engineResult.url_categorias as string[]) ?? [];
+  console.log(`[url-check] url_sample=${urlSample.length} OLLAMA_BASE_URL=${process.env.OLLAMA_BASE_URL ?? '(not set)'}`);
   if (urlSample.length > 0 && process.env.OLLAMA_BASE_URL) {
     const BATCH = 20;
     send({ type: 'url_check_start', total: urlSample.length });
