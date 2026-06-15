@@ -135,7 +135,7 @@ All tables are prefixed `gold_` and the SQL guard enforces this.
 
 ### SQL Guard (MySQL)
 Two constants in `app/api/chat/route.ts` and `app/api/external/query/route.ts` protect the MySQL query path:
-- `SAFE_QUERY` — allowlist: query must start with `SELECT … FROM`
+- `SAFE_QUERY` — allowlist: query must start with `SELECT` or `WITH` (CTEs) and contain `FROM`
 - `BLOCKED_PATTERNS` — blocklist: rejects `UNION SELECT`, `SLEEP()`, `BENCHMARK()`, `INFORMATION_SCHEMA`, `mysql.*`, `sys.*`, `performance_schema`
 
 Both checks must pass. If either fails the query is rejected with HTTP 400 before touching the database. The MySQL user is also read-only on `airbyte_secom` as a second layer.
