@@ -123,6 +123,8 @@ See `GOLD_LAYER_DATA_DICTIONARY.md` for full column definitions. Key tables:
 - `gold_platforms_age` / `gold_platforms_gender` — demographic dimensions
 - `gold_campaigns_classified` — VIEW: campaigns + Framework v4 creative classification (eixo, programa, formato, segundagem, visual, tom, porta_voz + target_geo/age/gender, dark_feed, person_name, classification_source). Populated by the `creative_classifier` Python job in the mysql repo. Codes only exist since April 2026; `classification_source` tracks provenance ('code' | 'inferred_keyword' | 'inferred_llm').
 - `gold_creative_dim_labels` — sigla → human-readable label lookup
+- `gold_regions_classified` — VIEW: gold_platforms_regions + all Framework v4 classification columns. Use this instead of JOIN regions+classified for geo+theme queries (pre-joined, no hang).
+- `gold_age_gender_classified` — VIEW: gold_platforms_age_gender + all Framework v4 classification columns. Use this instead of JOIN age_gender+classified for demo+theme queries. Missing: reactions, saves, link_clicks, video_2s/30s/p95/completions.
 
 All tables are prefixed `gold_` and the SQL guard enforces this.
 

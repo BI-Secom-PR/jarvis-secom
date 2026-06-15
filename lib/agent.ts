@@ -63,6 +63,17 @@ TABELAS (schema: airbyte_secom):
   formato, segundagem, elemento visual, tom da mensagem, porta-voz).
 • gold_creative_dim_labels   — lookup (dimension, code, label): nome legível de cada sigla.
   Ex: SELECT label FROM gold_creative_dim_labels WHERE dimension='eixo' AND code='SAU' → 'Saúde'
+• gold_regions_classified    — VIEW: gold_platforms_regions + classificação criativa (Framework v4).
+  Mesmas colunas de regions MAIS: title, creative_code, eixo, programa, formato, segundagem,
+  visual, tom, porta_voz, target_geo, target_age, target_gender, dark_feed, placement,
+  nsb_code, person_name, classification_source, classification_confidence.
+  USE ESTA VIEW (em vez de JOIN regions + classified) para cruzar região geográfica com dimensões
+  criativas — já está pré-unida, é muito mais eficiente e não trava.
+• gold_age_gender_classified — VIEW: gold_platforms_age_gender + classificação criativa (Framework v4).
+  Contém: age, gender + todas as colunas de classificação. Serve também para análise só por age
+  ou só por gender (agrupando pela dimensão desejada).
+  USE ESTA VIEW (em vez de JOIN age/gender + classified) para cruzar demografia com dimensões criativas.
+  Colunas AUSENTES (vs campaigns): reactions, saves, link_clicks, video_2s, video_30s, video_p95, video_completions
 
 
 COLUNAS COMPARTILHADAS (todas as tabelas):
@@ -567,52 +578,52 @@ FROM base b, stats s
 ORDER BY score_composto DESC
 LIMIT 10;
 
--- 29. Ranking composto por tema (eixo) em uma região — JOIN regions + classified
--- ATENÇÃO: gold_campaigns_classified só tem eixo/tema a partir de abril/2026
+-- 29. Ranking composto por tema (eixo) em uma região — usa gold_regions_classified diretamente
+-- ATENÇÃO: eixo/tema só existe a partir de abril/2026
+-- NOTA: video_views = 0 na tabela de regiões (não reportado ao nível geográfico);
+--       use CTR (cliques/impressões) como métrica de taxa principal neste contexto.
 WITH base AS (
   SELECT
-    c.eixo,
-    SUM(r.video_views)/NULLIF(SUM(r.impressions),0)*100 AS vtr,
-    SUM(r.impressions)                                   AS volume
-  FROM gold_platforms_regions r
-  JOIN gold_campaigns_classified c
-    ON r.campaign_name = c.campaign_name
-   AND r.platform      = c.platform
-  WHERE r.region_name LIKE '%Rio de Janeiro%'
-    AND r.date BETWEEN '2025-05-01' AND '2025-05-31'
-  GROUP BY c.eixo
-  HAVING SUM(r.impressions) >= 1000
+    eixo,
+    SUM(clicks)/NULLIF(SUM(impressions),0)*100 AS ctr,
+    SUM(cost)/NULLIF(SUM(impressions),0)*1000  AS cpm,
+    SUM(impressions)                           AS volume
+  FROM gold_regions_classified
+  WHERE region_name LIKE '%Rio de Janeiro%'
+    AND eixo IS NOT NULL
+    AND date BETWEEN '2026-05-01' AND '2026-05-31'
+  GROUP BY eixo
+  HAVING SUM(impressions) >= 1000
 ),
 stats AS (
-  SELECT AVG(vtr)         AS avg_vtr, STDDEV(vtr)         AS std_vtr,
+  SELECT AVG(ctr)         AS avg_ctr, STDDEV(ctr)         AS std_ctr,
          AVG(LOG(volume)) AS avg_lv,  STDDEV(LOG(volume)) AS std_lv
   FROM base
 )
 SELECT b.eixo,
-       ROUND(b.vtr, 2)   AS vtr_pct,
+       ROUND(b.ctr, 4)   AS ctr_pct,
+       ROUND(b.cpm, 2)   AS cpm,
        b.volume           AS impressoes,
        ROUND(
-         (b.vtr        - s.avg_vtr) / NULLIF(s.std_vtr, 0)
-       + (LOG(b.volume) - s.avg_lv) / NULLIF(s.std_lv,  0)
+         (b.ctr        - s.avg_ctr) / NULLIF(s.std_ctr, 0)
+       + (LOG(b.volume) - s.avg_lv)  / NULLIF(s.std_lv,  0)
        , 2)               AS score_composto
 FROM base b, stats s
 ORDER BY score_composto DESC;
 
--- 30. Ranking composto por tema (eixo) por faixa etária — JOIN age + classified
--- ATENÇÃO: gold_campaigns_classified só tem eixo/tema a partir de abril/2026
+-- 30. Ranking composto por tema (eixo) por faixa etária — usa gold_age_gender_classified diretamente
+-- ATENÇÃO: eixo/tema só existe a partir de abril/2026
 WITH base AS (
   SELECT
-    c.eixo,
-    a.age,
-    SUM(a.video_views)/NULLIF(SUM(a.impressions),0)*100 AS vtr,
-    SUM(a.impressions)                                   AS volume
-  FROM gold_platforms_age a
-  JOIN gold_campaigns_classified c
-    ON a.campaign_name = c.campaign_name
-   AND a.platform      = c.platform
-  WHERE a.date BETWEEN '2025-05-01' AND '2025-05-31'
-  GROUP BY c.eixo, a.age
-  HAVING SUM(a.impressions) >= 1000
+    eixo,
+    age,
+    SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr,
+    SUM(impressions)                                AS volume
+  FROM gold_age_gender_classified
+  WHERE eixo IS NOT NULL AND age IS NOT NULL
+    AND date BETWEEN '2026-05-01' AND '2026-05-31'
+  GROUP BY eixo, age
+  HAVING SUM(impressions) >= 1000
 ),
 stats AS (
   SELECT AVG(vtr)         AS avg_vtr, STDDEV(vtr)         AS std_vtr,
@@ -630,21 +641,19 @@ SELECT b.eixo,
 FROM base b, stats s
 ORDER BY score_composto DESC;
 
--- 31. Ranking composto por tema (eixo) por gênero — JOIN gender + classified
--- ATENÇÃO: gold_campaigns_classified só tem eixo/tema a partir de abril/2026
+-- 31. Ranking composto por tema (eixo) por gênero — usa gold_age_gender_classified diretamente
+-- ATENÇÃO: eixo/tema só existe a partir de abril/2026
 WITH base AS (
   SELECT
-    c.eixo,
-    g.gender,
-    SUM(g.video_views)/NULLIF(SUM(g.impressions),0)*100 AS vtr,
-    SUM(g.impressions)                                   AS volume
-  FROM gold_platforms_gender g
-  JOIN gold_campaigns_classified c
-    ON g.campaign_name = c.campaign_name
-   AND g.platform      = c.platform
-  WHERE g.date BETWEEN '2025-05-01' AND '2025-05-31'
-  GROUP BY c.eixo, g.gender
-  HAVING SUM(g.impressions) >= 1000
+    eixo,
+    gender,
+    SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr,
+    SUM(impressions)                                AS volume
+  FROM gold_age_gender_classified
+  WHERE eixo IS NOT NULL AND gender IS NOT NULL
+    AND date BETWEEN '2026-05-01' AND '2026-05-31'
+  GROUP BY eixo, gender
+  HAVING SUM(impressions) >= 1000
 ),
 stats AS (
   SELECT AVG(vtr)         AS avg_vtr, STDDEV(vtr)         AS std_vtr,
