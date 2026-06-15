@@ -47,22 +47,64 @@ async function checkUrlCategory(item: UrlSampleItem, categoriasDisponiveis: stri
     const response = await ollamaClient.chat({
       model: 'gemma4:31b-cloud',
       options: { num_predict: 100 },
-      messages: [{ role: 'user', content: `Você é um classificador de brand safety para o SECOM (Secretaria de Comunicação Social do Governo Federal do Brasil). Dado uma URL e a categoria de conteúdo atribuída a ela pelo adserver, determine se essa classificação é CORRETA ou INCORRETA. Se for incorreta, indique a categoria correta para que o adserver possa recategorizar a URL.
+      messages: [{ role: 'user', content: `Você é um classificador especialista em Brand Safety e auditoria de mídia programática para a SECOM (Secretaria de Comunicação Social do Governo Federal do Brasil). 
 
-As categorias de conteúdo consideradas indevidas pelo SECOM são:
-- Língua estrangeira: conteúdo entregue fora do português brasileiro (já foi objeto de questionamento pelo TCU e CGU)
-- Conteúdo adulto: sexo, sexualidade, pornografia e afins
-- Violência: acidentes, armas, morte, guerra, conflitos militares
-- Crimes: crimes, violação de direitos, atividade policial
-- Pirataria: distribuição ilegal de conteúdo protegido
-- Terrorismo: grupos terroristas, ataques, extremismo
-- Discurso de ódio: conteúdo discriminatório por raça, gênero, religião, orientação sexual etc.
-- Conteúdo gerado pelo usuário sem moderação: bate-papo, fóruns abertos — risco de conteúdo adulto e crimes, especialmente pedofilia
-- Drogas: uso, venda ou apologia a substâncias ilícitas
+Sua missão é auditar a classificação de conteúdo feita por um adserver. Dado uma URL, o título/conteúdo da página e a categoria atribuída pelo adserver, avalie se a classificação está CORRETA ou INCORRETA.
 
-Categorias que NÃO são conteúdo indevido:
-- "safeframe": limitação técnica de rastreamento. O Safeframe pode restringir o acesso à URL da página por privacidade, afetando entregas em apps, programática ou iframes. Trate sempre como CORRETA.
-- "aplicativo móvel" e "teste de tag": limitações técnicas, não conteúdo impróprio. Trate sempre como CORRETA.
+### DIRETRIZES DE AVALIAÇÃO (Regras de Negócio)
+
+1. TRATAMENTO DE CATEGORIAS TÉCNICAS (Safeframe, Aplicativo Móvel, Teste de Tag):
+   - O adserver frequentemente classifica URLs reais incorretamente como "safeframe", "aplicativo móvel" ou "teste de tag" devido a falhas de rastreamento.
+   - Você DEVE analisar o conteúdo real da URL. Se a URL apontar para uma notícia, blog ou portal de conteúdo, e o adserver a classificou como "safeframe" (ou similar), isso é uma classificação INCORRETA (Erro de categorização técnica). Indique a categoria real do conteúdo.
+   - Só considere CORRETA se a URL for genuinamente apenas um frame técnico isolado, sem conteúdo editorial visível.
+
+2. CONTEXTO DOMINANTE VS. PALAVRAS-CHAVE: Não classifique uma página como "indevida" apenas pela presença de palavras-chave isoladas. Analise o CONTEXTO DOMINANTE. 
+   - Matérias jornalísticas, artigos de opinião política, análises históricas, avanços tecnológicos, geopolítica ou notícias de segurança pública NÃO devem ser classificados automaticamente como "Violência" ou "Crimes", a menos que haja exposição gráfica, apologia ou sensacionalismo extremo.
+
+### CATEGORIAS INDEVIDAS DA SECOM (Definições Estritas)
+- Língua estrangeira: Conteúdo principal fora do português brasileiro.
+- Conteúdo adulto: Sexo explícito, pornografia, erotismo e afins.
+- Violência: Imagens ou descrições explícitas de acidentes violentos, armas, mortes brutais, apologia à guerra. (Geopolítica, história militar, tecnologia de defesa ou notícias cotidianas de portais de grande mídia NÃO são violência).
+- Crimes: Apologia ao crime, violação grave de direitos. (Atividade policial padrão ou notícias jurídicas/jornalísticas NÃO são crimes).
+- Pirataria: Links e métodos para distribuição ilegal de conteúdo protegido.
+- Terrorismo: Propaganda, recrutamento ou apologia a grupos extremistas/ataques.
+- Discurso de ódio: Conteúdo explicitamente discriminatório (raça, gênero, religião, orientação sexual, etc.).
+- Conteúdo gerado pelo usuário sem moderação: Fóruns abertos, chats anonimizados (alto risco de pedofilia/crimes).
+- Drogas: Apologia, comércio ou tutorial de uso de substâncias ilícitas.
+
+### INSTRUÇÕES DE SAÍDA (Formato de Resposta)
+Você deve seguir estritamente o formato JSON abaixo para sua resposta. Pense passo a passo antes de definir o status.
+
+{
+  "analise_contexto": "Explique brevemente o foco principal da URL e o que de fato há na página.",
+  "justificativa_brand_safety": "Avalie se o adserver errou a classificação (seja por falso positivo de Brand Safety ou por erro de categoria técnica como safeframe).",
+  "status": "CORRETA" ou "INCORRETA",
+  "categoria_sugerida": "Manter a atual se o status for CORRETA, ou indicar a categoria real (ex: 'Notícias', 'Tecnologia', 'Política') se for INCORRETA."
+}
+
+### EXEMPLOS PARA APRENDIZADO (Few-Shot)
+
+Exemplo 1 (Falso Positivo de safeframe):
+- URL: https://g1.globo.com/politica/noticia/2026/06/governo-anuncia-novas-medidas-economicas.html
+- Categoria do Adserver: safeframe
+- Resposta esperada:
+{
+  "analise_contexto": "A URL aponta para uma notícia jornalística real do portal G1 sobre política e economia governamental.",
+  "justificativa_brand_safety": "INCORRETA. O adserver classificou erroneamente como 'safeframe' devido a uma limitação técnica de rastreamento no momento do leilão, mas a URL contém conteúdo editorial legítimo que deveria ser mapeado.",
+  "status": "INCORRETA",
+  "categoria_sugerida": "Política / Economia"
+}
+
+Exemplo 2 (Falso Positivo de Violência):
+- URL: https://revistaforum.com.br/revista-forum/nem-portos-nem-barreiras-maior-marinha-do-mundo-cria-sistema-para-desembarcar-em-qualquer-costa/
+- Categoria do Adserver: Violência
+- Resposta esperada:
+{
+  "analise_contexto": "O artigo aborda um avanço tecnológico e logístico da marinha, focado em estratégia e engenharia.",
+  "justificativa_brand_safety": "INCORRETA. Falso positivo. A presença de termos militares acionou o gatilho de 'Violência' do adserver, mas o texto não contém violência gráfica ou conflito armado. Trata-se de inovação/geopolítica.",
+  "status": "INCORRETA",
+  "categoria_sugerida": "Tecnologia / Geopolítica"
+}
 ${categoriasDisponiveis.length > 0 ? `
 Categorias usadas neste arquivo de verificação (prefira sugerir uma destas, ou uma categoria indevida do SECOM acima):
 ${categoriasDisponiveis.map((c) => `- ${c}`).join('\n')}

@@ -583,12 +583,12 @@ def verificar(
         except Exception as e:
             parse_errors.append({"arquivo": Path(cp).name, "erro": str(e)})
 
-    # Categorias técnicas (safeframe, app móvel, teste de tag) não são conteúdo
-    # e ficam fora do pool de IA. Todas as demais — inclusive não-indevidas como
-    # "Notícias" — entram para checagem de categorização correta por veículo.
+    # app_movel e teste_tag são técnicas e ficam fora do pool de IA.
+    # safeframe é mantido: uma URL classificada como safeframe pode estar errada
+    # e a IA pode identificar a categoria correta (ex.: conteúdo sensível).
     url_pool = [
         item for item in url_pool
-        if normaliza_categoria(item.get("categoria", "")) not in ("safeframe", "app_movel", "teste_tag")
+        if normaliza_categoria(item.get("categoria", "")) not in ("app_movel", "teste_tag")
     ]
 
     # ── Agrupa URLs duplicadas por (url, categoria, veiculo) somando impressões ──
