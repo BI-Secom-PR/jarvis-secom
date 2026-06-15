@@ -406,6 +406,89 @@ FROM gold_campaigns_classified
 WHERE porta_voz IN ('APR','ATO') AND formato = 'VIDEO' AND ${DATE_FLOOR}
 GROUP BY porta_voz HAVING COUNT(DISTINCT ad_name) >= 3;`,
   },
+
+  // ── gold_regions_classified ──
+  {
+    question: 'Qual campanha melhor performou por tema no Rio de Janeiro no mês passado?',
+    dims: ['eixo', 'regiao'],
+    sql: `SELECT eixo, campaign_name, SUM(cost) AS investimento, SUM(impressions) AS impressoes,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr
+FROM gold_regions_classified
+WHERE region_name LIKE '%Rio de Janeiro%'
+  AND date BETWEEN DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')
+                AND LAST_DAY(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+  AND eixo IS NOT NULL
+GROUP BY eixo, campaign_name
+ORDER BY investimento DESC LIMIT 20;`,
+  },
+  {
+    question: 'Qual tema (eixo) teve melhor VTR no Nordeste?',
+    dims: ['eixo', 'regiao'],
+    sql: `SELECT eixo, SUM(impressions) AS impressoes,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr,
+       SUM(cost) AS investimento
+FROM gold_regions_classified
+WHERE region_name IN ('Maranhão','Piauí','Ceará','Rio Grande do Norte','Paraíba',
+                      'Pernambuco','Alagoas','Sergipe','Bahia')
+  AND eixo IS NOT NULL AND ${DATE_FLOOR}
+GROUP BY eixo
+HAVING SUM(impressions) >= 10000
+ORDER BY vtr DESC;`,
+  },
+  {
+    question: 'Comparar investimento por tema entre São Paulo e Rio de Janeiro',
+    dims: ['eixo', 'regiao'],
+    sql: `SELECT eixo,
+       SUM(CASE WHEN region_name LIKE '%São Paulo%' THEN cost ELSE 0 END) AS custo_sp,
+       SUM(CASE WHEN region_name LIKE '%Rio de Janeiro%' THEN cost ELSE 0 END) AS custo_rj,
+       SUM(cost) AS total
+FROM gold_regions_classified
+WHERE region_name IN ('São Paulo','Rio de Janeiro')
+  AND eixo IS NOT NULL AND ${DATE_FLOOR}
+GROUP BY eixo ORDER BY total DESC;`,
+  },
+
+  // ── gold_age_gender_classified ──
+  {
+    question: 'Qual tema ressoa mais com mulheres de 25 a 34 anos?',
+    dims: ['eixo', 'demografia'],
+    sql: `SELECT eixo, SUM(impressions) AS impressoes,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr,
+       SUM(cost) AS investimento
+FROM gold_age_gender_classified
+WHERE gender IN ('female','Female','FEMALE')
+  AND age IN ('25-34','25 a 34','AGE_RANGE_25_34','AGE_25_34')
+  AND eixo IS NOT NULL AND ${DATE_FLOOR}
+GROUP BY eixo
+HAVING SUM(impressions) >= 10000
+ORDER BY vtr DESC;`,
+  },
+  {
+    question: 'Qual faixa etária engaja mais com o tema Economia?',
+    dims: ['eixo', 'demografia'],
+    sql: `SELECT platform, age, SUM(impressions) AS impressoes,
+       SUM(engagements)/NULLIF(SUM(impressions),0)*100 AS taxa_engaj,
+       SUM(cost) AS investimento
+FROM gold_age_gender_classified
+WHERE eixo = 'ECO' AND age IS NOT NULL AND ${DATE_FLOOR}
+GROUP BY platform, age
+HAVING SUM(impressions) >= 10000
+ORDER BY taxa_engaj DESC;`,
+  },
+  {
+    question: 'Comparar VTR por gênero para cada tema criativo',
+    dims: ['eixo', 'demografia'],
+    sql: `SELECT eixo, gender,
+       SUM(impressions) AS impressoes,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr
+FROM gold_age_gender_classified
+WHERE eixo IS NOT NULL AND gender IS NOT NULL
+  AND gender NOT IN ('unknown','Unknown','UNDETERMINED','NONE')
+  AND ${DATE_FLOOR}
+GROUP BY eixo, gender
+HAVING SUM(impressions) >= 10000
+ORDER BY eixo, vtr DESC;`,
+  },
 ]
 
 async function main() {
