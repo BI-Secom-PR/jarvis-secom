@@ -539,6 +539,129 @@ FROM gold_campaigns_classified
 WHERE eixo = 'EDU' AND date >= '2026-04-01'
 GROUP BY classification_source;
 
+-- 28. Ranking composto de campanhas por região (z-score taxa + z-score log-volume)
+WITH base AS (
+  SELECT
+    campaign_name,
+    SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr,
+    SUM(impressions)                                AS volume
+  FROM gold_platforms_regions
+  WHERE region_name LIKE '%Rio de Janeiro%'
+    AND date BETWEEN '2025-05-01' AND '2025-05-31'
+  GROUP BY campaign_name
+  HAVING SUM(impressions) >= 100
+),
+stats AS (
+  SELECT AVG(vtr)         AS avg_vtr, STDDEV(vtr)         AS std_vtr,
+         AVG(LOG(volume)) AS avg_lv,  STDDEV(LOG(volume)) AS std_lv
+  FROM base
+)
+SELECT b.campaign_name,
+       ROUND(b.vtr, 2)   AS vtr_pct,
+       b.volume           AS impressoes,
+       ROUND(
+         (b.vtr        - s.avg_vtr) / NULLIF(s.std_vtr, 0)
+       + (LOG(b.volume) - s.avg_lv) / NULLIF(s.std_lv,  0)
+       , 2)               AS score_composto
+FROM base b, stats s
+ORDER BY score_composto DESC
+LIMIT 10;
+
+-- 29. Ranking composto por tema (eixo) em uma região — JOIN regions + classified
+-- ATENÇÃO: gold_campaigns_classified só tem eixo/tema a partir de abril/2026
+WITH base AS (
+  SELECT
+    c.eixo,
+    SUM(r.video_views)/NULLIF(SUM(r.impressions),0)*100 AS vtr,
+    SUM(r.impressions)                                   AS volume
+  FROM gold_platforms_regions r
+  JOIN gold_campaigns_classified c
+    ON r.campaign_name = c.campaign_name
+   AND r.platform      = c.platform
+  WHERE r.region_name LIKE '%Rio de Janeiro%'
+    AND r.date BETWEEN '2025-05-01' AND '2025-05-31'
+  GROUP BY c.eixo
+  HAVING SUM(r.impressions) >= 1000
+),
+stats AS (
+  SELECT AVG(vtr)         AS avg_vtr, STDDEV(vtr)         AS std_vtr,
+         AVG(LOG(volume)) AS avg_lv,  STDDEV(LOG(volume)) AS std_lv
+  FROM base
+)
+SELECT b.eixo,
+       ROUND(b.vtr, 2)   AS vtr_pct,
+       b.volume           AS impressoes,
+       ROUND(
+         (b.vtr        - s.avg_vtr) / NULLIF(s.std_vtr, 0)
+       + (LOG(b.volume) - s.avg_lv) / NULLIF(s.std_lv,  0)
+       , 2)               AS score_composto
+FROM base b, stats s
+ORDER BY score_composto DESC;
+
+-- 30. Ranking composto por tema (eixo) por faixa etária — JOIN age + classified
+-- ATENÇÃO: gold_campaigns_classified só tem eixo/tema a partir de abril/2026
+WITH base AS (
+  SELECT
+    c.eixo,
+    a.age,
+    SUM(a.video_views)/NULLIF(SUM(a.impressions),0)*100 AS vtr,
+    SUM(a.impressions)                                   AS volume
+  FROM gold_platforms_age a
+  JOIN gold_campaigns_classified c
+    ON a.campaign_name = c.campaign_name
+   AND a.platform      = c.platform
+  WHERE a.date BETWEEN '2025-05-01' AND '2025-05-31'
+  GROUP BY c.eixo, a.age
+  HAVING SUM(a.impressions) >= 1000
+),
+stats AS (
+  SELECT AVG(vtr)         AS avg_vtr, STDDEV(vtr)         AS std_vtr,
+         AVG(LOG(volume)) AS avg_lv,  STDDEV(LOG(volume)) AS std_lv
+  FROM base
+)
+SELECT b.eixo,
+       b.age,
+       ROUND(b.vtr, 2)   AS vtr_pct,
+       b.volume           AS impressoes,
+       ROUND(
+         (b.vtr        - s.avg_vtr) / NULLIF(s.std_vtr, 0)
+       + (LOG(b.volume) - s.avg_lv) / NULLIF(s.std_lv,  0)
+       , 2)               AS score_composto
+FROM base b, stats s
+ORDER BY score_composto DESC;
+
+-- 31. Ranking composto por tema (eixo) por gênero — JOIN gender + classified
+-- ATENÇÃO: gold_campaigns_classified só tem eixo/tema a partir de abril/2026
+WITH base AS (
+  SELECT
+    c.eixo,
+    g.gender,
+    SUM(g.video_views)/NULLIF(SUM(g.impressions),0)*100 AS vtr,
+    SUM(g.impressions)                                   AS volume
+  FROM gold_platforms_gender g
+  JOIN gold_campaigns_classified c
+    ON g.campaign_name = c.campaign_name
+   AND g.platform      = c.platform
+  WHERE g.date BETWEEN '2025-05-01' AND '2025-05-31'
+  GROUP BY c.eixo, g.gender
+  HAVING SUM(g.impressions) >= 1000
+),
+stats AS (
+  SELECT AVG(vtr)         AS avg_vtr, STDDEV(vtr)         AS std_vtr,
+         AVG(LOG(volume)) AS avg_lv,  STDDEV(LOG(volume)) AS std_lv
+  FROM base
+)
+SELECT b.eixo,
+       b.gender,
+       ROUND(b.vtr, 2)   AS vtr_pct,
+       b.volume           AS impressoes,
+       ROUND(
+         (b.vtr        - s.avg_vtr) / NULLIF(s.std_vtr, 0)
+       + (LOG(b.volume) - s.avg_lv) / NULLIF(s.std_lv,  0)
+       , 2)               AS score_composto
+FROM base b, stats s
+ORDER BY score_composto DESC;
+
 ═══════════════════════════════════════════════
 SKILL DE PERFORMANCE — MÉDIAS DA SECOM
 Fonte: gold DB jan/2025–abr/2026 + doc. oficial SECOM Set/2025. Todos os custos em BRL.
@@ -611,6 +734,58 @@ FORMATO DE RESPOSTA (SKILL DE PERFORMANCE):
 
 PRIORIDADE: SKILL DE PERFORMANCE tem prioridade sobre SKILL DE RELATÓRIO para qualquer pergunta
 que não contenha pedido explícito de "relatório", "paper" ou "status geral".
+
+RANKING COMPOSTO — quando usar score_composto em vez de ordenar por métrica única:
+Ativar quando o usuário usar expressões como: "qual melhor", "top N", "melhor performance",
+"quem se destacou", "qual criativo", "qual região", "comparar campanhas", "ranking de"
+E houver múltiplas linhas para comparar (mais de uma campanha/criativo/região etc.).
+
+MOTIVO: ordenar só por taxa (VTR, CTR) favorece formatos de baixíssimo volume; ordenar só por
+volume favorece campanhas mediocres com muitas impressões. O score_composto equilibra os dois.
+
+PADRÃO SQL — score_composto (z-score taxa + z-score log-volume):
+  • rate_metric = KPI que melhor representa o objetivo (VTR para vídeo, CTR para tráfego, etc.)
+  • volume_metric = sempre impressions
+  • HAVING SUM(impressions) >= <piso> — ajuste ao contexto (análise de criativos → 100,
+    cross-campaign → 1.000+); remova ruído estatístico, não corte grupos válidos
+
+  WITH base AS (
+    SELECT
+      <coluna_grupo>,
+      <numerador_taxa> / NULLIF(<denominador_taxa>, 0) * 100 AS taxa,
+      SUM(impressions) AS volume
+    FROM <tabela>
+    WHERE <filtros>
+    GROUP BY <coluna_grupo>
+    HAVING SUM(impressions) >= <piso>
+  ),
+  stats AS (
+    SELECT
+      AVG(taxa)           AS avg_taxa,   STDDEV(taxa)           AS std_taxa,
+      AVG(LOG(volume))    AS avg_logvol, STDDEV(LOG(volume))    AS std_logvol
+    FROM base
+  )
+  SELECT
+    b.<coluna_grupo>,
+    ROUND(b.taxa, 2)   AS taxa_pct,
+    b.volume           AS impressoes,
+    ROUND(
+      (b.taxa        - s.avg_taxa)   / NULLIF(s.std_taxa,   0)
+    + (LOG(b.volume) - s.avg_logvol) / NULLIF(s.std_logvol, 0)
+    , 2) AS score_composto
+  FROM base b, stats s
+  ORDER BY score_composto DESC
+  LIMIT 10;
+
+REGRAS DE DIREÇÃO DO SCORE:
+  • VTR / CTR / Tx.Eng.: maior = melhor → z-score positivo (padrão acima)
+  • CPV / CPM / CPC: menor = melhor → NEGUE o z-score da taxa:
+    - (b.taxa - s.avg_taxa) / NULLIF(s.std_taxa, 0)
+  • LOG(volume): sempre use LOG() para normalizar volume antes do z-score — evita que uma
+    campanha com 10× as impressões das demais domine a pontuação de volume
+
+SAÍDA OBRIGATÓRIA: mostrar taxa_pct E impressoes ao lado de score_composto para que o usuário
+entenda por que cada item ficou na posição que ficou.
 
 NOTAS DE GRAIN:
   Google em age/gender/regions/age_gender: ad_id='' (reporta no nível ad_group)
