@@ -298,8 +298,9 @@ def _merge_by_veiculo(results: list[dict]) -> dict[str, dict]:
         key = _normalize(r["veiculo"])
         if key not in merged:
             merged[key] = dict(r)
-            merged[key]["indevidas"]     = dict(r.get("indevidas", {}))
-            merged[key]["indevidas_cpv"] = dict(r.get("indevidas_cpv", {}))
+            merged[key]["indevidas"]         = dict(r.get("indevidas", {}))
+            merged[key]["indevidas_cpv"]     = dict(r.get("indevidas_cpv", {}))
+            merged[key]["indevidas_sem_url"] = dict(r.get("indevidas_sem_url", {}))
         else:
             m = merged[key]
             m["entregue"]    = (m.get("entregue") or 0) + (r.get("entregue") or 0)
@@ -312,6 +313,8 @@ def _merge_by_veiculo(results: list[dict]) -> dict[str, dict]:
                 m["indevidas"][cat] = m["indevidas"].get(cat, 0) + val
             for cat, val in r.get("indevidas_cpv", {}).items():
                 m["indevidas_cpv"][cat] = m["indevidas_cpv"].get(cat, 0) + val
+            for cat, val in r.get("indevidas_sem_url", {}).items():
+                m["indevidas_sem_url"][cat] = m["indevidas_sem_url"].get(cat, 0) + val
     return merged
 
 
@@ -429,6 +432,17 @@ def _compare(
                     f"ALERTA safeframe: {_fmt_num(safeframe_verif)} imp "
                     f"({pct_sf:.1f}% do total) — alto índice, verificar rastreamento"
                 )
+
+        # Alerta safeframe sem URL: impressões em safeframe sem URL identificada
+        # (não auditáveis por brand safety — não há página para inspecionar).
+        sf_sem_url = 0
+        for raw_cat, count in verif_result.get("indevidas_sem_url", {}).items():
+            if normaliza_categoria(raw_cat, adserver=adserver) == "safeframe":
+                sf_sem_url += count
+        if sf_sem_url > 0:
+            linhas.append(
+                f"ALERTA safeframe sem URL: {_fmt_num(sf_sem_url)} imp sem URL identificada"
+            )
     else:
         linhas.append("? indevidas: sem arquivo de verification")
 

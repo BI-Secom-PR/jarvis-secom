@@ -218,7 +218,8 @@ def parse_verif(
             f"Colunas obrigatórias ausentes (Veículo/Impressões/Categoria): {path.name}"
         )
 
-    veiculos_indevidas: dict[str, dict] = defaultdict(dict)
+    veiculos_indevidas:         dict[str, dict] = defaultdict(dict)
+    veiculos_indevidas_sem_url: dict[str, dict] = defaultdict(dict)
     veiculos_entregue:  dict[str, int]  = defaultdict(int)
     veiculos_total:     dict[str, int]  = defaultdict(int)
     MAX_POOL = 10000
@@ -255,6 +256,10 @@ def parse_verif(
         veiculos_indevidas[veiculo][cat_str] = (
             veiculos_indevidas[veiculo].get(cat_str, 0) + impressoes
         )
+        if not url:
+            veiculos_indevidas_sem_url[veiculo][cat_str] = (
+                veiculos_indevidas_sem_url[veiculo].get(cat_str, 0) + impressoes
+            )
 
         veiculos_entregue[veiculo] += impressoes
         veiculos_total[veiculo] += impressoes
@@ -283,6 +288,7 @@ def parse_verif(
             "viewables":         None,
             "viewability":       None,
             "indevidas":         dict(veiculos_indevidas[veiculo]),
+            "indevidas_sem_url": dict(veiculos_indevidas_sem_url[veiculo]),
             "url_sample":        url_pool if not results else [],
             "formato_detectado": "metrike_verif",
         })
