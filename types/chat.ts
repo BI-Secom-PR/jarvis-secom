@@ -1,15 +1,23 @@
 export type Role = 'user' | 'ai';
 
+export interface ScatterPoint {
+  x: number;
+  y: number;
+}
+
 export interface ChartDataset {
   label: string;
-  data: number[];
+  data: number[] | ScatterPoint[];
+  meta?: Record<string, string | number>[];
 }
 
 export interface ChartData {
-  type: 'bar' | 'line' | 'area' | 'pie';
+  type: 'bar' | 'line' | 'area' | 'pie' | 'scatter' | 'geo';
   title?: string;
-  labels: string[];
+  labels?: string[];
   datasets: ChartDataset[];
+  xLabel?: string;
+  yLabel?: string;
 }
 
 export interface Message {

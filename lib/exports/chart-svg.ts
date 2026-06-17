@@ -1,13 +1,11 @@
 import type { ChartSpec } from './types'
-import { CHART_HUES } from './chart-palette'
+import { PREMIUM_PALETTE } from './chart-palette'
 
 const W = 720
 const H = 380
 const PAD = { top: 48, right: 30, bottom: 56, left: 70 }
 
-/* Print-safe palette — shared hues with the in-app ChartWidget (chart-palette.ts),
-   `main` tuned for white background */
-const COLORS = CHART_HUES.map((h) => ({ main: h.deep, light: h.bright }))
+const COLORS = PREMIUM_PALETTE.map((c) => ({ main: c, light: c }))
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')

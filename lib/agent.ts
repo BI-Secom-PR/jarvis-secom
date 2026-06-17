@@ -86,7 +86,7 @@ COLUNAS COMPARTILHADAS (todas as tabelas):
   Performance:   impressions BIGINT, clicks BIGINT, reach BIGINT,
                  engagements BIGINT, conversions BIGINT
   Social:        likes, comments, shares, reactions (Meta only), saves
-  Engajamento Real (Meta only): soma de likes + comments + shares + reactions + saves. Se estas métricas não existirem, use engagements.
+  Engajamento Real: ver regra "ENGAJAMENTO REAL" na seção de KPIs — usar sempre que a análise for sobre engajamento.
   Vídeo:         video_views, video_plays, video_2s, video_30s,
                  video_p25, video_p50, video_p75, video_p95, video_p100, video_completions
 
@@ -156,8 +156,34 @@ KPIs COMUNS:
   CPM  = SUM(cost)/NULLIF(SUM(impressions),0)*1000
   CPC  = SUM(cost)/NULLIF(SUM(clicks),0)
   CTR  = SUM(clicks)/NULLIF(SUM(impressions),0)*100
-  CPE  = SUM(cost)/NULLIF(SUM(engagements),0)
+  CPE  = SUM(cost)/NULLIF(SUM(engagamentos_reais),0)   ← veja ENGAJAMENTO REAL abaixo
   CPA  = SUM(cost)/NULLIF(SUM(conversions),0)
+
+ENGAJAMENTO REAL — REGRA OBRIGATÓRIA:
+  Sempre que a pergunta envolver engajamento (taxa de engajamento, engajamentos, CPE,
+  "qual campanha/peça engajou mais", "melhor engajamento"), prefira "engajamento real"
+  em vez da coluna engagements.
+
+  Expressão SQL por contexto:
+  ① Somente Meta:
+       SUM(likes + comments + shares + reactions + saves)  AS engajamentos_reais
+
+  ② Multiplataforma com Meta inclusa:
+       SUM(CASE WHEN platform = 'meta'
+                THEN likes + comments + shares + reactions + saves
+                ELSE engagements END)                       AS engajamentos_reais
+
+  ③ Sem Meta (tiktok, google, etc.):
+       SUM(engagements)                                     AS engajamentos_reais
+
+  Taxa de engajamento real:
+       SUM(engajamentos_reais)/NULLIF(SUM(impressions),0)*100  AS taxa_engaj_real
+
+  CPE real:
+       SUM(cost)/NULLIF(SUM(engajamentos_reais),0)             AS cpe_real
+
+  ⚠ reactions e saves só existem em gold_platforms_campaigns; em regions/age/gender
+    use a expressão ③ (SUM(engagements)) como fallback.
   VCR  = SUM(video_p100)/NULLIF(SUM(impressions),0)*100
   CPV  = SUM(cost)/NULLIF(SUM(video_views),0)  [kwai/linkedin: usar video_completions]
   VTR  = SUM(video_views)/NULLIF(SUM(impressions),0)*100  [kwai: video_completions]
@@ -439,8 +465,10 @@ ORDER BY vtr DESC;
 
 -- 18. Programa × Geo-alvo: "Bolsa Família engaja mais em qual segmentação geográfica?"
 SELECT target_geo,
-       COUNT(DISTINCT ad_name)                          AS pecas,
-       SUM(engagements)/NULLIF(SUM(impressions),0)*100  AS taxa_engaj
+       COUNT(DISTINCT ad_name)                                                         AS pecas,
+       SUM(CASE WHEN platform = 'meta'
+                THEN likes + comments + shares + reactions + saves
+                ELSE engagements END)/NULLIF(SUM(impressions),0)*100                  AS taxa_engaj_real
 FROM gold_campaigns_classified
 WHERE programa = 'BF' AND target_geo IS NOT NULL
   AND date >= '2026-04-01'
@@ -1040,14 +1068,26 @@ Se quiser oferecer um gráfico, apenas pergunte. Aguarde o usuário confirmar an
 Quando o usuário confirmar, inclua SOMENTE no final da resposta (sem texto depois):
 CHART_REQUEST:{"type":"bar","title":"Título","labels":["A","B"],"datasets":[{"label":"Métrica","data":[1,2]}]}
 
-Tipos suportados: "bar", "line", "area", "pie"
+Tipos suportados: "bar", "line", "area", "pie", "scatter", "geo"
 Como escolher:
 - "line" — séries temporais (dados por data) com múltiplas métricas
 - "area" — séries temporais com UMA métrica (evolução de investimento, impressões ao longo do tempo)
 - "bar" — comparações entre categorias (plataformas, campanhas, regiões)
 - "pie" — distribuição/participação percentual com 3 a 6 categorias e UM único dataset (ex: share de investimento por plataforma). NUNCA use pie para mais de 6 categorias ou séries temporais.
+- "scatter" — comparação de DUAS métricas contínuas ao mesmo tempo com agrupamento por dimensão (ex: CPV × VTR por tema, CTR × CPM por criativo). Cada dataset é um grupo (ex: um tema, uma plataforma). Requer "xLabel" e "yLabel". Os dados de cada dataset são arrays de {x, y} — não arrays de números simples.
+- "geo" — distribuição geográfica por estado brasileiro. Use "labels" com siglas de UF (SP, RJ, MG, BA…) e "datasets" com os valores numéricos correspondentes. Mostre apenas os estados com dados (não precisa incluir todos os 27 estados).
 Para múltiplas métricas no mesmo gráfico ("bar"/"line"), adicione múltiplos objetos em "datasets".
 Evite misturar métricas de escalas muito diferentes (ex: impressões em milhões + CTR em %) no mesmo gráfico — prefira dois gráficos ou escolha a métrica principal.
+
+Campo "meta" (enriquecer tooltip): em qualquer tipo de gráfico, adicione "meta" em cada dataset para mostrar métricas de contexto ao passar o mouse. "meta" é um array com um objeto por ponto de dado. SEMPRE use meta quando o gráfico tem uma métrica principal mas o analista vai querer ver métricas relacionadas no hover (ex: gráfico de VTR → meta com CPV e visualizações; gráfico de impressões por UF → meta com CTR e CPM).
+
+Exemplos de CHART_REQUEST para os novos tipos:
+
+scatter — CPV × VTR por tema:
+CHART_REQUEST:{"type":"scatter","title":"CPV × VTR por Tema","xLabel":"CPV (R$)","yLabel":"VTR (%)","datasets":[{"label":"Educação","data":[{"x":0.08,"y":45},{"x":0.11,"y":38}],"meta":[{"Visualizações":"1,2 Mi","Campanha":"Volta às Aulas"},{"Visualizações":"980 Mil","Campanha":"EAD 2026"}]},{"label":"Saúde","data":[{"x":0.05,"y":52}],"meta":[{"Visualizações":"2,1 Mi","Campanha":"Prevenção"}]}]}
+
+geo — impressões por estado:
+CHART_REQUEST:{"type":"geo","title":"Impressões por Estado","labels":["SP","RJ","MG","BA","PR","RS"],"datasets":[{"label":"Impressões","data":[12000000,5400000,3200000,1800000,2100000,1500000],"meta":[{"CTR":"1,2%","CPM":"R$8,50"},{"CTR":"0,9%","CPM":"R$9,20"},{"CTR":"1,1%","CPM":"R$7,80"},{"CTR":"0,8%","CPM":"R$10,50"},{"CTR":"1,0%","CPM":"R$8,90"},{"CTR":"0,7%","CPM":"R$11,20"}]}]}
 
 Não mostre o SQL ao usuário, exceto se pedido explicitamente.
 
@@ -1071,7 +1111,7 @@ A tool recebe: { format, sql_query, title?, filename?, chart?, report_text? }
 - sql_query: SELECT que produz as linhas do arquivo (mesmas regras de execute_sql_query)
 - title: título humano (vai no header do xlsx/html); deixe curto e descritivo
 - chart: opcional, SOMENTE para format=html, mesma estrutura do CHART_REQUEST
-  ({ type, title?, labels, datasets }). Tipos: "bar", "line", "area", "pie".
+  ({ type, title?, labels?, datasets, xLabel?, yLabel? }). Tipos: "bar", "line", "area", "pie", "scatter", "geo".
 - report_text: OBRIGATÓRIO quando format=html. Texto estruturado do relatório usando este formato:
 
   [METRICS] Label1: Valor1 | Label2: Valor2 | Label3: Valor3 | Label4: Valor4 | Label5: Valor5
