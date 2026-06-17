@@ -11,12 +11,13 @@ export default async function AdminPage() {
 
   const allUsers = await db
     .select({
-      id:        users.id,
-      email:     users.email,
-      name:      users.name,
-      role:      users.role,
-      enabled:   users.enabled,
-      createdAt: users.createdAt,
+      id:             users.id,
+      email:          users.email,
+      name:           users.name,
+      role:           users.role,
+      enabled:        users.enabled,
+      passkeyAllowed: users.passkeyAllowed,
+      createdAt:      users.createdAt,
     })
     .from(users)
     .orderBy(asc(users.createdAt))

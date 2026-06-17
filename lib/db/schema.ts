@@ -13,9 +13,10 @@ export const users = pgTable('users', {
   name:         text('name').notNull(),
   passwordHash: text('password_hash').notNull(),
   role:         roleEnum('role').notNull().default('USER'),
-  enabled:      boolean('enabled').notNull().default(false),
-  createdAt:    timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt:    timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  enabled:        boolean('enabled').notNull().default(false),
+  passkeyAllowed: boolean('passkey_allowed').notNull().default(false),
+  createdAt:      timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:      timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const sessions = pgTable('sessions', {
@@ -55,6 +56,16 @@ export const fileExports = pgTable('file_exports', {
   expiresAt:      timestamp('expires_at', { withTimezone: true }).notNull(),
 })
 
+export const passkeyCredentials = pgTable('passkey_credentials', {
+  credentialId: text('credential_id').primaryKey(),
+  userId:       uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  publicKey:    bytea('public_key').notNull(),
+  counter:      text('counter').notNull().default('0'),
+  transports:   text('transports').array(),
+  name:         text('name').notNull().default('Chave de acesso'),
+  createdAt:    timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 // RAG: (question → SQL) example library, retrieved by embedding similarity
 // and injected into the chat system prompt. Embeddings are 768-dim vectors
 // (nomic-embed-text via Ollama) stored as JSON — at <5k rows, brute-force
@@ -70,9 +81,10 @@ export const sqlExamples = pgTable('sql_examples', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-export type User        = typeof users.$inferSelect
-export type Session     = typeof sessions.$inferSelect
-export type ChatSession = typeof chatSessions.$inferSelect
-export type ChatMessage = typeof chatMessages.$inferSelect
-export type FileExport  = typeof fileExports.$inferSelect
-export type SqlExample  = typeof sqlExamples.$inferSelect
+export type User               = typeof users.$inferSelect
+export type Session            = typeof sessions.$inferSelect
+export type ChatSession        = typeof chatSessions.$inferSelect
+export type ChatMessage        = typeof chatMessages.$inferSelect
+export type FileExport         = typeof fileExports.$inferSelect
+export type SqlExample         = typeof sqlExamples.$inferSelect
+export type PasskeyCredential  = typeof passkeyCredentials.$inferSelect

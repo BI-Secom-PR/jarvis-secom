@@ -8,11 +8,12 @@ import { users, sessions } from '@/lib/db/schema'
 import { sendApprovalEmail } from '@/lib/email'
 
 const schema = z.object({
-  enabled:  z.boolean().optional(),
-  name:     z.string().min(2).max(100).optional(),
-  email:    z.string().email().optional(),
-  role:     z.enum(['ADMIN', 'USER']).optional(),
-  password: z.string().min(8).max(100).optional(),
+  enabled:        z.boolean().optional(),
+  passkeyAllowed: z.boolean().optional(),
+  name:           z.string().min(2).max(100).optional(),
+  email:          z.string().email().optional(),
+  role:           z.enum(['ADMIN', 'USER']).optional(),
+  password:       z.string().min(8).max(100).optional(),
 })
 
 export async function PATCH(
@@ -36,7 +37,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 })
   }
 
-  const { enabled, name, email, role, password } = parsed.data
+  const { enabled, passkeyAllowed, name, email, role, password } = parsed.data
   const enabledChanged = enabled !== undefined
 
   // Check email uniqueness if changing email
@@ -52,17 +53,18 @@ export async function PATCH(
   }
 
   const patch: Record<string, unknown> = { updatedAt: new Date() }
-  if (enabledChanged)        patch.enabled = enabled
-  if (name !== undefined) patch.name   = name
-  if (email !== undefined) patch.email = email.toLowerCase()
-  if (role !== undefined)  patch.role  = role
-  if (password)            patch.passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
+  if (enabledChanged)              patch.enabled        = enabled
+  if (passkeyAllowed !== undefined) patch.passkeyAllowed = passkeyAllowed
+  if (name !== undefined)          patch.name           = name
+  if (email !== undefined)         patch.email          = email.toLowerCase()
+  if (role !== undefined)          patch.role           = role
+  if (password)                    patch.passwordHash   = await bcrypt.hash(password, BCRYPT_ROUNDS)
 
   const updated = await db
     .update(users)
     .set(patch)
     .where(eq(users.id, id))
-    .returning({ id: users.id, email: users.email, name: users.name, role: users.role, enabled: users.enabled })
+    .returning({ id: users.id, email: users.email, name: users.name, role: users.role, enabled: users.enabled, passkeyAllowed: users.passkeyAllowed })
 
   if (!updated.length) {
     return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 })

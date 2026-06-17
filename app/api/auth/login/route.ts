@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs'
 import { randomBytes } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { users, sessions } from '@/lib/db/schema'
+import { users, sessions, passkeyCredentials } from '@/lib/db/schema'
 import { SESSION_COOKIE } from '@/lib/auth'
 import { rateLimit, clientIp, tooManyRequests } from '@/lib/rateLimit'
 
@@ -58,7 +58,18 @@ export async function POST(req: NextRequest) {
   const token = randomBytes(64).toString('hex')
   await db.insert(sessions).values({ token, userId: user!.id })
 
-  const res = NextResponse.json({ ok: true })
+  // Check if user should be prompted to enroll a passkey
+  let enrollPasskey = false
+  if (user!.passkeyAllowed) {
+    const existingPasskeys = await db
+      .select({ credentialId: passkeyCredentials.credentialId })
+      .from(passkeyCredentials)
+      .where(eq(passkeyCredentials.userId, user!.id))
+      .limit(1)
+    enrollPasskey = existingPasskeys.length === 0
+  }
+
+  const res = NextResponse.json({ ok: true, ...(enrollPasskey && { enrollPasskey: true }) })
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure:   IS_PROD,

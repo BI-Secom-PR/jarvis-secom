@@ -6,7 +6,7 @@ import type { User } from '@/lib/db/schema'
 import { logout } from '@/lib/authClient'
 import { patchJson } from '@/lib/fetchUtils'
 
-type UserRow = Pick<User, 'id' | 'email' | 'name' | 'role' | 'enabled' | 'createdAt'>
+type UserRow = Pick<User, 'id' | 'email' | 'name' | 'role' | 'enabled' | 'passkeyAllowed' | 'createdAt'>
 
 type EditState = {
   name:     string
@@ -31,7 +31,8 @@ export default function UsersTable({
 }) {
   const router = useRouter()
   const [users, setUsers]       = useState(initialUsers)
-  const [toggling, setToggling] = useState<string | null>(null)
+  const [toggling, setToggling]               = useState<string | null>(null)
+  const [togglingPasskey, setTogglingPasskey] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editState, setEditState] = useState<EditState | null>(null)
   const [saving, setSaving]     = useState(false)
@@ -45,6 +46,16 @@ export default function UsersTable({
       setUsers(prev => prev.map(u => u.id === id ? { ...u, enabled: updated.enabled } : u))
     }
     setToggling(null)
+  }
+
+  async function togglePasskeyAllowed(id: string, allow: boolean) {
+    setTogglingPasskey(id)
+    const res = await patchJson(`/api/admin/users/${id}`, { passkeyAllowed: allow })
+    if (res.ok) {
+      const updated = await res.json()
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, passkeyAllowed: updated.passkeyAllowed } : u))
+    }
+    setTogglingPasskey(null)
   }
 
   function startEdit(user: UserRow) {
@@ -116,6 +127,7 @@ export default function UsersTable({
               <th className="text-left text-xs text-white/40 font-medium px-6 py-4">E-mail</th>
               <th className="text-left text-xs text-white/40 font-medium px-6 py-4">Perfil</th>
               <th className="text-center text-xs text-white/40 font-medium px-6 py-4">Acesso</th>
+              <th className="text-center text-xs text-white/40 font-medium px-6 py-4">Passkey</th>
               <th className="text-right text-xs text-white/40 font-medium px-6 py-4">Ações</th>
             </tr>
           </thead>
@@ -162,6 +174,26 @@ export default function UsersTable({
                     )}
                   </td>
 
+                  {/* Passkey toggle */}
+                  <td className="px-6 py-4 text-center">
+                    <button
+                      disabled={togglingPasskey === user.id}
+                      onClick={() => togglePasskeyAllowed(user.id, !user.passkeyAllowed)}
+                      title={user.passkeyAllowed ? 'Revogar permissão de passkey' : 'Permitir criação de passkey'}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full border-[0.5px] transition-colors duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                        user.passkeyAllowed
+                          ? 'bg-[rgba(120,80,255,0.25)] border-[rgba(120,80,255,0.4)]'
+                          : 'bg-white/[0.08] border-white/[0.15]'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 rounded-full shadow transition-transform duration-200 ${
+                        user.passkeyAllowed
+                          ? 'translate-x-6 bg-purple-400'
+                          : 'translate-x-1 bg-white/30'
+                      }`} />
+                    </button>
+                  </td>
+
                   {/* Actions */}
                   <td className="px-6 py-4 text-right">
                     {user.id === currentUserId ? (
@@ -187,7 +219,7 @@ export default function UsersTable({
                 {/* Inline edit row */}
                 {editingId === user.id && editState && (
                   <tr className="border-b border-white/[0.05] last:border-0 bg-white/[0.02]">
-                    <td colSpan={5} className="px-6 py-5">
+                    <td colSpan={6} className="px-6 py-5">
                       <div className="flex flex-col gap-4">
                         <div className="grid grid-cols-4 gap-3">
                           <div className="flex flex-col gap-1.5">
