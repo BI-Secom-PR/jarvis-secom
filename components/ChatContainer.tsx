@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Message } from "@/types/chat";
-import { MODELS, DEFAULT_MODEL, type ModelId } from "@/lib/agent";
+import { DEFAULT_MODEL, type ModelId } from "@/lib/agent";
 import * as chatApi from "@/lib/chatApi";
 import type { SessionUser } from "@/lib/auth";
 import MessageBubble from "./MessageBubble";
@@ -182,31 +182,6 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2 md:gap-2.5">
-          <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value as ModelId)}
-            disabled={isTyping}
-            className="appearance-none bg-fill border-[0.5px] border-separator rounded-lg px-3 py-2 md:py-1.5 text-[16px] md:text-[12px] text-ink-2 font-[inherit] tracking-[-0.1px] cursor-pointer outline-none transition-[border-color,background] duration-150 hover:bg-fill-2 hover:text-ink focus:border-accent-border disabled:opacity-40 disabled:cursor-not-allowed max-w-[42vw] md:max-w-none"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(128,128,140,0.6)' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "right 10px center",
-              paddingRight: "28px",
-            }}
-          >
-            {(["google", "ollama"] as const).map((provider) => (
-              <optgroup
-                key={provider}
-                label={provider === "google" ? "✦ Google" : "🦙 Ollama"}
-              >
-                {MODELS.filter((m) => m.provider === provider).map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
           <div
             title="Online"
             className="w-2 h-2 bg-success rounded-full shadow-[0_0_6px_rgba(52,199,89,0.55)] animate-pulse-green hidden md:block"

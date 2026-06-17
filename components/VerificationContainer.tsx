@@ -3,6 +3,7 @@
 import { Fragment, useState, useEffect } from "react";
 import Link from "next/link";
 import JarvisRing from "./JarvisRing";
+import ThemeToggle from "./ThemeToggle";
 
 type VehicleResult = {
   veiculo: string;
@@ -273,6 +274,7 @@ function lastDayOfMonth(year: number, month: number): number {
 
 export default function VerificationContainer() {
   const currentYear = new Date().getFullYear();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [adserver, setAdserver] = useState<string | null>(null);
   const [consolidado, setConsolidado] = useState<File[]>([]);
   const [comprovantes, setComprovantes] = useState<File[]>([]);
@@ -503,7 +505,7 @@ export default function VerificationContainer() {
 
   return (
     <div className="h-dvh w-full flex flex-col overflow-hidden relative nebula-bg">
-      {/* Header — breadcrumb left, ring right (never overlapping on phones) */}
+      {/* Header — breadcrumb left, controls right */}
       <header className="shrink-0 flex items-center justify-between gap-3 px-4 md:px-6 pb-3 md:pb-4 pt-[max(0.75rem,env(safe-area-inset-top))] md:pt-4 border-b border-separator">
         <div className="flex items-center gap-2.5 min-w-0">
           <Link
@@ -517,10 +519,48 @@ export default function VerificationContainer() {
             Verificação de Consolidados
           </h1>
         </div>
-        <div className="shrink-0">
-          <JarvisRing size={34} />
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Desktop: theme toggle + ring */}
+          <div className="hidden md:flex items-center gap-2">
+            <ThemeToggle />
+            <JarvisRing size={34} />
+          </div>
+          {/* Mobile: hamburger only */}
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Abrir menu"
+            className="md:hidden w-11 h-11 flex items-center justify-center rounded-xl text-ink-3 hover:text-ink-2 hover:bg-fill-2 transition-all duration-150 -mr-1"
+          >
+            <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
+              <path d="M0 1h16M0 6h16M0 11h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </button>
         </div>
       </header>
+
+      {/* Mobile bottom-sheet drawer for verification */}
+      <div
+        className={`fixed inset-0 z-50 md:hidden transition-opacity duration-200 ${mobileMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      >
+        <div
+          className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+        <div
+          className={`absolute bottom-0 left-0 right-0 bg-surface-opaque border-t border-separator rounded-t-3xl transition-transform duration-300 ease-out ${mobileMenuOpen ? "translate-y-0" : "translate-y-full"}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="w-9 h-1 rounded-full bg-separator" />
+          </div>
+          <div className="px-5 pt-3 pb-[max(2rem,env(safe-area-inset-bottom))]">
+            <div className="flex items-center justify-between py-3 px-1">
+              <span className="text-sm text-ink-2">Tema</span>
+              <ThemeToggle />
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto px-4 py-5 md:px-6 md:py-8 space-y-6">
