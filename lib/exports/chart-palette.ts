@@ -3,12 +3,12 @@
    independent of the app theme. Keep ChartWidget and chart-svg.ts in parity. */
 
 export const PREMIUM_PALETTE = [
-  '#3b82f6', // blue-500
-  '#10b981', // emerald-500
-  '#8b5cf6', // violet-500
-  '#f59e0b', // amber-500
-  '#f43f5e', // rose-500
-  '#06b6d4', // cyan-500
+  '#38bdf8', // sky-400   — electric blue
+  '#f472b6', // pink-400  — hot pink
+  '#2dd4bf', // teal-400  — mint
+  '#fb923c', // orange-400 — coral
+  '#a78bfa', // violet-400 — soft indigo
+  '#4ade80', // green-400  — lime
 ];
 
 /* Legacy — kept so existing chart-svg.ts compiles without changes until updated */

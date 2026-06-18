@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -124,10 +124,10 @@ function PremiumTooltip({
           <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "8px 0" }} />
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "3px 12px" }}>
             {Object.entries(meta).map(([k, v]) => (
-              <>
-                <span key={`k-${k}`} style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{k}</span>
-                <span key={`v-${k}`} style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{v}</span>
-              </>
+              <React.Fragment key={k}>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{k}</span>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{v}</span>
+              </React.Fragment>
             ))}
           </div>
         </>
@@ -196,16 +196,16 @@ function ScatterTooltip({
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "3px 12px" }}>
             {__meta
               ? Object.entries(__meta).map(([k, v]) => (
-                  <>
-                    <span key={`k-${k}`} style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{k}</span>
-                    <span key={`v-${k}`} style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right" }}>{v}</span>
-                  </>
+                  <React.Fragment key={k}>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{k}</span>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right" }}>{v}</span>
+                  </React.Fragment>
                 ))
               : extraKeys.map((k) => (
-                  <>
-                    <span key={`k-${k}`} style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{k}</span>
-                    <span key={`v-${k}`} style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right" }}>{String(rest[k])}</span>
-                  </>
+                  <React.Fragment key={k}>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{k}</span>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right" }}>{String(rest[k])}</span>
+                  </React.Fragment>
                 ))}
           </div>
         </>
@@ -221,18 +221,20 @@ function GeoTooltip({
   meta,
   metricLabel,
   color,
+  isDark,
 }: {
   state: string;
   value: number;
   meta?: Record<string, string | number>;
   metricLabel: string;
   color: string;
+  isDark: boolean;
 }) {
   return (
     <div
       style={{
-        background: "#0f172a",
-        border: "1px solid rgba(255,255,255,0.10)",
+        background: isDark ? "#0f172a" : "#ffffff",
+        border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(0,0,0,0.08)",
         borderRadius: 10,
         boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
         padding: "10px 14px",
@@ -240,21 +242,21 @@ function GeoTooltip({
         pointerEvents: "none",
       }}
     >
-      <p style={{ fontSize: 13, fontWeight: 700, color: "#fff", marginBottom: 6 }}>{state}</p>
+      <p style={{ fontSize: 13, fontWeight: 700, color: isDark ? "#fff" : "#0f172a", marginBottom: 6 }}>{state}</p>
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, boxShadow: `0 0 8px ${color}88` }} />
-        <span style={{ color: "rgba(255,255,255,0.55)" }}>{metricLabel}</span>
-        <span style={{ marginLeft: "auto", paddingLeft: 16, fontWeight: 600, color: "#fff" }}>{formatCompact(value)}</span>
+        <span style={{ color: isDark ? "rgba(255,255,255,0.55)" : "rgba(60,60,67,0.55)" }}>{metricLabel}</span>
+        <span style={{ marginLeft: "auto", paddingLeft: 16, fontWeight: 600, color: isDark ? "#fff" : "#0f172a" }}>{formatCompact(value)}</span>
       </div>
       {meta && Object.keys(meta).length > 0 && (
         <>
-          <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "8px 0" }} />
+          <hr style={{ border: "none", borderTop: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)", margin: "8px 0" }} />
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "3px 12px" }}>
             {Object.entries(meta).map(([k, v]) => (
-              <>
-                <span key={`k-${k}`} style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{k}</span>
-                <span key={`v-${k}`} style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right" }}>{v}</span>
-              </>
+              <React.Fragment key={k}>
+                <span style={{ fontSize: 11, color: isDark ? "rgba(255,255,255,0.4)" : "rgba(60,60,67,0.4)" }}>{k}</span>
+                <span style={{ fontSize: 11, color: isDark ? "rgba(255,255,255,0.75)" : "rgba(30,41,59,0.85)", textAlign: "right" }}>{v}</span>
+              </React.Fragment>
             ))}
           </div>
         </>
@@ -307,12 +309,14 @@ function BrazilChoropleth({
   metaMap,
   metricLabel,
   color,
+  isDark,
 }: {
   labels: string[];
   values: number[];
   metaMap: Record<string, Record<string, string | number> | undefined>;
   metricLabel: string;
   color: string;
+  isDark: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [paths, setPaths] = useState<{ uf: string; d: string }[]>([]);
@@ -326,7 +330,9 @@ function BrazilChoropleth({
   function stateFill(uf: string, isHovered: boolean): string {
     const v = valueMap[uf.toUpperCase()];
     const ratio = v ? v / max : 0;
-    const opacity = v ? 0.18 + ratio * 0.77 : 0.06;
+    const opacity = isDark
+      ? (v ? 0.18 + ratio * 0.77 : 0.06)
+      : (v ? 0.25 + ratio * 0.70 : 0.10);
     const base = hexToRgba(color, opacity);
     if (isHovered) return hexToRgba(color, Math.min(opacity + 0.2, 1));
     return base;
@@ -358,13 +364,13 @@ function BrazilChoropleth({
 
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
-      <svg viewBox="0 0 560 560" style={{ width: "100%", height: 300, borderRadius: 10, background: "#0f172a" }}>
+      <svg viewBox="0 0 560 560" style={{ width: "100%", height: 300, borderRadius: 10, background: isDark ? "#0f172a" : "#f1f5f9" }}>
         {paths.map(({ uf, d }) => (
           <path
             key={uf}
             d={d}
             fill={stateFill(uf, hoveredUf === uf)}
-            stroke="rgba(255,255,255,0.12)"
+            stroke={isDark ? "rgba(255,255,255,0.12)" : "rgba(30,41,59,0.18)"}
             strokeWidth={0.8}
             style={{ cursor: valueMap[uf.toUpperCase()] ? "pointer" : "default", transition: "fill 0.15s" }}
             onMouseEnter={(e) => {
@@ -393,7 +399,7 @@ function BrazilChoropleth({
       </svg>
       {hover && (
         <div style={{ position: "absolute", left: Math.min(hover.x + 12, 260), top: Math.max(hover.y - 60, 0), zIndex: 50, pointerEvents: "none" }}>
-          <GeoTooltip state={hover.uf} value={hover.value} meta={hover.meta} metricLabel={metricLabel} color={color} />
+          <GeoTooltip state={hover.uf} value={hover.value} meta={hover.meta} metricLabel={metricLabel} color={color} isDark={isDark} />
         </div>
       )}
     </div>
@@ -704,6 +710,7 @@ export default function ChartWidget({ chart }: Props) {
             metaMap={metaMap}
             metricLabel={chart.datasets[0]?.label ?? "Valor"}
             color={PREMIUM_PALETTE[0]}
+            isDark={isDark}
           />
         );
       }
