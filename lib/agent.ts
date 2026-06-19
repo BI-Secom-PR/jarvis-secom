@@ -56,22 +56,24 @@ TABELAS (schema: airbyte_secom):
 • gold_platforms_age         — grain: platform+campaign+ad+ad_group+date+age+network (4 plataformas)
 • gold_platforms_gender      — grain: platform+campaign+ad+ad_group+date+gender+network (4 plataformas)
 • gold_campaigns_classified  — VIEW: gold_platforms_campaigns + classificação criativa (Framework v4).
-  Mesmas colunas de campaigns MAIS: title, creative_code, eixo, programa, formato, segundagem,
-  visual, tom, porta_voz, target_geo, target_age, target_gender, dark_feed, placement,
-  nsb_code, person_name, classification_source, classification_confidence.
+  Mesmas colunas de campaigns MAIS: title, creative_code, eixo, eixo_label, programa, programa_label,
+  formato, segundagem, visual, tom, porta_voz, target_geo, target_age, target_gender, dark_feed,
+  placement, nsb_code, person_name, classification_source, classification_confidence.
+  eixo_label / programa_label = nome legível já pronto na view (ex: programa='E61' → programa_label='Escala 6×1').
+  Para filtrar/agrupar por NOME use programa_label (ex: WHERE programa_label='Escala 6×1') — não precisa decorar siglas nem fazer JOIN.
   USE ESTA VIEW para qualquer pergunta sobre dimensões criativas (eixo temático, programa,
   formato, segundagem, elemento visual, tom da mensagem, porta-voz).
 • gold_creative_dim_labels   — lookup (dimension, code, label): nome legível de cada sigla.
   Ex: SELECT label FROM gold_creative_dim_labels WHERE dimension='eixo' AND code='SAU' → 'Saúde'
 • gold_regions_classified    — VIEW: gold_platforms_regions + classificação criativa (Framework v4).
-  Mesmas colunas de regions MAIS: title, creative_code, eixo, programa, formato, segundagem,
-  visual, tom, porta_voz, target_geo, target_age, target_gender, dark_feed, placement,
-  nsb_code, person_name, classification_source, classification_confidence.
+  Mesmas colunas de regions MAIS: title, creative_code, eixo, eixo_label, programa, programa_label,
+  formato, segundagem, visual, tom, porta_voz, target_geo, target_age, target_gender, dark_feed,
+  placement, nsb_code, person_name, classification_source, classification_confidence.
   USE ESTA VIEW (em vez de JOIN regions + classified) para cruzar região geográfica com dimensões
   criativas — já está pré-unida, é muito mais eficiente e não trava.
 • gold_age_gender_classified — VIEW: gold_platforms_age_gender + classificação criativa (Framework v4).
-  Contém: age, gender + todas as colunas de classificação. Serve também para análise só por age
-  ou só por gender (agrupando pela dimensão desejada).
+  Contém: age, gender + todas as colunas de classificação (incl. eixo_label, programa_label). Serve
+  também para análise só por age ou só por gender (agrupando pela dimensão desejada).
   USE ESTA VIEW (em vez de JOIN age/gender + classified) para cruzar demografia com dimensões criativas.
   Colunas AUSENTES (vs campaigns): reactions, saves, link_clicks, video_2s, video_30s, video_p95, video_completions
 
@@ -222,7 +224,8 @@ Cada peça criativa tem 7 dimensões de classificação extraídas do ad_name
 (código no padrão EIXO_PROGRAMA_FORMATO_SEGUNDAGEM_VISUAL_TOM_PORTAVOZ,
 ex: TRB_E61_VIDEO_30S_MEM_CEL_ATO) + metadados de mídia.
 
-DICIONÁRIO DE SIGLAS (labels completos em gold_creative_dim_labels):
+DICIONÁRIO DE SIGLAS (labels já prontos na própria view: eixo_label, programa_label —
+prefira-os a JOIN com gold_creative_dim_labels; filtre por nome com WHERE programa_label='Escala 6×1'):
   eixo (tema):      SAU=Saúde, AMB=Meio Ambiente, ECO=Economia, INFRA=Infraestrutura,
                     EDU=Educação, CUL=Cultura, MOB=Mobilidade, TRB=Trabalho, SEG=Segurança,
                     INOV=Inovação, MUL=Mulheres, COMB=Combustíveis, JOV=Jovem, DIV=Diversos
@@ -550,6 +553,27 @@ WHERE programa = 'E61' AND formato = 'VIDEO'
 GROUP BY visual, tom
 HAVING COUNT(DISTINCT ad_name) >= 3 AND SUM(impressions) >= 10000
 ORDER BY vtr DESC;
+
+-- 24b. Filtrar por NOME do programa (programa_label) — captura código E61 + inferidos por keyword.
+--      Use sempre que o usuário citar o programa pelo nome ("Escala 6x1", "Bolsa Família").
+SELECT programa_label                              AS programa,
+       COUNT(DISTINCT ad_name)                     AS pecas,
+       SUM(cost)                                   AS investimento,
+       SUM(impressions)                            AS impressoes,
+       SUM(reach)                                  AS alcance
+FROM gold_campaigns_classified
+WHERE programa_label = 'Escala 6×1' AND platform = 'meta'
+GROUP BY programa_label;
+
+-- 24c. Ranking de programas pelo nome legível (sem decorar siglas, sem JOIN)
+SELECT programa_label                              AS programa,
+       COUNT(DISTINCT ad_name)                     AS pecas,
+       SUM(cost)                                   AS investimento,
+       SUM(clicks)/NULLIF(SUM(impressions),0)*100  AS ctr
+FROM gold_campaigns_classified
+WHERE programa IS NOT NULL AND date >= '2026-04-01'
+GROUP BY programa_label
+ORDER BY investimento DESC;
 
 -- 25. Terceira ordem — Eixo × Segundagem × Visual: duração e linguagem ideal por tema
 SELECT segundagem, visual,

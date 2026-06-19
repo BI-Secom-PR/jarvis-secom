@@ -300,25 +300,42 @@ GROUP BY DATE_FORMAT(date,'%Y-%m') ORDER BY mes;`,
   {
     question: 'Qual eixo temático teve melhor performance este mês?',
     dims: ['eixo'],
-    sql: `SELECT c.eixo, l.label AS tema, COUNT(DISTINCT c.ad_name) AS pecas, SUM(c.cost) AS investimento,
-       SUM(c.clicks)/NULLIF(SUM(c.impressions),0)*100 AS ctr,
-       SUM(c.video_views)/NULLIF(SUM(c.impressions),0)*100 AS vtr
-FROM gold_campaigns_classified c
-LEFT JOIN gold_creative_dim_labels l ON l.dimension='eixo' AND l.code=c.eixo
-WHERE c.eixo IS NOT NULL AND c.formato = 'VIDEO'
-  AND c.date BETWEEN DATE_FORMAT(CURDATE(),'%Y-%m-01') AND CURDATE()
-GROUP BY c.eixo, l.label HAVING COUNT(DISTINCT c.ad_name) >= 3 ORDER BY vtr DESC;`,
+    sql: `SELECT eixo_label AS tema, COUNT(DISTINCT ad_name) AS pecas, SUM(cost) AS investimento,
+       SUM(clicks)/NULLIF(SUM(impressions),0)*100 AS ctr,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr
+FROM gold_campaigns_classified
+WHERE eixo IS NOT NULL AND formato = 'VIDEO'
+  AND date BETWEEN DATE_FORMAT(CURDATE(),'%Y-%m-01') AND CURDATE()
+GROUP BY eixo_label HAVING COUNT(DISTINCT ad_name) >= 3 ORDER BY vtr DESC;`,
   },
   {
     question: 'Compare o investimento e o desempenho entre os programas de governo nos últimos 30 dias',
     dims: ['programa'],
-    sql: `SELECT c.programa, l.label AS programa_nome, COUNT(DISTINCT c.ad_name) AS pecas,
-       SUM(c.cost) AS investimento, SUM(c.impressions) AS impressoes,
-       SUM(c.clicks)/NULLIF(SUM(c.impressions),0)*100 AS ctr
-FROM gold_campaigns_classified c
-LEFT JOIN gold_creative_dim_labels l ON l.dimension='programa' AND l.code=c.programa
-WHERE c.programa IS NOT NULL AND c.date BETWEEN DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND CURDATE()
-GROUP BY c.programa, l.label ORDER BY investimento DESC;`,
+    sql: `SELECT programa_label AS programa_nome, COUNT(DISTINCT ad_name) AS pecas,
+       SUM(cost) AS investimento, SUM(impressions) AS impressoes,
+       SUM(clicks)/NULLIF(SUM(impressions),0)*100 AS ctr
+FROM gold_campaigns_classified
+WHERE programa IS NOT NULL AND date BETWEEN DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND CURDATE()
+GROUP BY programa_label ORDER BY investimento DESC;`,
+  },
+  {
+    question: 'Qual foi o investimento e o alcance da Escala 6x1 na Meta?',
+    dims: ['programa'],
+    sql: `SELECT programa_label AS programa, COUNT(DISTINCT ad_name) AS pecas,
+       SUM(cost) AS investimento, SUM(impressions) AS impressoes, SUM(reach) AS alcance
+FROM gold_campaigns_classified
+WHERE programa_label = 'Escala 6×1' AND platform = 'meta'
+GROUP BY programa_label;`,
+  },
+  {
+    question: 'Como a campanha do Bolsa Família vem performando ao longo dos meses?',
+    dims: ['programa'],
+    sql: `SELECT DATE_FORMAT(date,'%Y-%m') AS mes, COUNT(DISTINCT ad_name) AS pecas,
+       SUM(cost) AS investimento, SUM(impressions) AS impressoes,
+       SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr
+FROM gold_campaigns_classified
+WHERE programa_label = 'Bolsa Família'
+GROUP BY DATE_FORMAT(date,'%Y-%m') ORDER BY mes;`,
   },
   {
     question: 'Qual formato de peça tem o menor custo por engajamento?',
