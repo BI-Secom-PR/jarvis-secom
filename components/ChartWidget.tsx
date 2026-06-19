@@ -126,7 +126,7 @@ function PremiumTooltip({
             {Object.entries(meta).map(([k, v]) => (
               <React.Fragment key={k}>
                 <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{k}</span>
-                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{v}</span>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{typeof v === "number" ? formatFull(v) : String(v)}</span>
               </React.Fragment>
             ))}
           </div>
@@ -181,12 +181,12 @@ function ScatterTooltip({
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, boxShadow: `0 0 8px ${color}88` }} />
           <span style={{ color: "rgba(255,255,255,0.5)" }}>{xLabel ?? "x"}</span>
-          <span style={{ marginLeft: "auto", paddingLeft: 16, fontWeight: 600, color: "#fff" }}>{x}</span>
+          <span style={{ marginLeft: "auto", paddingLeft: 16, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums" }}>{typeof x === "number" ? formatFull(x) : x}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: "transparent" }} />
           <span style={{ color: "rgba(255,255,255,0.5)" }}>{yLabel ?? "y"}</span>
-          <span style={{ marginLeft: "auto", paddingLeft: 16, fontWeight: 600, color: "#fff" }}>{y}</span>
+          <span style={{ marginLeft: "auto", paddingLeft: 16, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums" }}>{typeof y === "number" ? formatFull(y) : y}</span>
         </div>
       </div>
 
@@ -198,13 +198,13 @@ function ScatterTooltip({
               ? Object.entries(__meta).map(([k, v]) => (
                   <React.Fragment key={k}>
                     <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{k}</span>
-                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right" }}>{v}</span>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{typeof v === "number" ? formatFull(v) : v}</span>
                   </React.Fragment>
                 ))
               : extraKeys.map((k) => (
                   <React.Fragment key={k}>
                     <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{k}</span>
-                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right" }}>{String(rest[k])}</span>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{typeof rest[k] === "number" ? formatFull(rest[k] as number) : String(rest[k])}</span>
                   </React.Fragment>
                 ))}
           </div>
@@ -255,7 +255,7 @@ function GeoTooltip({
             {Object.entries(meta).map(([k, v]) => (
               <React.Fragment key={k}>
                 <span style={{ fontSize: 11, color: isDark ? "rgba(255,255,255,0.4)" : "rgba(60,60,67,0.4)" }}>{k}</span>
-                <span style={{ fontSize: 11, color: isDark ? "rgba(255,255,255,0.75)" : "rgba(30,41,59,0.85)", textAlign: "right" }}>{v}</span>
+                <span style={{ fontSize: 11, color: isDark ? "rgba(255,255,255,0.75)" : "rgba(30,41,59,0.85)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{typeof v === "number" ? formatFull(v) : String(v)}</span>
               </React.Fragment>
             ))}
           </div>
