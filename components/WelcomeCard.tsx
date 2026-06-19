@@ -1,6 +1,6 @@
 export default function WelcomeCard() {
   return (
-    <div className="rounded-[18px] bg-fill border-[0.5px] border-separator shadow-(--shadow-bubble) p-4 md:p-5 text-ink-2 text-sm leading-[1.7] tracking-[-0.1px]">
+    <div className="rounded-[18px] liquid-glass-soft p-4 md:p-5 text-ink-2 text-sm leading-[1.7] tracking-[-0.1px]">
       Olá! 👋 Sou o <strong className="text-accent-text">Jarvis</strong>, assistente de dados da SECOM.
       <br /><br />
       Posso consultar dados de campanhas digitais e responder perguntas como:

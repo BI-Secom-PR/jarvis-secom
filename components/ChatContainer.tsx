@@ -155,7 +155,7 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
   );
 
   return (
-    <div className="w-full h-full flex flex-col bg-surface-opaque rounded-none border-0 overflow-hidden relative z-10 md:mx-5 md:max-w-9/12 md:h-[92dvh] md:max-h-225 md:bg-surface md:backdrop-blur-[60px] md:backdrop-saturate-180 md:border-[0.5px] md:border-separator md:rounded-[28px] md:shadow-(--shadow-card)">
+    <div className="w-full h-full flex flex-col bg-surface-opaque rounded-none border-0 overflow-hidden relative z-10 md:mx-5 md:max-w-9/12 md:h-[92dvh] md:max-h-225 md:bg-transparent md:liquid-glass md:rounded-[28px]">
       {/* Header */}
       <div className="flex items-center gap-2 md:gap-3 px-3 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] md:px-6 md:py-4.5 bg-fill border-b-[0.5px] border-separator shrink-0">
         <a

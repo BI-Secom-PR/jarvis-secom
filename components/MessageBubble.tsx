@@ -51,9 +51,7 @@ export default function MessageBubble({ message }: Props) {
     >
       {/* Avatar — hidden on phones to free bubble width, iMessage-style */}
       <div
-        className={`w-8 h-8 rounded-full hidden md:flex items-center justify-center flex-shrink-0 bg-fill border-[0.5px] shadow-(--shadow-bubble) ${
-          isAi ? 'border-separator-strong' : 'border-separator'
-        }`}
+        className="w-8 h-8 rounded-full hidden md:flex items-center justify-center flex-shrink-0 liquid-glass-soft"
       >
         {isAi ? <StarIcon /> : <UserIcon />}
       </div>
@@ -62,8 +60,8 @@ export default function MessageBubble({ message }: Props) {
       <div
         className={`px-[15px] py-[11px] rounded-[18px] text-sm leading-[1.65] tracking-[-0.1px] break-words max-w-full bubble-content ${
           isAi
-            ? 'bg-fill border-[0.5px] border-separator text-ink rounded-bl-[5px] shadow-(--shadow-bubble)'
-            : 'bg-(--bubble-user) border-[0.5px] border-(--bubble-user-border) text-white rounded-br-[5px] shadow-(--shadow-bubble-user) whitespace-pre-wrap'
+            ? 'liquid-glass-soft text-ink rounded-bl-[5px]'
+            : 'liquid-glass-accent text-(--bubble-user-ink) rounded-br-[5px] whitespace-pre-wrap'
         }`}
       >
         {isAi ? (
