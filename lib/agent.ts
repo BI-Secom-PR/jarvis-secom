@@ -81,6 +81,9 @@ COLUNAS COMPARTILHADAS (todas as tabelas):
   Data:          date DATE (formato YYYY-MM-DD — sempre filtrar por esta coluna)
   Hierarquia:    account_id, account_name, campaign_id, campaign_name,
                  ad_group_id, ad_group_name, ad_id, ad_name
+                 ⚠ "total de anúncios" / "quantos anúncios" = COUNT(DISTINCT ad_id) SEMPRE.
+                   NUNCA use COUNT(DISTINCT ad_name): nomes repetem entre ids distintos e
+                   subcontam. ad_id é o identificador único real do anúncio veiculado.
   Metadata:      objective (NULL para Google e Amazon)
   Custo:         cost DECIMAL(18,6), cost_currency
   Performance:   impressions BIGINT, clicks BIGINT, reach BIGINT,
@@ -148,9 +151,12 @@ MOEDA (cost):
   meta, google, tiktok: BRL (account native, cost_currency=NULL)
   kwai: BRL (cost_currency='BRL')
   linkedin: varia por conta
-  pinterest: USD (cost_currency='USD')
+  pinterest: aparece como cost_currency='USD', MAS o valor JÁ ESTÁ EM BRL — o fornecedor
+             entrega o custo já convertido em reais para o cliente. TRATE pinterest como BRL:
+             pode somar com meta/google/tiktok/kwai/linkedin(BRL) sem conversão e exibir R$.
   amazon_dsp: USD (cost_currency=NULL)
-  ⚠ NÃO some cost entre plataformas sem filtrar por moeda
+  ⚠ NÃO some cost entre plataformas sem filtrar por moeda — EXCEÇÃO: pinterest conta como BRL
+    (acima). Atenção real só com amazon_dsp (USD de verdade) e linkedin de conta em moeda estrangeira.
 
 KPIs COMUNS:
   CPM  = SUM(cost)/NULLIF(SUM(impressions),0)*1000
