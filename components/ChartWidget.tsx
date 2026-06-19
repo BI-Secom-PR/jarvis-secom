@@ -126,7 +126,7 @@ function PremiumTooltip({
             {Object.entries(meta).map(([k, v]) => (
               <React.Fragment key={k}>
                 <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{k}</span>
-                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{v}</span>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{typeof v === "number" ? formatFull(v) : String(v)}</span>
               </React.Fragment>
             ))}
           </div>
@@ -181,12 +181,12 @@ function ScatterTooltip({
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, boxShadow: `0 0 8px ${color}88` }} />
           <span style={{ color: "rgba(255,255,255,0.5)" }}>{xLabel ?? "x"}</span>
-          <span style={{ marginLeft: "auto", paddingLeft: 16, fontWeight: 600, color: "#fff" }}>{x}</span>
+          <span style={{ marginLeft: "auto", paddingLeft: 16, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums" }}>{typeof x === "number" ? formatFull(x) : x}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: "transparent" }} />
           <span style={{ color: "rgba(255,255,255,0.5)" }}>{yLabel ?? "y"}</span>
-          <span style={{ marginLeft: "auto", paddingLeft: 16, fontWeight: 600, color: "#fff" }}>{y}</span>
+          <span style={{ marginLeft: "auto", paddingLeft: 16, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums" }}>{typeof y === "number" ? formatFull(y) : y}</span>
         </div>
       </div>
 
@@ -198,13 +198,13 @@ function ScatterTooltip({
               ? Object.entries(__meta).map(([k, v]) => (
                   <React.Fragment key={k}>
                     <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{k}</span>
-                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right" }}>{v}</span>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{typeof v === "number" ? formatFull(v) : v}</span>
                   </React.Fragment>
                 ))
               : extraKeys.map((k) => (
                   <React.Fragment key={k}>
                     <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{k}</span>
-                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right" }}>{String(rest[k])}</span>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{typeof rest[k] === "number" ? formatFull(rest[k] as number) : String(rest[k])}</span>
                   </React.Fragment>
                 ))}
           </div>
@@ -255,7 +255,7 @@ function GeoTooltip({
             {Object.entries(meta).map(([k, v]) => (
               <React.Fragment key={k}>
                 <span style={{ fontSize: 11, color: isDark ? "rgba(255,255,255,0.4)" : "rgba(60,60,67,0.4)" }}>{k}</span>
-                <span style={{ fontSize: 11, color: isDark ? "rgba(255,255,255,0.75)" : "rgba(30,41,59,0.85)", textAlign: "right" }}>{v}</span>
+                <span style={{ fontSize: 11, color: isDark ? "rgba(255,255,255,0.75)" : "rgba(30,41,59,0.85)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{typeof v === "number" ? formatFull(v) : String(v)}</span>
               </React.Fragment>
             ))}
           </div>
@@ -642,17 +642,32 @@ export default function ChartWidget({ chart }: Props) {
       }
 
       case "scatter": {
-        /* Build per-dataset point arrays with meta embedded */
+        /* Build per-dataset point arrays with meta embedded.
+           Guard against malformed AI data (e.g. number[] instead of {x,y}[]):
+           coerce to finite numbers and drop invalid points, otherwise the
+           numeric axes get a degenerate domain and Recharts re-renders forever
+           ("Maximum update depth exceeded"). */
         const scatterSeries = chart.datasets.map((ds, dsIdx) => ({
           color: PREMIUM_PALETTE[dsIdx % PREMIUM_PALETTE.length],
           label: ds.label,
-          points: (ds.data as ScatterPoint[]).map((pt, ptIdx) => ({
-            x: pt.x,
-            y: pt.y,
-            __label: ds.label,
-            __meta: ds.meta?.[ptIdx],
-          })),
+          points: (ds.data as ScatterPoint[])
+            .map((pt, ptIdx) => ({
+              x: Number((pt as ScatterPoint)?.x),
+              y: Number((pt as ScatterPoint)?.y),
+              __label: ds.label,
+              __meta: ds.meta?.[ptIdx],
+            }))
+            .filter((pt) => Number.isFinite(pt.x) && Number.isFinite(pt.y)),
         }));
+
+        const hasPoints = scatterSeries.some((s) => s.points.length > 0);
+        if (!hasPoints) {
+          return (
+            <div className="flex h-[280px] items-center justify-center text-center text-[12px] text-ink-3">
+              Não foi possível renderizar o gráfico de dispersão: dados sem coordenadas (x, y) válidas.
+            </div>
+          );
+        }
 
         return (
           <ScatterChart margin={{ top: 8, right: 16, left: 0, bottom: 24 }}>
@@ -739,6 +754,12 @@ export default function ChartWidget({ chart }: Props) {
 
   const chartHeight = chart.type === "pie" ? 260 : chart.type === "geo" ? 310 : chart.type === "scatter" ? 280 : 248;
 
+  const rendered = renderChart();
+  // geo draws its own SVG, and the scatter/empty-data fallback is a plain <div>;
+  // neither should be wrapped in ResponsiveContainer (it injects width/height props).
+  const skipResponsive =
+    chart.type === "geo" || (React.isValidElement(rendered) && rendered.type === "div");
+
   return (
     <div className="mt-3 rounded-2xl border border-separator bg-fill p-3 md:p-4 shadow-(--shadow-bubble)">
       <div ref={captureRef} className="rounded-xl">
@@ -753,11 +774,11 @@ export default function ChartWidget({ chart }: Props) {
             </p>
           </div>
         )}
-        {chart.type === "geo" ? (
-          renderChart()
+        {skipResponsive ? (
+          rendered
         ) : (
           <ResponsiveContainer width="100%" height={chartHeight}>
-            {renderChart()}
+            {rendered}
           </ResponsiveContainer>
         )}
         {showLegend && <LegendRow items={legendItems} />}

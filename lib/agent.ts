@@ -1104,7 +1104,8 @@ Como escolher:
 - "area" — séries temporais com UMA métrica (evolução de investimento, impressões ao longo do tempo)
 - "bar" — comparações entre categorias (plataformas, campanhas, regiões)
 - "pie" — distribuição/participação percentual com 3 a 6 categorias e UM único dataset (ex: share de investimento por plataforma). NUNCA use pie para mais de 6 categorias ou séries temporais.
-- "scatter" — comparação de DUAS métricas contínuas ao mesmo tempo com agrupamento por dimensão (ex: CPV × VTR por tema, CTR × CPM por criativo). Cada dataset é um grupo (ex: um tema, uma plataforma). Requer "xLabel" e "yLabel". Os dados de cada dataset são arrays de {x, y} — não arrays de números simples.
+- "scatter" — comparação de DUAS métricas contínuas ao mesmo tempo com agrupamento por dimensão (ex: CPV × VTR por tema, CTR × CPM por criativo). Requer "xLabel" e "yLabel". Os dados de cada dataset são arrays de {x, y} — não arrays de números simples.
+  OBRIGATÓRIO: cada valor da dimensão de agrupamento vira UM dataset separado (a cor do scatter é por dataset). Quando o usuário pedir "por tema", "por plataforma", "por criativo" etc., gere UM dataset para CADA tema/plataforma/criativo, com "label" = o nome do grupo. NUNCA coloque todos os grupos num único dataset — isso pinta todos os pontos da mesma cor e perde a distinção visual. Ex: 5 temas ⇒ 5 datasets.
 - "geo" — distribuição geográfica por estado brasileiro. Use "labels" com siglas de UF (SP, RJ, MG, BA…) e "datasets" com os valores numéricos correspondentes. Mostre apenas os estados com dados (não precisa incluir todos os 27 estados).
 Para múltiplas métricas no mesmo gráfico ("bar"/"line"), adicione múltiplos objetos em "datasets".
 Evite misturar métricas de escalas muito diferentes (ex: impressões em milhões + CTR em %) no mesmo gráfico — prefira dois gráficos ou escolha a métrica principal.
