@@ -2,7 +2,6 @@
 
 import { Fragment, useState, useEffect } from "react";
 import Link from "next/link";
-import JarvisRing from "./JarvisRing";
 import HudBackground from "./HudBackground";
 import HudCorners from "./HudCorners";
 
@@ -520,15 +519,13 @@ export default function VerificationContainer() {
             Verificação de Consolidados
           </h1>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Desktop: ring */}
-          <div className="hidden md:flex items-center gap-2">
-            <JarvisRing size={34} />
-          </div>
-          {/* Mobile: brand ring */}
-          <div className="md:hidden -mr-1">
-            <JarvisRing size={30} />
-          </div>
+        <div className="flex items-center shrink-0">
+          <span
+            className="text-[15px] leading-none animate-hud-flicker motion-reduce:animate-none"
+            style={{ color: "var(--hud-cyan)", textShadow: "0 0 12px var(--hud-cyan)" }}
+          >
+            ◇
+          </span>
         </div>
       </header>
 
