@@ -90,9 +90,9 @@ export default function VoiceMode({ onClose, model }: Props) {
       const glow = Math.round(50 + amplitude * 90);
       orbCoreRef.current.style.transform = `scale(${scale.toFixed(3)})`;
       orbCoreRef.current.style.boxShadow = [
-        `0 0 ${glow}px rgba(41,151,255,0.6)`,
-        `0 0 ${glow * 2}px rgba(41,151,255,0.3)`,
-        `0 0 ${glow * 3}px rgba(80,40,200,0.15)`,
+        `0 0 ${glow}px rgba(39,224,255,0.6)`,
+        `0 0 ${glow * 2}px rgba(39,224,255,0.3)`,
+        `0 0 ${glow * 3}px rgba(255,181,61,0.14)`,
       ].join(', ');
     }
     rafRef.current = requestAnimationFrame(animateOrb);
@@ -263,28 +263,40 @@ export default function VoiceMode({ onClose, model }: Props) {
           <>
             <div
               className="absolute inset-0 rounded-full animate-orb-ripple"
-              style={{ background: 'rgba(41,151,255,0.1)' }}
+              style={{ background: 'rgba(39,224,255,0.1)' }}
             />
             <div
               className="absolute inset-0 rounded-full animate-orb-ripple"
-              style={{ background: 'rgba(41,151,255,0.07)', animationDelay: '0.5s' }}
+              style={{ background: 'rgba(39,224,255,0.07)', animationDelay: '0.5s' }}
             />
             <div
               className="absolute inset-0 rounded-full animate-orb-ripple"
-              style={{ background: 'rgba(41,151,255,0.04)', animationDelay: '1s' }}
+              style={{ background: 'rgba(39,224,255,0.04)', animationDelay: '1s' }}
             />
           </>
         )}
 
-        {/* Core orb */}
+        {/* Gold repulsor corona ring */}
+        <div
+          className="absolute rounded-full motion-safe:animate-[spin_14s_linear_infinite]"
+          style={{
+            width: 220,
+            height: 220,
+            border: '1px solid rgba(255,181,61,0.35)',
+            borderTopColor: 'rgba(255,181,61,0.8)',
+            boxShadow: '0 0 18px rgba(255,181,61,0.2)',
+          }}
+        />
+
+        {/* Core orb — arc reactor */}
         <div
           ref={orbCoreRef}
           className={`w-48 h-48 rounded-full ${orbAnimClass}`}
           style={{
             background:
-              'radial-gradient(circle at 38% 32%, rgba(155,205,255,0.95) 0%, rgba(41,151,255,0.88) 38%, rgba(55,30,150,0.75) 72%, rgba(20,10,60,0.6) 100%)',
+              'radial-gradient(circle at 38% 32%, rgba(205,248,255,0.97) 0%, rgba(39,224,255,0.88) 38%, rgba(18,110,150,0.75) 72%, rgba(6,18,38,0.6) 100%)',
             boxShadow:
-              '0 0 60px rgba(41,151,255,0.5), 0 0 120px rgba(41,151,255,0.25), 0 0 200px rgba(80,40,200,0.15)',
+              '0 0 60px rgba(39,224,255,0.5), 0 0 120px rgba(39,224,255,0.25), 0 0 200px rgba(255,181,61,0.12)',
             transition: 'box-shadow 80ms ease-out',
           }}
         />
@@ -293,13 +305,13 @@ export default function VoiceMode({ onClose, model }: Props) {
       {/* Status label + transcript */}
       <div className="text-center mb-12 px-10 max-w-xs">
         <p
-          className="text-[11px] text-white/35 mb-3 uppercase tracking-[0.12em]"
-          style={{ fontVariantNumeric: 'tabular-nums' }}
+          className="font-hud text-[10px] mb-3 uppercase tracking-[0.3em]"
+          style={{ color: 'rgba(116,233,255,0.7)', textShadow: '0 0 10px rgba(39,224,255,0.4)' }}
         >
           {STATE_LABEL[orbState]}
         </p>
         {error ? (
-          <p className="text-[15px] text-red-400/75 leading-relaxed">{error}</p>
+          <p className="text-[15px] leading-relaxed" style={{ color: 'rgba(255,90,80,0.85)' }}>{error}</p>
         ) : transcript ? (
           <p className="text-[16px] text-white/75 leading-relaxed">{transcript}</p>
         ) : null}
@@ -308,9 +320,9 @@ export default function VoiceMode({ onClose, model }: Props) {
       {/* End button */}
       <button
         onClick={handleClose}
-        className="flex items-center gap-2.5 px-7 py-3 rounded-full border-[0.5px] border-white/[0.16] bg-white/[0.07] text-white/65 text-[14px] font-medium tracking-[-0.1px] hover:bg-white/[0.12] hover:text-white/90 active:scale-95 transition-all duration-150"
+        className="font-hud flex items-center gap-2.5 px-7 py-3 rounded-full border-[0.5px] border-white/[0.16] bg-white/[0.07] text-white/65 text-[11px] uppercase tracking-[0.2em] hover:bg-white/[0.12] hover:text-white/90 active:scale-95 transition-all duration-150"
       >
-        <span className="w-2 h-2 rounded-full bg-red-400/90 inline-block flex-shrink-0" />
+        <span className="w-2 h-2 rounded-full inline-block flex-shrink-0" style={{ background: 'rgba(255,65,51,0.9)', boxShadow: '0 0 8px rgba(255,65,51,0.7)' }} />
         Encerrar
       </button>
     </div>,

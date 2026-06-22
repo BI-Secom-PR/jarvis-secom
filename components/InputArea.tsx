@@ -95,8 +95,8 @@ const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend
           </svg>
         </button>
       </div>
-      <p className="hidden md:block text-[11px] text-ink-4 text-center mt-2.5 tracking-[0.1px]">
-        Enter para enviar &nbsp;·&nbsp; Shift+Enter para nova linha &nbsp;·&nbsp; ctrl+N nova sessão
+      <p className="hidden md:block font-hud text-[9px] uppercase text-ink-4 text-center mt-2.5 tracking-[0.22em]">
+        Enter enviar &nbsp;·&nbsp; Shift+Enter nova linha &nbsp;·&nbsp; ⌘N nova sessão
       </p>
     </div>
   );

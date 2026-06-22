@@ -11,7 +11,7 @@ import TypingIndicator from "./TypingIndicator";
 import InputArea, { type InputAreaHandle } from "./InputArea";
 import WelcomeCard from "./WelcomeCard";
 import UserMenu from "./UserMenu";
-import JarvisRing from "./JarvisRing";
+import HudCorners from "./HudCorners";
 import dynamic from "next/dynamic";
 const VoiceMode = dynamic(() => import("./VoiceMode"), { ssr: false });
 
@@ -155,43 +155,62 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
   );
 
   return (
-    <div className="w-full h-full flex flex-col bg-surface-opaque rounded-none border-0 overflow-hidden relative z-10 md:mx-5 md:max-w-9/12 md:h-[92dvh] md:max-h-225 md:bg-transparent md:liquid-glass md:rounded-[28px]">
-      {/* Header */}
-      <div className="flex items-center gap-2 md:gap-3 px-3 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] md:px-6 md:py-4.5 bg-fill border-b-[0.5px] border-separator shrink-0">
+    <div className="relative z-10 w-full h-full flex flex-col overflow-hidden md:mx-5 md:my-[4dvh] md:max-w-9/12 md:h-[92dvh] md:max-h-225 md:rounded-[18px] md:border md:border-[color:var(--separator-strong)] md:[box-shadow:0_0_50px_rgba(39,224,255,0.08),inset_0_0_60px_rgba(6,12,26,0.6)]">
+      {/* HUD frame corners (desktop) */}
+      <div className="hidden md:block">
+        <HudCorners accent="cyan" size={18} inset={8} />
+      </div>
+
+      {/* Header — HUD command bar */}
+      <div className="relative flex items-center gap-2 md:gap-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:px-7 md:py-4.5 border-b border-separator shrink-0">
+        {/* Cyan scan rail under the header */}
+        <span className="absolute inset-x-0 bottom-0 h-px overflow-hidden">
+          <span
+            className="block h-full w-1/4 animate-hud-sweep motion-reduce:hidden"
+            style={{ background: "linear-gradient(90deg, transparent, var(--hud-cyan), transparent)" }}
+          />
+        </span>
         <a
           href="/"
           title="Voltar ao início"
-          className="w-11 h-11 md:w-8 md:h-8 rounded-xl flex items-center justify-center text-ink-3 hover:text-ink-2 hover:bg-fill-2 transition-all duration-150 shrink-0 -ml-2 md:-ml-1 md:mr-0.5"
+          className="w-11 h-11 md:w-9 md:h-9 rounded-lg flex items-center justify-center text-ink-3 hover:text-ink hover:bg-fill-2 transition-all duration-150 shrink-0 -ml-2 md:-ml-2"
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </a>
-        <div className="shrink-0 md:hidden">
-          <JarvisRing size={34} />
-        </div>
-        <div className="shrink-0 hidden md:block">
-          <JarvisRing size={44} />
-        </div>
+        {/* Diamond glyph (replaces the old ring) */}
+        <span
+          className="shrink-0 text-[15px] leading-none animate-hud-flicker motion-reduce:animate-none"
+          style={{ color: "var(--hud-cyan)", textShadow: "0 0 12px var(--hud-cyan)" }}
+        >
+          ◇
+        </span>
         <div className="min-w-0">
-          <h1 className="text-[17px] font-semibold text-ink tracking-[-0.2px]">
+          <h1
+            className="font-hud text-[15px] md:text-[17px] font-bold uppercase tracking-[0.24em] text-ink"
+            style={{ textShadow: "0 0 14px rgba(39,224,255,0.45)" }}
+          >
             Jarvis
           </h1>
-          <p className="text-xs text-ink-3 mt-0.5 hidden md:block">
-            Assistente de dados da SECOM
+          <p className="font-hud text-[8px] uppercase tracking-[0.34em] text-ink-3 mt-1 hidden md:block">
+            SECOM · Data Assistant
           </p>
         </div>
-        <div className="ml-auto flex items-center gap-2 md:gap-2.5">
-          <div
-            title="Online"
-            className="w-2 h-2 bg-success rounded-full shadow-[0_0_6px_rgba(52,199,89,0.55)] animate-pulse-green hidden md:block"
-          />
-          <UserMenu user={user} />
+        <div className="ml-auto flex items-center gap-2 md:gap-3">
+          <div className="hidden md:flex items-center gap-1.5">
+            <span
+              title="Online"
+              className="w-1.5 h-1.5 bg-success rounded-full shadow-[0_0_8px_rgba(48,217,184,0.8)] animate-pulse-green"
+            />
+            <span className="font-hud text-[8px] uppercase tracking-[0.28em] text-ink-3">Online</span>
+          </div>
+          <UserMenu user={user} hideThemeToggle />
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="messages-scroll flex-1 overflow-y-auto px-3.5 py-4 md:px-6 md:py-7 flex flex-col gap-3 md:gap-3.5 scroll-smooth">
+      {/* Messages — float over the lattice */}
+      <div className="messages-scroll flex-1 overflow-y-auto px-4 py-5 md:px-8 md:py-7 flex flex-col gap-3.5 md:gap-4 scroll-smooth">
         <WelcomeCard />
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
