@@ -175,7 +175,7 @@ function GridLines({ pl, pr, pt, pb, max, theme, yTicks = true, xTicks = false }
             <line x1={pl} y1={y} x2={pl + cW} y2={y} stroke={theme.axis} strokeWidth={i === 0 ? 1 : 0.5} strokeDasharray={i === 0 ? undefined : "3 6"} />
             {xTicks && <line x1={x} y1={pt} x2={x} y2={pt + cH} stroke={theme.axis} strokeWidth={i === 0 ? 1 : 0.5} strokeDasharray={i === 0 ? undefined : "2 5"} />}
             {yTicks && i > 0 && (
-              <text x={pl - 4} y={y + 3.5} textAnchor="end" fill={theme.dim} fontSize="7.5" fontFamily="monospace">
+              <text x={pl - 4} y={y + 3.5} textAnchor="end" fill={theme.dim} fontSize="9" fontFamily="monospace">
                 {formatCompact(max * i / 4)}
               </text>
             )}
@@ -236,8 +236,8 @@ function LegendRow({ items, theme }: { items: { label: string; color: string }[]
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
       {items.map((it) => (
-        <span key={it.label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 7.5, letterSpacing: ".08em", textTransform: "uppercase", fontFamily: "monospace", color: theme.dim }}>
-          <span style={{ width: 5, height: 5, borderRadius: "50%", background: it.color, boxShadow: theme.isDark ? `0 0 5px ${it.color}77` : "none", flexShrink: 0 }} />
+        <span key={it.label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", fontFamily: "monospace", color: theme.dim }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: it.color, boxShadow: theme.isDark ? `0 0 5px ${it.color}77` : "none", flexShrink: 0 }} />
           {it.label}
         </span>
       ))}
@@ -262,7 +262,7 @@ function HudCorners({ theme }: { theme: HudTheme }) {
 function HudBar({ chart, gid, theme, setHover }: { chart: ChartData; gid: string; theme: HudTheme; setHover: (hover: HoverState | null) => void }) {
   const labels = chart.labels ?? [];
   const values = asNumbers(chart.datasets[0]?.data);
-  const pl = 44, pr = 8, pt = 8, pb = 24;
+  const pl = 50, pr = 8, pt = 8, pb = 26;
   const cW = VIEW_W - pl - pr;
   const cH = VIEW_H - pt - pb;
   const max = Math.max(...values, 1);
@@ -284,8 +284,8 @@ function HudBar({ chart, gid, theme, setHover }: { chart: ChartData; gid: string
           <g key={`${label}-${i}`} onMouseEnter={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: String(label), rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color }], meta: meta?.[i] })} onMouseMove={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: String(label), rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color }], meta: meta?.[i] })} onMouseLeave={() => setHover(null)}>
             <rect x={x} y={y} width={bW} height={h} rx="1" fill={`url(#${gid}-bar-${i % theme.palette.length})`} filter={theme.isDark ? `url(#${gid}-soft-glow)` : undefined} />
             <line x1={x} y1={y + 0.7} x2={x + bW} y2={y + 0.7} stroke={color} strokeWidth="2" opacity={theme.isDark ? 0.88 : 0.65} />
-            {value > 0 && <text x={x + bW / 2} y={y - 4} textAnchor="middle" fill={theme.isDark ? color : theme.text} fontSize="7.5" fontWeight="700" fontFamily="monospace">{formatCompact(value)}</text>}
-            <text x={x + bW / 2} y={VIEW_H - pb + 11} textAnchor="middle" fill={theme.dim} fontSize="7" fontFamily="monospace" letterSpacing=".04em">{shortLabel(String(label), 4)}</text>
+            {value > 0 && <text x={x + bW / 2} y={y - 4} textAnchor="middle" fill={theme.isDark ? color : theme.text} fontSize="9" fontWeight="700" fontFamily="monospace">{formatCompact(value)}</text>}
+            <text x={x + bW / 2} y={VIEW_H - pb + 12} textAnchor="middle" fill={theme.dim} fontSize="8.5" fontFamily="monospace" letterSpacing=".04em">{shortLabel(String(label), 4)}</text>
           </g>
         );
       })}
@@ -296,7 +296,7 @@ function HudBar({ chart, gid, theme, setHover }: { chart: ChartData; gid: string
 function HudLineArea({ chart, gid, theme, setHover, area }: { chart: ChartData; gid: string; theme: HudTheme; setHover: (hover: HoverState | null) => void; area: boolean }) {
   const labels = chart.labels ?? [];
   const series = chart.datasets.map((ds) => ({ label: ds.label, values: asNumbers(ds.data), meta: ds.meta }));
-  const pl = area ? 42 : 38, pr = 10, pt = 12, pb = 22;
+  const pl = area ? 48 : 44, pr = 10, pt = 12, pb = 24;
   const cW = VIEW_W - pl - pr;
   const cH = VIEW_H - pt - pb;
   const max = Math.max(...series.flatMap((s) => s.values), 1) * 1.08;
@@ -309,7 +309,7 @@ function HudLineArea({ chart, gid, theme, setHover, area }: { chart: ChartData; 
       <GridLines pl={pl} pr={pr} pt={pt} pb={pb} max={max} theme={theme} />
       {Array.from({ length: count }).map((_, i) => {
         const x = count === 1 ? pl + cW / 2 : pl + i * (cW / (count - 1));
-        return <text key={i} x={x} y={VIEW_H - pb + 11} textAnchor="middle" fill={theme.dim} fontSize="7" fontFamily="monospace">{shortLabel(labelAt(i), 4)}</text>;
+        return <text key={i} x={x} y={VIEW_H - pb + 12} textAnchor="middle" fill={theme.dim} fontSize="8.5" fontFamily="monospace">{shortLabel(labelAt(i), 4)}</text>;
       })}
       {[...series].reverse().map((s, reverseIdx) => {
         const si = series.length - 1 - reverseIdx;
@@ -379,8 +379,8 @@ function HudDonut({ chart, gid, theme, setHover }: { chart: ChartData; gid: stri
         return (
           <g key={`${label}-side`}>
             <circle cx={VIEW_W * 0.63} cy={y} r="3.8" fill={color} filter={theme.isDark ? `url(#${gid}-soft-glow)` : undefined} />
-            <text x={VIEW_W * 0.63 + 9} y={y - 2} fill={theme.text} opacity=".72" fontSize="8" fontFamily="monospace" letterSpacing=".04em">{shortLabel(String(label), 12)}</text>
-            <text x={VIEW_W * 0.63 + 9} y={y + 9} fill={theme.isDark ? color : "rgba(30,41,59,.45)"} fontSize="7.5" fontFamily="monospace" fontWeight="700">{((values[i] ?? 0) / total * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</text>
+            <text x={VIEW_W * 0.63 + 9} y={y - 2} fill={theme.text} opacity=".72" fontSize="9" fontFamily="monospace" letterSpacing=".04em">{shortLabel(String(label), 12)}</text>
+            <text x={VIEW_W * 0.63 + 9} y={y + 10} fill={theme.isDark ? color : "rgba(30,41,59,.45)"} fontSize="8.5" fontFamily="monospace" fontWeight="700">{((values[i] ?? 0) / total * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</text>
           </g>
         );
       })}
@@ -413,13 +413,13 @@ function HudScatter({ chart, gid, theme, setHover }: { chart: ChartData; gid: st
         const x = pl + cW * i / 4;
         return (
           <React.Fragment key={i}>
-            <text x={pl - 3} y={y + 3.5} textAnchor="end" fill={theme.dim} fontSize="7" fontFamily="monospace">{formatCompact(maxY * (4 - i) / 4)}</text>
-            <text x={x} y={VIEW_H - pb + 11} textAnchor="middle" fill={theme.dim} fontSize="7" fontFamily="monospace">{formatCompact(minX + (maxX - minX) * i / 4)}</text>
+            <text x={pl - 3} y={y + 3.5} textAnchor="end" fill={theme.dim} fontSize="8.5" fontFamily="monospace">{formatCompact(maxY * (4 - i) / 4)}</text>
+            <text x={x} y={VIEW_H - pb + 12} textAnchor="middle" fill={theme.dim} fontSize="8.5" fontFamily="monospace">{formatCompact(minX + (maxX - minX) * i / 4)}</text>
           </React.Fragment>
         );
       })}
-      {chart.xLabel && <text x={pl + cW / 2} y={VIEW_H - 2} textAnchor="middle" fill={theme.dim} fontSize="7" fontFamily="monospace" letterSpacing=".08em">{chart.xLabel.toUpperCase()}</text>}
-      {chart.yLabel && <text x="12" y={pt + cH / 2} textAnchor="middle" fill={theme.dim} fontSize="7" fontFamily="monospace" transform={`rotate(-90,12,${pt + cH / 2})`}>{chart.yLabel.toUpperCase()}</text>}
+      {chart.xLabel && <text x={pl + cW / 2} y={VIEW_H - 2} textAnchor="middle" fill={theme.dim} fontSize="8.5" fontFamily="monospace" letterSpacing=".08em">{chart.xLabel.toUpperCase()}</text>}
+      {chart.yLabel && <text x="13" y={pt + cH / 2} textAnchor="middle" fill={theme.dim} fontSize="8.5" fontFamily="monospace" transform={`rotate(-90,13,${pt + cH / 2})`}>{chart.yLabel.toUpperCase()}</text>}
       {series.map((s) => (
         <g key={s.label}>
           {s.points.map((p) => {
@@ -490,13 +490,13 @@ function BrazilChoropleth({ chart, gid, theme, setHover }: { chart: ChartData; g
           return (
             <g key={uf} onMouseEnter={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: uf, rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color: theme.accent }], meta: metaMap[uf.toUpperCase()] })} onMouseMove={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: uf, rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color: theme.accent }], meta: metaMap[uf.toUpperCase()] })} onMouseLeave={() => setHover(null)}>
               <path d={d} fill={theme.accent} fillOpacity={fillOpacity} stroke={theme.accent} strokeOpacity={strokeOpacity} strokeWidth={theme.isDark && ratio > 0.6 ? 0.9 : 0.6} filter={theme.isDark && ratio > 0.5 ? `url(#${gid}-soft-glow)` : undefined} />
-              {value > 0 && ratio > 0.32 && Number.isFinite(cx) && Number.isFinite(cy) && <text x={cx} y={cy + 3} textAnchor="middle" fill={theme.accent} fillOpacity={0.45 + ratio * 0.5} fontSize="6.5" fontFamily="monospace" fontWeight="700">{uf}</text>}
+              {value > 0 && ratio > 0.32 && Number.isFinite(cx) && Number.isFinite(cy) && <text x={cx} y={cy + 3} textAnchor="middle" fill={theme.accent} fillOpacity={0.45 + ratio * 0.5} fontSize="8" fontFamily="monospace" fontWeight="700">{uf}</text>}
             </g>
           );
         })}
         <rect x={VIEW_W - 62} y={VIEW_H - 14} width="58" height="5" fill={`url(#${gid}-geo-legend)`} rx="2" />
-        <text x={VIEW_W - 62} y={VIEW_H - 16} fill={theme.dim} fontSize="6" fontFamily="monospace">BAIXO</text>
-        <text x={VIEW_W - 4} y={VIEW_H - 16} textAnchor="end" fill={theme.dim} fontSize="6" fontFamily="monospace">ALTO</text>
+        <text x={VIEW_W - 62} y={VIEW_H - 17} fill={theme.dim} fontSize="7.5" fontFamily="monospace">BAIXO</text>
+        <text x={VIEW_W - 4} y={VIEW_H - 17} textAnchor="end" fill={theme.dim} fontSize="7.5" fontFamily="monospace">ALTO</text>
       </svg>
     </div>
   );
@@ -582,7 +582,7 @@ export default function ChartWidget({ chart }: Props) {
     }`;
 
   return (
-    <div className="mt-3">
+    <div className="mt-3" style={{ width: 580, maxWidth: "100%" }}>
       <div
         ref={captureRef}
         style={{
