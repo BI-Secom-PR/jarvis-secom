@@ -31,7 +31,7 @@ function resolveModel(id: ModelId) {
 }
 
 const SAFE_QUERY = /^\s*(?:WITH\b|SELECT\b)(?![\s\S]*\b(?:INTO\s+(?:OUTFILE|DUMPFILE)|LOAD_FILE)\b)[\s\S]+\bFROM\b/i;
-const BLOCKED_PATTERNS = /\b(UNION[\s\S]*SELECT|SLEEP\s*\(|BENCHMARK\s*\(|INFORMATION_SCHEMA|mysql\s*\.|sys\s*\.|performance_schema)\b/i;
+const BLOCKED_PATTERNS = /\b(UNION[\s\S]*SELECT|SLEEP\s*\(|BENCHMARK\s*\(|INFORMATION_SCHEMA|mysql\s*\.|sys\s*\.|performance_schema)\b|gold_platforms_/i;
 const EXPORT_TTL_DAYS = 7;
 const EXPORT_ROW_CAP = 50_000;
 

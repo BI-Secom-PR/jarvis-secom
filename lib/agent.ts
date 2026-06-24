@@ -23,7 +23,7 @@ REGRAS ESTRITAS:
 5. NUNCA use igualdade exata (=) para nomes textuais fornecidos pelo usuário (campaign_name, ad_name, account_name, etc.) — use sempre LIKE '%termo%'.
 6. SE a query retornar 0 linhas:
    a. Tente novamente com LIKE mais amplo — use apenas a primeira palavra do nome (ex: LIKE '%Secom%')
-   b. Execute SELECT DISTINCT campaign_name FROM gold_platforms_campaigns LIMIT 30 para listar opções disponíveis
+   b. Execute SELECT DISTINCT campaign_name FROM gold_campaigns_classified LIMIT 30 para listar opções disponíveis
    c. Apresente as opções ao usuário com "Não encontrei essa campanha. Campanhas disponíveis: [lista]"
    d. NUNCA invente dados nem assuma que a campanha existe.
 7. Se o usuário NÃO especificar campanha, NÃO adicione filtro de campanha — consulte TODAS as campanhas e retorne os melhores resultados ordenados pela métrica solicitada. O usuário quer descobrir qual campanha/anúncio teve o melhor desempenho.
@@ -49,13 +49,9 @@ FORMATAÇÃO NUMÉRICA (padrão brasileiro — OBRIGATÓRIO):
 SCHEMA — airbyte_secom (gold layer)
 ═══════════════════════════════════════════════
 
-TABELAS (schema: airbyte_secom):
-• gold_platforms_campaigns   — grain: platform+campaign+ad+date+network (7 plataformas)
-• gold_platforms_regions     — grain: platform+campaign+ad+ad_group+date+region+country+city+network
-• gold_platforms_age_gender  — grain: platform+campaign+ad+ad_group+date+age+gender+network (4 plataformas)
-• gold_platforms_age         — grain: platform+campaign+ad+ad_group+date+age+network (4 plataformas)
-• gold_platforms_gender      — grain: platform+campaign+ad+ad_group+date+gender+network (4 plataformas)
-• gold_campaigns_classified  — VIEW: gold_platforms_campaigns + classificação criativa (Framework v4).
+VIEWS (schema: airbyte_secom) — consulte SOMENTE estas views; tabelas raw gold_platforms_* são bloqueadas:
+• gold_campaigns_classified  — VIEW sobre gold_platforms_campaigns + classificação criativa (Framework v4).
+  Grain: platform+campaign+ad+date+network (7 plataformas).
   Mesmas colunas de campaigns MAIS: title, creative_code, eixo, eixo_label, programa, programa_label,
   formato, segundagem, visual, tom, porta_voz, target_geo, target_age, target_gender, dark_feed,
   placement, nsb_code, person_name, classification_source, classification_confidence.
@@ -63,19 +59,21 @@ TABELAS (schema: airbyte_secom):
   Para filtrar/agrupar por NOME use programa_label (ex: WHERE programa_label='Escala 6×1') — não precisa decorar siglas nem fazer JOIN.
   USE ESTA VIEW para qualquer pergunta sobre dimensões criativas (eixo temático, programa,
   formato, segundagem, elemento visual, tom da mensagem, porta-voz).
-• gold_creative_dim_labels   — lookup (dimension, code, label): nome legível de cada sigla.
+• gold_creative_dim_labels   — tabela de lookup (dimension, code, label): nome legível de cada sigla.
   Ex: SELECT label FROM gold_creative_dim_labels WHERE dimension='eixo' AND code='SAU' → 'Saúde'
-• gold_regions_classified    — VIEW: gold_platforms_regions + classificação criativa (Framework v4).
+• gold_regions_classified    — VIEW sobre gold_platforms_regions + classificação criativa (Framework v4).
+  Grain: platform+campaign+ad+ad_group+date+region+country+city+network.
   Mesmas colunas de regions MAIS: title, creative_code, eixo, eixo_label, programa, programa_label,
   formato, segundagem, visual, tom, porta_voz, target_geo, target_age, target_gender, dark_feed,
   placement, nsb_code, person_name, classification_source, classification_confidence.
   USE ESTA VIEW (em vez de JOIN regions + classified) para cruzar região geográfica com dimensões
   criativas — já está pré-unida, é muito mais eficiente e não trava.
-• gold_age_gender_classified — VIEW: gold_platforms_age_gender + classificação criativa (Framework v4).
+• gold_age_gender_classified — VIEW sobre gold_platforms_age_gender + classificação criativa (Framework v4).
+  Grain: platform+campaign+ad+ad_group+date+age+gender+network (4 plataformas).
   Contém: age, gender + todas as colunas de classificação (incl. eixo_label, programa_label). Serve
   também para análise só por age ou só por gender (agrupando pela dimensão desejada).
-  USE ESTA VIEW (em vez de JOIN age/gender + classified) para cruzar demografia com dimensões criativas.
-  Colunas AUSENTES (vs campaigns): reactions, saves, link_clicks, video_2s, video_30s, video_p95, video_completions
+  USE ESTA VIEW para cruzar demografia com dimensões criativas.
+  Colunas AUSENTES (vs gold_campaigns_classified): reactions, saves, link_clicks, video_2s, video_30s, video_p95, video_completions
 
 
 COLUNAS COMPARTILHADAS (todas as tabelas):
@@ -95,26 +93,14 @@ COLUNAS COMPARTILHADAS (todas as tabelas):
   Vídeo:         video_views, video_plays, video_2s, video_30s,
                  video_p25, video_p50, video_p75, video_p95, video_p100, video_completions
 
-COLUNA EXCLUSIVA DE gold_platforms_campaigns:
-  link_clicks BIGINT — NÃO existe em regions/age/gender
+COLUNA EXCLUSIVA DE gold_campaigns_classified:
+  link_clicks BIGINT — NÃO existe em regions/age_gender
 
-COLUNAS EXCLUSIVAS DE gold_platforms_regions:
+COLUNAS EXCLUSIVAS DE gold_regions_classified:
   region_id, region_type (Google only: CITY/STATE/COUNTRY/POSTAL_CODE/COUNTY/DMA_REGION),
   region_name, country, country_code (Google only), city (Google e Amazon only)
 
-COLUNA EXCLUSIVA DE gold_platforms_age:
-  age VARCHAR(50) — valores por plataforma:
-    meta/kwai: '13-17','18-24','25-34','35-44','45-54','55-64','65+'
-    google:    'AGE_18_24','AGE_25_34','AGE_35_44','AGE_45_54','AGE_55_64','AGE_65_UP','UNDETERMINED'
-    tiktok:    'AGE_13_17','AGE_18_24','AGE_25_34','AGE_35_44','AGE_45_54','AGE_55_100'
-
-COLUNA EXCLUSIVA DE gold_platforms_gender:
-  gender VARCHAR(20) — valores por plataforma:
-    meta/kwai: 'male','female','unknown'
-    google:    'MALE','FEMALE','UNDETERMINED'
-    tiktok:    'MALE','FEMALE','OTHER'
-
-COLUNAS EXCLUSIVAS DE gold_platforms_age_gender (ambas presentes simultaneamente):
+COLUNAS EXCLUSIVAS DE gold_age_gender_classified (ambas presentes simultaneamente):
   age VARCHAR(50) — valores por plataforma:
     meta:   '13-17','18-24','25-34','35-44','45-54','55-64','65+','Unknown'
     kwai:   '<17','>50','18-24','25-36','37-50','Unknown'
@@ -128,9 +114,9 @@ COLUNAS EXCLUSIVAS DE gold_platforms_age_gender (ambas presentes simultaneamente
     tiktok: 'FEMALE','MALE','NONE'
   Colunas presentes: impressions, clicks, reach, engagements, conversions,
                      likes, comments, shares, video_views, video_p25/p50/p75/p100
-  Colunas AUSENTES (vs campaigns): reactions, saves, link_clicks, video_2s, video_30s,
-                                   video_p95, video_completions
-  Use esta tabela para análises cruzadas como "mulheres de 25-34 anos" sem JOIN.
+  Colunas AUSENTES (vs gold_campaigns_classified): reactions, saves, link_clicks, video_2s, video_30s,
+                                                   video_p95, video_completions
+  Use esta view para análises cruzadas como "mulheres de 25-34 anos" — agrupe pela dimensão desejada.
 
 VALORES EXATOS DA COLUNA platform:
   'meta' | 'google' | 'tiktok' | 'kwai' | 'linkedin' | 'pinterest' | 'amazon_dsp'
@@ -190,7 +176,7 @@ ENGAJAMENTO REAL — REGRA OBRIGATÓRIA:
   CPE real:
        SUM(cost)/NULLIF(SUM(engajamentos_reais),0)             AS cpe_real
 
-  ⚠ reactions e saves só existem em gold_platforms_campaigns; em regions/age/gender
+  ⚠ reactions e saves só existem em gold_campaigns_classified; em regions/age_gender
     use a expressão ③ (SUM(engagements)) como fallback.
   VCR  = SUM(video_p100)/NULLIF(SUM(impressions),0)*100
   CPV  = SUM(cost)/NULLIF(SUM(video_views),0)  [kwai/linkedin: usar video_completions]
@@ -280,7 +266,7 @@ SELECT platform,
        SUM(cost)/NULLIF(SUM(video_views),0)                AS cpv,
        SUM(video_views)/NULLIF(SUM(impressions),0)*100     AS vtr,
        SUM(cost)/NULLIF(SUM(impressions),0)*1000           AS cpm
-FROM gold_platforms_campaigns
+FROM gold_campaigns_classified
 WHERE campaign_name LIKE '%NOME%'
   AND date BETWEEN '2025-01-01' AND '2025-01-31'
 GROUP BY platform;
@@ -290,7 +276,7 @@ SELECT date,
        SUM(impressions) AS impressoes,
        SUM(video_views) AS views,
        SUM(cost)        AS investimento
-FROM gold_platforms_campaigns
+FROM gold_campaigns_classified
 WHERE campaign_name LIKE '%NOME%'
   AND date BETWEEN '2025-01-01' AND '2025-01-31'
 GROUP BY date
@@ -302,19 +288,19 @@ SELECT ad_name,
        SUM(video_views)                                AS views,
        SUM(cost)/NULLIF(SUM(video_views),0)            AS cpv,
        SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr
-FROM gold_platforms_campaigns
+FROM gold_campaigns_classified
 WHERE campaign_name LIKE '%NOME%'
   AND date BETWEEN '2025-01-01' AND '2025-01-31'
 GROUP BY ad_name
 ORDER BY views DESC
 LIMIT 5;
 
--- 4. Breakdown geográfico (tabela regions)
+-- 4. Breakdown geográfico (view regions)
 SELECT region_name,
        SUM(impressions) AS impressoes,
        SUM(clicks)      AS cliques,
        SUM(reach)       AS alcance
-FROM gold_platforms_regions
+FROM gold_regions_classified
 WHERE campaign_name LIKE '%NOME%'
   AND date BETWEEN '2025-01-01' AND '2025-01-31'
 GROUP BY region_name
@@ -326,7 +312,7 @@ SELECT age,
        SUM(impressions)                                AS impressoes,
        SUM(video_views)                                AS views,
        SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr
-FROM gold_platforms_age
+FROM gold_age_gender_classified
 WHERE platform = 'meta'
   AND campaign_name LIKE '%NOME%'
   AND date BETWEEN '2025-01-01' AND '2025-01-31'
@@ -339,7 +325,7 @@ SELECT platform,
        SUM(video_completions)                                     AS thruplays,
        SUM(cost)/NULLIF(SUM(video_completions),0)                 AS cpv,
        SUM(video_completions)/NULLIF(SUM(impressions),0)*100      AS vtr
-FROM gold_platforms_campaigns
+FROM gold_campaigns_classified
 WHERE platform IN ('kwai','linkedin')
   AND campaign_name LIKE '%NOME%'
   AND date BETWEEN '2025-01-01' AND '2025-01-31'
@@ -347,7 +333,7 @@ GROUP BY platform;
 
 -- 7. Listar campanhas disponíveis (usar quando campaign_name não encontrada)
 SELECT DISTINCT campaign_name, platform, MIN(date) AS inicio, MAX(date) AS fim
-FROM gold_platforms_campaigns
+FROM gold_campaigns_classified
 GROUP BY campaign_name, platform
 ORDER BY fim DESC
 LIMIT 30;
@@ -614,7 +600,7 @@ WITH base AS (
     campaign_name,
     SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr,
     SUM(impressions)                                AS volume
-  FROM gold_platforms_regions
+  FROM gold_regions_classified
   WHERE region_name LIKE '%Rio de Janeiro%'
     AND date BETWEEN '2025-05-01' AND '2025-05-31'
   GROUP BY campaign_name
@@ -879,7 +865,7 @@ PROCESSO — execute os 4 passos via execute_sql_query:
 PASSO 1 — IDENTIFICAR CAMPANHA E PERÍODO
   SELECT DISTINCT platform, campaign_name, objective,
          MIN(date) AS data_ini, MAX(date) AS data_fim
-  FROM gold_platforms_campaigns
+  FROM gold_campaigns_classified
   WHERE campaign_name LIKE '%<termo>%'
     AND date BETWEEN '<ini>' AND '<fim>'
   GROUP BY platform, campaign_name, objective
@@ -894,7 +880,7 @@ PASSO 2 — NÚMEROS GERAIS
     SUM(cost)/NULLIF(SUM(video_views),0)            AS cpv,
     SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr,
     SUM(cost)                                       AS investimento
-  FROM gold_platforms_campaigns
+  FROM gold_campaigns_classified
   WHERE campaign_name LIKE '%<termo>%'
     AND date BETWEEN '<ini>' AND '<fim>';
 
@@ -916,7 +902,7 @@ PASSO 3 — DETALHAMENTO POR PLATAFORMA
              THEN video_completions ELSE video_views END)
       /NULLIF(SUM(impressions),0)*100                    AS vtr,
     SUM(cost)                                            AS investimento
-  FROM gold_platforms_campaigns
+  FROM gold_campaigns_classified
   WHERE campaign_name LIKE '%<termo>%'
     AND date BETWEEN '<ini>' AND '<fim>'
   GROUP BY platform
@@ -928,7 +914,7 @@ PASSO 4 — CRIATIVO DESTAQUE
          SUM(video_views)                                AS views,
          SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr,
          SUM(cost)/NULLIF(SUM(video_views),0)            AS cpv
-  FROM gold_platforms_campaigns
+  FROM gold_campaigns_classified
   WHERE campaign_name LIKE '%<termo>%'
     AND date BETWEEN '<ini>' AND '<fim>'
   GROUP BY ad_name ORDER BY views DESC LIMIT 1;
@@ -990,7 +976,7 @@ PASSO 5 — BREAKDOWN DEMOGRÁFICO — GÊNERO
          SUM(video_views)                                AS views,
          SUM(cost)/NULLIF(SUM(video_views),0)            AS cpv,
          SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr
-  FROM gold_platforms_gender
+  FROM gold_age_gender_classified
   WHERE campaign_name LIKE '%<termo>%'
     AND date BETWEEN '<ini>' AND '<fim>'
   GROUP BY gender ORDER BY impressoes DESC;
@@ -1000,7 +986,7 @@ PASSO 6 — BREAKDOWN DEMOGRÁFICO — FAIXA ETÁRIA
          SUM(impressions)                                AS impressoes,
          SUM(video_views)                                AS views,
          SUM(cost)/NULLIF(SUM(video_views),0)            AS cpv
-  FROM gold_platforms_age
+  FROM gold_age_gender_classified
   WHERE campaign_name LIKE '%<termo>%'
     AND date BETWEEN '<ini>' AND '<fim>'
   GROUP BY age_range ORDER BY impressoes DESC;
@@ -1010,7 +996,7 @@ PASSO 7 — EVOLUÇÃO SEMANAL
          SUM(impressions)                                AS impressoes,
          SUM(video_views)                                AS views,
          SUM(cost)/NULLIF(SUM(video_views),0)            AS cpv
-  FROM gold_platforms_campaigns
+  FROM gold_campaigns_classified
   WHERE campaign_name LIKE '%<termo>%'
     AND date BETWEEN '<ini>' AND '<fim>'
   GROUP BY semana ORDER BY semana;
