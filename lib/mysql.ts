@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise';
+import type { ConnectionOptions as TlsConnectionOptions } from 'node:tls';
 
 // OCI MySQL HeatWave DB system auto-generates a self-signed CA (CN=MySQL_Endpoint_CA),
 // not present in any public trust store. We pin it so the TLS connection is actually
@@ -27,6 +28,17 @@ odhldLMfagkIwul/1KSonDSHguSPVW2feH0qd7s=
 
 let pool: mysql.Pool | null = null;
 
+// Cert has a generic CN (MySQL_Endpoint_Server), no SAN, and we connect by IP —
+// hostname verification can't pass. Skip the hostname check while keeping full
+// CA-chain verification (that's what stops MITM). mysql2 forwards these to
+// tls.connect at runtime, but its SslOptions type omits checkServerIdentity —
+// hence the TLS type + cast.
+const sslOptions: TlsConnectionOptions = {
+  ca: OCI_MYSQL_CA,
+  rejectUnauthorized: true,
+  checkServerIdentity: () => undefined,
+};
+
 export function getPool(): mysql.Pool {
   if (!pool) {
     pool = mysql.createPool({
@@ -36,14 +48,7 @@ export function getPool(): mysql.Pool {
       password: process.env.MYSQL_PASSWORD?.trim(),
       waitForConnections: true,
       connectionLimit: 5,
-      ssl: {
-        ca: OCI_MYSQL_CA,
-        rejectUnauthorized: true,
-        // Cert has a generic CN (MySQL_Endpoint_Server), no SAN, and we connect by
-        // IP — hostname verification can't pass. Skip the hostname check while
-        // keeping full CA-chain verification (that's what stops MITM).
-        checkServerIdentity: () => undefined,
-      },
+      ssl: sslOptions as mysql.SslOptions,
     });
   }
   return pool;
