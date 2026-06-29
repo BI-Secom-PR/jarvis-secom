@@ -17,7 +17,6 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.43",
-    "@ai-sdk/openai-compatible": "^2.0.41",
     "@google/genai": "^1.45.0",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.1",
@@ -33,13 +32,11 @@
     "html-to-image": "^1.11.13",
     "jose": "^6.2.3",
     "mysql2": "^3.19.1",
-    "nanoid": "^5.1.11",
     "next": "16.2.6",
     "ollama": "^0.6.3",
     "postgres": "^3.4.8",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-is": "^19.2.7",
     "recharts": "^3.8.0",
     "resend": "^6.12.4",
     "zod": "^4.3.6"
