@@ -112,8 +112,12 @@ export default function HudBackground({
         const perspective = Math.max(width, height) * 0.72;
         const cameraDistance = Math.max(width, height) * 0.83;
         const scale = perspective / (perspective + this.z3d + cameraDistance);
-        this.x = this.x3d * scale + width / 2;
-        this.y = this.y3d * scale + height * sphereCenterY;
+        // Organic radial breathing: each particle drifts in/out along its own
+        // radius, phase-shifted by its pulse. Applied at projection time only,
+        // so the 3D state never accumulates error.
+        const breathe = 1 + Math.sin(this.pulse) * 0.04;
+        this.x = this.x3d * breathe * scale + width / 2;
+        this.y = this.y3d * breathe * scale + height * sphereCenterY;
         this.scale = scale;
         this.pulse += this.pulseSpeed;
       }
@@ -226,17 +230,19 @@ export default function HudBackground({
       ctx2.save();
       ctx2.globalCompositeOperation = "lighter";
 
+      const max2 = MAX_DISTANCE * MAX_DISTANCE;
       for (let i = 0; i < particles.length; i++) {
         const p1 = particles[i];
         for (let j = i + 1; j < particles.length; j++) {
           const p2 = particles[j];
           const dx = p1.x3d - p2.x3d;
+          if (dx > MAX_DISTANCE || dx < -MAX_DISTANCE) continue;
           const dy = p1.y3d - p2.y3d;
           const dz = p1.z3d - p2.z3d;
-          const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-          if (distance < MAX_DISTANCE) {
+          const d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 < max2) {
             const depth = Math.min(1.4, (p1.scale + p2.scale) * 0.75);
-            const alpha = (1 - distance / MAX_DISTANCE) * depth * 0.33;
+            const alpha = (1 - Math.sqrt(d2) / MAX_DISTANCE) * depth * 0.33;
             ctx2.beginPath();
             ctx2.moveTo(p1.x, p1.y);
             ctx2.lineTo(p2.x, p2.y);
