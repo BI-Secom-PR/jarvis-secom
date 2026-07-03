@@ -262,7 +262,7 @@ function HudCorners({ theme }: { theme: HudTheme }) {
 function HudBar({ chart, gid, theme, setHover }: { chart: ChartData; gid: string; theme: HudTheme; setHover: (hover: HoverState | null) => void }) {
   const labels = chart.labels ?? [];
   const values = asNumbers(chart.datasets[0]?.data);
-  const pl = 50, pr = 8, pt = 8, pb = 26;
+  const pl = 50, pr = 8, pt = 20, pb = 26;
   const cW = VIEW_W - pl - pr;
   const cH = VIEW_H - pt - pb;
   const max = Math.max(...values, 1);
@@ -582,7 +582,7 @@ export default function ChartWidget({ chart }: Props) {
     }`;
 
   return (
-    <div className="mt-3" style={{ width: 580, maxWidth: "100%" }}>
+    <div className="mt-3" style={{ width: 630, maxWidth: "100%" }}>
       <div
         ref={captureRef}
         style={{
