@@ -97,11 +97,20 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
   const [topMode, setTopMode] = useState<"Negativo" | "Positivo">("Negativo");
 
   useEffect(() => {
-    fetch("/api/sentimentos/filters")
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries({ from, to, campaign, ad, platform, sentiment }))
+      if (v) qs.set(k, v);
+    fetch(`/api/sentimentos/filters?${qs}`)
       .then((r) => r.json())
-      .then(setFiltersData)
+      .then((d: FiltersData) => {
+        setFiltersData(d);
+        // drop selections that fell out of the new option universe
+        setCampaign((c) => (c && !d.campaigns.includes(c) ? "" : c));
+        setAd((a) => (a && !d.ads.some((x) => x.ad === a) ? "" : a));
+        setPlatform((p) => (p && !d.platforms.includes(p) ? "" : p));
+      })
       .catch(() => setFiltersData({ campaigns: [], platforms: [], ads: [] }));
-  }, []);
+  }, [from, to, campaign, ad, platform, sentiment]);
 
   const loadData = useCallback(async (body: Record<string, unknown>) => {
     setLoading(true);
@@ -122,11 +131,11 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
     loadData({ campaign, ad, platform, sentiment, from, to, aiWhere: aiFilter?.where, page });
   }, [campaign, ad, platform, sentiment, from, to, aiFilter, page, loadData]);
 
-  const adOptions = useMemo(() => {
-    if (!filtersData) return [];
-    const list = campaign ? filtersData.ads.filter((a) => a.campaign === campaign) : filtersData.ads;
-    return [...new Set(list.map((a) => a.ad))];
-  }, [filtersData, campaign]);
+  // server already facets the ads list by the other filters
+  const adOptions = useMemo(
+    () => (filtersData ? [...new Set(filtersData.ads.map((a) => a.ad))] : []),
+    [filtersData]
+  );
 
   async function applyAiFilter() {
     if (!aiText.trim()) return;
@@ -248,7 +257,9 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
   }, [data, topMode]);
 
   const selectClass =
-    "bg-fill border border-separator rounded-lg px-3 py-2 text-[13px] text-ink focus:outline-none focus:border-accent-border appearance-none cursor-pointer max-w-full";
+    "bg-fill border border-separator rounded-lg px-3 py-2 text-[13px] text-ink focus:outline-none focus:border-accent-border appearance-none cursor-pointer w-full min-w-0 truncate";
+  const dateClass =
+    "bg-fill border border-separator rounded-lg px-3 py-2 text-[13px] text-ink focus:outline-none focus:border-accent-border cursor-pointer";
 
   return (
     <div className="h-dvh w-full flex flex-col overflow-hidden relative hud-theme hud-void-bg">
@@ -289,7 +300,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
           >
             <span style={{ color: "var(--hud-cyan)" }}>◇</span> Filtros
           </div>
-          <div className="flex flex-wrap gap-2.5 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 items-center">
             <select
               className={selectClass}
               value={campaign}
@@ -330,34 +341,36 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
-            <label className="flex items-center gap-1.5 text-[12px] text-ink-3">
-              de
-              <input
-                type="date"
-                value={from}
-                max={to || undefined}
-                onChange={(e) => { setFrom(e.target.value); setPage(0); }}
-                className={selectClass}
-              />
-            </label>
-            <label className="flex items-center gap-1.5 text-[12px] text-ink-3">
-              até
-              <input
-                type="date"
-                value={to}
-                min={from || undefined}
-                onChange={(e) => { setTo(e.target.value); setPage(0); }}
-                className={selectClass}
-              />
-            </label>
-            {(from || to) && (
-              <button
-                onClick={() => { setFrom(""); setTo(""); setPage(0); }}
-                className="text-[12px] text-ink-3 hover:text-ink underline underline-offset-2"
-              >
-                limpar datas
-              </button>
-            )}
+            <div className="md:col-span-2 flex flex-wrap gap-2.5 items-center">
+              <label className="flex items-center gap-1.5 text-[12px] text-ink-3">
+                de
+                <input
+                  type="date"
+                  value={from}
+                  max={to || undefined}
+                  onChange={(e) => { setFrom(e.target.value); setPage(0); }}
+                  className={dateClass}
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-[12px] text-ink-3">
+                até
+                <input
+                  type="date"
+                  value={to}
+                  min={from || undefined}
+                  onChange={(e) => { setTo(e.target.value); setPage(0); }}
+                  className={dateClass}
+                />
+              </label>
+              {(from || to) && (
+                <button
+                  onClick={() => { setFrom(""); setTo(""); setPage(0); }}
+                  className="text-[12px] text-ink-3 hover:text-ink underline underline-offset-2"
+                >
+                  limpar datas
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex flex-wrap gap-2.5 items-center">
             <input

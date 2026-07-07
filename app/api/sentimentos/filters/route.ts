@@ -1,26 +1,43 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getPool } from '@/lib/mysql';
+import { buildWhere } from '@/lib/sentimentos';
 
 export const dynamic = 'force-dynamic';
 
-// 534 campaigns / ~2.2k ads — tiny; cache per process for 10 min.
+// 534 campaigns / ~2.2k ads — tiny; cache per process for 10 min, keyed by date window.
 const CACHE_TTL_MS = 10 * 60 * 1000;
-let cache: { data: unknown; loadedAt: number } | null = null;
+const cache = new Map<string, { data: unknown; loadedAt: number }>();
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (cache && Date.now() - cache.loadedAt < CACHE_TTL_MS)
-    return NextResponse.json(cache.data);
+  const q = req.nextUrl.searchParams;
+  const f = {
+    from: q.get('from') ?? undefined,
+    to: q.get('to') ?? undefined,
+    campaign: q.get('campaign') ?? undefined,
+    ad: q.get('ad') ?? undefined,
+    platform: q.get('platform') ?? undefined,
+    sentiment: q.get('sentiment') ?? undefined,
+  };
+  const key = JSON.stringify(f);
+
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.loadedAt < CACHE_TTL_MS)
+    return NextResponse.json(hit.data);
 
   try {
+    // Faceted: each list is constrained by every filter EXCEPT its own dimension.
+    const wCampaigns = buildWhere({ ...f, campaign: undefined });
+    const wPlatforms = buildWhere({ ...f, platform: undefined });
+    const wAds = buildWhere({ ...f, ad: undefined });
     const pool = getPool();
     const [campaigns, platforms, ads] = await Promise.all([
-      pool.query("SELECT DISTINCT campaign_name FROM silver_social_comments WHERE campaign_name IS NOT NULL AND campaign_name != '' ORDER BY campaign_name"),
-      pool.query('SELECT DISTINCT platform FROM silver_social_comments ORDER BY platform'),
-      pool.query("SELECT DISTINCT campaign_name, ad_name FROM silver_social_comments WHERE ad_name IS NOT NULL AND ad_name != '' ORDER BY ad_name"),
+      pool.query(`SELECT DISTINCT campaign_name FROM silver_social_comments WHERE ${wCampaigns.sql} AND campaign_name IS NOT NULL AND campaign_name != '' ORDER BY campaign_name`, wCampaigns.params),
+      pool.query(`SELECT DISTINCT platform FROM silver_social_comments WHERE ${wPlatforms.sql} ORDER BY platform`, wPlatforms.params),
+      pool.query(`SELECT DISTINCT campaign_name, ad_name FROM silver_social_comments WHERE ${wAds.sql} AND ad_name IS NOT NULL AND ad_name != '' ORDER BY ad_name`, wAds.params),
     ]);
     const data = {
       campaigns: (campaigns[0] as { campaign_name: string }[]).map((r) => r.campaign_name),
@@ -30,7 +47,8 @@ export async function GET() {
         ad: r.ad_name,
       })),
     };
-    cache = { data, loadedAt: Date.now() };
+    if (cache.size > 50) cache.clear(); // ponytail: crude bound; LRU if it ever matters
+    cache.set(key, { data, loadedAt: Date.now() });
     return NextResponse.json(data);
   } catch (e) {
     console.error('[sentimentos/filters]', e);
