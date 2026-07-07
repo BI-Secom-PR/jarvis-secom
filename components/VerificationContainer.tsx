@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState, useEffect } from "react";
+import { upload } from "@vercel/blob/client";
 import Link from "next/link";
 import JarvisRing from "./JarvisRing";
 import ThemeToggle from "./ThemeToggle";
@@ -402,16 +403,12 @@ export default function VerificationContainer() {
         setUploadProgress({ done: 0, total: allFiles.length });
 
         const blobUpload = async (file: File) => {
-          const fd = new FormData();
-          fd.append("file", file);
-          const res = await fetch("/api/verification/blob-upload", { method: "POST", body: fd });
-          const text = await res.text();
-          if (!res.ok) throw new Error(`Upload failed: ${text}`);
-          let json: { url?: string };
-          try { json = JSON.parse(text); } catch { throw new Error(`Unexpected response from blob upload`); }
-          if (!json.url) throw new Error(`Blob upload returned no URL`);
+          const blob = await upload(file.name, file, {
+            access: "private",
+            handleUploadUrl: "/api/verification/blob-upload",
+          });
           setUploadProgress((p) => p && { ...p, done: p.done + 1 });
-          return json.url;
+          return blob.url;
         };
 
         const consolidadoUrl = await blobUpload(consolidado[0]);
