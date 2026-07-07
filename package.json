@@ -13,7 +13,8 @@
     "tunnel": "bash scripts/tunnel-pg.sh",
     "tunnel:close": "bash scripts/tunnel-pg.sh close",
     "tunnel:status": "bash scripts/tunnel-pg.sh status",
-    "db:seed-examples": "bun --env-file=.env.local scripts/seed-sql-examples.ts"
+    "db:seed-examples": "bun --env-file=.env.local scripts/seed-sql-examples.ts",
+    "test:rag": "bun --env-file=.env.local scripts/test-rag.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.43",

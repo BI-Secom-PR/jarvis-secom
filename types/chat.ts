@@ -18,6 +18,8 @@ export interface ChartData {
   datasets: ChartDataset[];
   xLabel?: string;
   yLabel?: string;
+  /** Optional palette override (e.g. semantic sentiment colors). */
+  colors?: string[];
 }
 
 export interface Message {

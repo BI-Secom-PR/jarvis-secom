@@ -19,6 +19,8 @@ import { sqlExamples } from '../lib/db/schema'
 import { isNeonHost, pgEnv } from '../lib/db/env'
 
 const EMBED_MODEL = process.env.EMBED_MODEL ?? 'gemini-embedding-001'
+// Must match lib/rag.ts EMBED_DIMS — query and library vectors share one space.
+const EMBED_DIMS = 768
 
 const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY })
 
@@ -523,7 +525,11 @@ async function main() {
   console.log(`Embedding ${EXAMPLES.length} examples with ${EMBED_MODEL}...`)
   let ok = 0
   for (const ex of EXAMPLES) {
-    const res = await aiEmbed({ model: google.textEmbedding(EMBED_MODEL), value: ex.question })
+    const res = await aiEmbed({
+      model: google.textEmbedding(EMBED_MODEL),
+      value: ex.question,
+      providerOptions: { google: { outputDimensionality: EMBED_DIMS } },
+    })
     const embedding = res.embedding
     if (!embedding?.length) throw new Error(`empty embedding for: ${ex.question}`)
 

@@ -18,7 +18,8 @@ function buildCsp(nonce: string): string {
     "default-src 'self'",
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://*.public.blob.vercel-storage.com",
+    // *.fbcdn.net: creative thumbnails on /sentimentos (silver_social_comments.image_url)
+    "img-src 'self' data: https://*.public.blob.vercel-storage.com https://*.fbcdn.net",
     "connect-src 'self' https://vercel.com https://*.public.blob.vercel-storage.com https://*.blob.vercel-storage.com",
     "object-src 'none'",
     "base-uri 'self'",

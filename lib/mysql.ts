@@ -56,3 +56,27 @@ export function getPool(): mysql.Pool {
   }
   return pool;
 }
+
+let rwPool: mysql.Pool | null = null;
+
+/**
+ * Write-capable pool for the sentiment-correction path only. The MYSQL_RW_*
+ * user is granted UPDATE solely on silver_social_comments — the main pool
+ * (and the AI SQL path) stays read-only. Returns null when the env is not
+ * configured so callers can answer 503 instead of crashing.
+ */
+export function getRwPool(): mysql.Pool | null {
+  if (!process.env.MYSQL_RW_USER || !process.env.MYSQL_RW_PASSWORD) return null;
+  if (!rwPool) {
+    rwPool = mysql.createPool({
+      host: process.env.MYSQL_HOST?.trim(),
+      database: process.env.MYSQL_DATABASE?.trim(),
+      user: process.env.MYSQL_RW_USER.trim(),
+      password: process.env.MYSQL_RW_PASSWORD.trim(),
+      waitForConnections: true,
+      connectionLimit: 2,
+      ssl: sslOptions as mysql.SslOptions,
+    });
+  }
+  return rwPool;
+}

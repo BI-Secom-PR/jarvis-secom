@@ -4,7 +4,11 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import { ChartData, ScatterPoint } from "@/types/chat";
 import { getChartPalette } from "@/lib/exports/chart-palette";
 
-interface Props { chart: ChartData }
+interface Props {
+  chart: ChartData;
+  /** Stretch the card to fill its parent (dashboard grids with equal-height cells). */
+  fill?: boolean;
+}
 
 type ChartThemeMode = "system" | "dark" | "light";
 
@@ -502,7 +506,7 @@ function BrazilChoropleth({ chart, gid, theme, setHover }: { chart: ChartData; g
   );
 }
 
-export default function ChartWidget({ chart }: Props) {
+export default function ChartWidget({ chart, fill = false }: Props) {
   const captureRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState<null | "png" | "print">(null);
   const [hover, setHover] = useState<HoverState | null>(null);
@@ -510,7 +514,9 @@ export default function ChartWidget({ chart }: Props) {
   const gid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const appIsDark = useIsDark();
   const chartIsDark = chartThemeMode === "system" ? appIsDark : chartThemeMode === "dark";
-  const theme = themeVars(chartIsDark);
+  const baseTheme = themeVars(chartIsDark);
+  // Semantic palettes (e.g. sentiment green/red/gray) override the categorical one.
+  const theme = chart.colors?.length ? { ...baseTheme, palette: chart.colors } : baseTheme;
 
   const labels = chart.labels ?? [];
   const values = asNumbers(chart.datasets[0]?.data);
@@ -582,10 +588,14 @@ export default function ChartWidget({ chart }: Props) {
     }`;
 
   return (
-    <div className="mt-3" style={{ width: 630, maxWidth: "100%" }}>
+    <div
+      className={fill ? "flex-1 min-h-0 h-full flex flex-col" : "mt-3"}
+      style={{ width: fill ? undefined : 630, maxWidth: "100%" }}
+    >
       <div
         ref={captureRef}
         style={{
+          ...(fill ? { flex: 1 } : {}),
           position: "relative",
           borderRadius: 2,
           border: `1px solid ${chartIsDark ? "rgba(34,211,238,.2)" : "rgba(14,90,130,.15)"}`,
