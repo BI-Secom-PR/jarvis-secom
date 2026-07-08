@@ -84,6 +84,7 @@ export async function proxy(req: NextRequest) {
     pathname === '/icon' ||
     pathname === '/apple-icon' ||
     pathname === '/manifest.webmanifest' ||
+    pathname === '/robots.txt' ||
     pathname.match(/\.(png|jpg|jpeg|svg|ico|webmanifest|geojson|json)$/)
   ) {
     return withCsp(req)
