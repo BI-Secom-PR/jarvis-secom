@@ -292,7 +292,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
       <div className="relative z-10 flex-1 overflow-y-auto">
       <div className="max-w-6xl mx-auto px-4 py-6 md:px-6 space-y-5">
         {/* ── Filtros ── */}
-        <section className="relative hud-panel rounded-[16px] px-4 py-5 md:px-6 space-y-4">
+        <section className="relative hud-panel rounded-[16px] px-4 py-5 md:px-6 space-y-6">
           <HudCorners accent="cyan" size={16} inset={8} />
           <div
             className="font-hud text-[11px] uppercase tracking-[0.24em] text-ink flex items-center gap-2"
