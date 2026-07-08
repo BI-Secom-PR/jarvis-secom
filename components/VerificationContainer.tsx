@@ -528,8 +528,9 @@ export default function VerificationContainer() {
 
       <div className="relative z-10 flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto px-4 py-6 md:px-6 md:py-8">
-          <section className="relative hud-panel rounded-[16px] px-4 py-6 md:px-7 md:py-7 space-y-6">
+          <section className="relative hud-panel rounded-[16px] px-4 py-6 md:px-7 md:py-7">
             <HudCorners accent="cyan" size={16} inset={8} />
+            <div className="space-y-6">
             <div
               className="font-hud text-[11px] uppercase tracking-[0.24em] text-ink mb-1 flex items-center gap-2"
               style={{ textShadow: "0 0 12px rgba(39,224,255,0.35)" }}
@@ -1127,6 +1128,7 @@ export default function VerificationContainer() {
               )}
             </div>
           )}
+          </div>
           </section>
         </div>
       </div>
