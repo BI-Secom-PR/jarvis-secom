@@ -357,7 +357,7 @@ GROUP BY formato HAVING COUNT(DISTINCT ad_name) >= 3 ORDER BY cpe ASC;`,
        SUM(cost)/NULLIF(SUM(video_views),0) AS cpv,
        SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr,
        SUM(cost)/NULLIF(SUM(impressions),0)*1000 AS cpm
-FROM gold_platforms_campaigns
+FROM gold_campaigns_classified
 WHERE campaign_name LIKE '%X%' AND date BETWEEN DATE_FORMAT(CURDATE(),'%Y-%m-01') AND CURDATE()
 GROUP BY platform;`,
   },
@@ -367,7 +367,7 @@ GROUP BY platform;`,
     sql: `SELECT ad_name, SUM(impressions) AS impressoes, SUM(video_views) AS views,
        SUM(cost)/NULLIF(SUM(video_views),0) AS cpv,
        SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr
-FROM gold_platforms_campaigns
+FROM gold_campaigns_classified
 WHERE campaign_name LIKE '%X%'
 GROUP BY ad_name ORDER BY views DESC LIMIT 5;`,
   },
@@ -375,7 +375,7 @@ GROUP BY ad_name ORDER BY views DESC LIMIT 5;`,
     question: 'Mostre a evolução diária de investimento e impressões da campanha X',
     dims: ['temporal'],
     sql: `SELECT date, SUM(impressions) AS impressoes, SUM(video_views) AS views, SUM(cost) AS investimento
-FROM gold_platforms_campaigns
+FROM gold_campaigns_classified
 WHERE campaign_name LIKE '%X%'
 GROUP BY date ORDER BY date;`,
   },
@@ -383,7 +383,7 @@ GROUP BY date ORDER BY date;`,
     question: 'Qual o breakdown por região da campanha X?',
     dims: ['geo'],
     sql: `SELECT region_name, SUM(impressions) AS impressoes, SUM(clicks) AS cliques, SUM(reach) AS alcance
-FROM gold_platforms_regions
+FROM gold_regions_classified
 WHERE campaign_name LIKE '%X%'
 GROUP BY region_name ORDER BY impressoes DESC LIMIT 20;`,
   },
@@ -392,7 +392,7 @@ GROUP BY region_name ORDER BY impressoes DESC LIMIT 20;`,
     dims: ['demografia'],
     sql: `SELECT age, SUM(impressions) AS impressoes, SUM(video_views) AS views,
        SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr
-FROM gold_platforms_age
+FROM gold_age_gender_classified
 WHERE platform = 'meta' AND campaign_name LIKE '%X%'
 GROUP BY age ORDER BY impressoes DESC;`,
   },
@@ -402,7 +402,7 @@ GROUP BY age ORDER BY impressoes DESC;`,
     sql: `SELECT platform, SUM(impressions) AS impressoes, SUM(video_completions) AS thruplays,
        SUM(cost)/NULLIF(SUM(video_completions),0) AS cpv,
        SUM(video_completions)/NULLIF(SUM(impressions),0)*100 AS vtr
-FROM gold_platforms_campaigns
+FROM gold_campaigns_classified
 WHERE platform IN ('kwai','linkedin')
 GROUP BY platform;`,
   },
@@ -410,7 +410,7 @@ GROUP BY platform;`,
     question: 'Quais campanhas estão ativas atualmente?',
     dims: ['descoberta'],
     sql: `SELECT DISTINCT campaign_name, platform, MIN(date) AS inicio, MAX(date) AS fim
-FROM gold_platforms_campaigns
+FROM gold_campaigns_classified
 GROUP BY campaign_name, platform
 HAVING MAX(date) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
 ORDER BY fim DESC LIMIT 30;`,

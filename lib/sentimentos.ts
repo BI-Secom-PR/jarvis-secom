@@ -50,7 +50,7 @@ const ALLOWED_TOKEN = new RegExp(
 
 export function isSafeWhereFragment(fragment: string): boolean {
   if (!fragment || fragment.length > 1000) return false;
-  if (/[;`\\]|--|\/\*/.test(fragment)) return false;
+  if (/[;`\\#]|--|\/\*/.test(fragment)) return false;
   const withoutStrings = fragment.replace(/'(?:[^'\\]|'')*'/g, ' ').replace(/"(?:[^"\\])*"/g, ' ');
   if (/['"]/.test(withoutStrings)) return false; // unbalanced quote
   const tokens = withoutStrings.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? [];

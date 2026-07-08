@@ -78,26 +78,30 @@ export async function retrieveTop(question: string, k = 3): Promise<RagHit[]> {
   const examples = await loadExamples();
   if (!examples.length) return [];
 
+  let embedTimer: ReturnType<typeof setTimeout> | undefined;
   const queryVec = await Promise.race([
     embed(question),
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('embed timeout')), EMBED_TIMEOUT_MS)),
-  ]);
+    new Promise<never>((_, reject) => { embedTimer = setTimeout(() => reject(new Error('embed timeout')), EMBED_TIMEOUT_MS); }),
+  ]).finally(() => clearTimeout(embedTimer));
 
   const scored = examples
     .map((e) => ({ question: e.question, sql: e.sql, dims: e.dims, score: cosine(queryVec, e.embedding) }))
     .sort((a, b) => b.score - a.score);
 
+  // prefer dims diversity, but backfill with dup-dims hits so k good matches never shrink to 1
   const picked: RagHit[] = [];
+  const dupDims: RagHit[] = [];
   const seenDims = new Set<string>();
   for (const e of scored) {
     if (picked.length >= k || e.score <= SCORE_FLOOR) break;
     const dimsKey = e.dims?.length ? [...e.dims].sort().join('+') : null;
     if (dimsKey) {
-      if (seenDims.has(dimsKey)) continue;
+      if (seenDims.has(dimsKey)) { dupDims.push(e); continue; }
       seenDims.add(dimsKey);
     }
     picked.push(e);
   }
+  while (picked.length < k && dupDims.length) picked.push(dupDims.shift()!);
 
   // retrieval telemetry: raw best scores (pre-filter) so the floor can be calibrated
   console.log('[rag]', JSON.stringify({

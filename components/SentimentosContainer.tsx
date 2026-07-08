@@ -97,19 +97,22 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
   const [topMode, setTopMode] = useState<"Negativo" | "Positivo">("Negativo");
 
   useEffect(() => {
+    let stale = false; // ignore out-of-order responses from superseded filter states
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries({ from, to, campaign, ad, platform, sentiment }))
       if (v) qs.set(k, v);
     fetch(`/api/sentimentos/filters?${qs}`)
       .then((r) => r.json())
       .then((d: FiltersData) => {
+        if (stale) return;
         setFiltersData(d);
         // drop selections that fell out of the new option universe
         setCampaign((c) => (c && !d.campaigns.includes(c) ? "" : c));
         setAd((a) => (a && !d.ads.some((x) => x.ad === a) ? "" : a));
         setPlatform((p) => (p && !d.platforms.includes(p) ? "" : p));
       })
-      .catch(() => setFiltersData({ campaigns: [], platforms: [], ads: [] }));
+      .catch(() => { if (!stale) setFiltersData({ campaigns: [], platforms: [], ads: [] }); });
+    return () => { stale = true; };
   }, [from, to, campaign, ad, platform, sentiment]);
 
   const loadData = useCallback(async (body: Record<string, unknown>) => {

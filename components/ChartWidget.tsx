@@ -46,8 +46,10 @@ interface SeriesPoint {
 interface GeoFeature { type: string; properties?: Record<string, unknown>; geometry: unknown }
 
 function useIsDark(): boolean {
+  // .hud-theme on <body> forces dark visuals app-wide regardless of html class / OS scheme
   const [isDark, setIsDark] = useState(() => {
     if (typeof document === "undefined") return true;
+    if (document.body?.classList.contains("hud-theme")) return true;
     const cls = document.documentElement.classList;
     return cls.contains("dark") || (!cls.contains("light") && window.matchMedia("(prefers-color-scheme: dark)").matches);
   });
@@ -55,7 +57,7 @@ function useIsDark(): boolean {
   useEffect(() => {
     const root = document.documentElement;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const compute = () => setIsDark(root.classList.contains("dark") || (!root.classList.contains("light") && mq.matches));
+    const compute = () => setIsDark(document.body.classList.contains("hud-theme") || root.classList.contains("dark") || (!root.classList.contains("light") && mq.matches));
     mq.addEventListener("change", compute);
     const obs = new MutationObserver(compute);
     obs.observe(root, { attributes: true, attributeFilter: ["class"] });
@@ -101,6 +103,8 @@ function polar(cx: number, cy: number, r: number, deg: number): { x: number; y: 
 }
 
 function donutPath(cx: number, cy: number, ro: number, ri: number, start: number, end: number): string {
+  // a full-circle arc has coincident endpoints and renders nothing — clamp just under 360°
+  if (end - start >= 360) end = start + 359.99;
   const p1 = polar(cx, cy, ro, start);
   const p2 = polar(cx, cy, ro, end);
   const q1 = polar(cx, cy, ri, start);
