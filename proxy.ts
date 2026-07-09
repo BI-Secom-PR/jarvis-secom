@@ -19,7 +19,8 @@ function buildCsp(nonce: string): string {
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",
     // *.fbcdn.net: creative thumbnails on /sentimentos (silver_social_comments.image_url)
-    "img-src 'self' data: https://*.public.blob.vercel-storage.com https://*.fbcdn.net",
+    // www.facebook.com: unwrapped ad-image links (see resolveImageUrl in app/api/sentimentos/data/route.ts) redirect through here before landing on fbcdn
+    "img-src 'self' data: https://*.public.blob.vercel-storage.com https://*.fbcdn.net https://www.facebook.com",
     "connect-src 'self' https://vercel.com https://*.public.blob.vercel-storage.com https://*.blob.vercel-storage.com",
     "object-src 'none'",
     "base-uri 'self'",

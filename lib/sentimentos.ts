@@ -15,7 +15,7 @@ export type SentimentFilters = {
   aiWhere?: string;
 };
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Parameterized WHERE for the fixed filters (aiWhere appended separately). */
 export function buildWhere(f: SentimentFilters): { sql: string; params: unknown[] } {

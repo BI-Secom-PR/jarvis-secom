@@ -8,6 +8,23 @@ export const maxDuration = 60;
 
 const PAGE_SIZE = 50;
 
+// Meta ad-creative rows store a signed external-*.fbcdn.net wrapper URL whose
+// `oe=` expiry passes within ~1-2 days; the inner `url=` (the actual
+// facebook.com/ads/image/ link) stays valid much longer, so unwrap it.
+function resolveImageUrl(url: string | null): string | null {
+  if (!url) return url;
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.endsWith('fbcdn.net')) {
+      const inner = parsed.searchParams.get('url');
+      if (inner) return inner;
+    }
+  } catch {
+    // not a valid absolute URL — leave as-is, Thumb's onError already handles bad values
+  }
+  return url;
+}
+
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -53,13 +70,18 @@ export async function POST(req: NextRequest) {
     const topBy = (s: string) =>
       topRows.filter((r) => r.sentiment === s).slice(0, 10).map(({ ad_name, n }) => ({ ad_name, n }));
 
+    const resolvedComments = (comments[0] as Array<Record<string, unknown>>).map((c) => ({
+      ...c,
+      image_url: resolveImageUrl(c.image_url as string | null),
+    }));
+
     return NextResponse.json({
       distribution: dist[0],
       trend: trend[0],
       byPlatform: byPlatform[0],
       topNegative: topBy('Negativo'),
       topPositive: topBy('Positivo'),
-      comments: comments[0],
+      comments: resolvedComments,
       page,
       pageSize: PAGE_SIZE,
     });
