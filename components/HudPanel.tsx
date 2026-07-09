@@ -12,7 +12,7 @@ interface HudPanelProps {
   title: string;
   subtitle?: string;
   icon?: React.ReactNode;
-  accent?: "cyan" | "gold";
+  accent?: "cyan" | "gold" | "violet";
   className?: string;
   children?: React.ReactNode;
 }
@@ -26,7 +26,7 @@ export default function HudPanel({
   className = "",
   children,
 }: HudPanelProps) {
-  const accentVar = accent === "gold" ? "var(--hud-gold)" : "var(--hud-cyan)";
+  const accentVar = `var(--hud-${accent})`;
 
   const body = (
     <>
@@ -82,7 +82,7 @@ export default function HudPanel({
   );
 
   const panelClass = `group relative block rounded-[10px] px-11 py-4 hud-panel ${
-    accent === "gold" ? "hud-panel-gold" : ""
+    accent === "gold" ? "hud-panel-gold" : accent === "violet" ? "hud-panel-violet" : ""
   } transition-[box-shadow,transform] duration-300 ${className}`;
 
   if (href) {

@@ -49,13 +49,13 @@ function SentimentIcon() {
     <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
       <path
         d="M3 5.5A2.5 2.5 0 0 1 5.5 3h11A2.5 2.5 0 0 1 19 5.5v8A2.5 2.5 0 0 1 16.5 16H13l-2 3-2-3H5.5A2.5 2.5 0 0 1 3 13.5v-8Z"
-        stroke="var(--hud-cyan)"
+        stroke="var(--hud-violet)"
         strokeWidth="1.4"
         strokeLinejoin="round"
       />
       <path
         d="M11 12.3l-2.6-2.55a1.55 1.55 0 0 1 2.2-2.2l.4.4.4-.4a1.55 1.55 0 0 1 2.2 2.2L11 12.3Z"
-        stroke="var(--hud-cyan)"
+        stroke="var(--hud-violet)"
         strokeWidth="1.3"
         strokeLinejoin="round"
       />
@@ -102,7 +102,7 @@ export default async function Home() {
           icon={<SentimentIcon />}
           title="Sentimentos"
           subtitle="Analise o sentimento dos comentários dos anúncios e corrija classificações"
-          accent="cyan"
+          accent="violet"
           className="w-full max-w-sm md:w-[320px]"
         />
         <HudPanel

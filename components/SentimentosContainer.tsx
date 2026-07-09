@@ -71,7 +71,7 @@ function Thumb({ url }: { url: string | null }) {
       alt="criativo"
       loading="lazy"
       onError={() => setFailed(true)}
-      className="h-12 w-12 shrink-0 rounded-lg border border-separator object-cover"
+      className="h-30 w-30 shrink-0 rounded-lg border border-separator object-cover"
     />
   );
 }
@@ -150,6 +150,11 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
       setPage(0);
       setAiFilter(json);
+      // AI-extracted sentiment/date range become normal filter state, so the
+      // user can refine them with the existing dropdowns afterward.
+      if (json.sentiment) setSentiment(json.sentiment);
+      if (json.from) setFrom(json.from);
+      if (json.to) setTo(json.to);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha no filtro IA");
     } finally {
@@ -286,276 +291,275 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
         </div>
         <span
           className="text-[15px] leading-none animate-hud-flicker motion-reduce:animate-none"
-          style={{ color: "var(--hud-cyan)", textShadow: "0 0 12px var(--hud-cyan)" }}
+          style={{ color: "var(--hud-violet)", textShadow: "0 0 12px var(--hud-violet)" }}
         >
           ◇
         </span>
       </header>
 
       <div className="relative z-10 flex-1 overflow-y-auto">
-      <div className="max-w-6xl mx-auto px-4 py-6 md:px-6 space-y-5">
-        {/* ── Filtros ── */}
-        <section className="relative hud-panel rounded-[16px] px-4 py-5 md:px-6">
-          <HudCorners accent="cyan" size={16} inset={8} />
-          <div className="space-y-6">
-          <div
-            className="font-hud text-[11px] uppercase tracking-[0.24em] text-ink flex items-center gap-2"
-            style={{ textShadow: "0 0 12px rgba(39,224,255,0.35)" }}
-          >
-            <span style={{ color: "var(--hud-cyan)" }}>◇</span> Filtros
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 items-center">
-            <select
-              className={selectClass}
-              value={campaign}
-              onChange={(e) => { setCampaign(e.target.value); setAd(""); setPage(0); }}
-            >
-              <option value="">Todas as campanhas</option>
-              {filtersData?.campaigns.map((c) => (
-                <option key={c} value={c}>{truncate(c, 70)}</option>
-              ))}
-            </select>
-            <select
-              className={selectClass}
-              value={ad}
-              onChange={(e) => { setAd(e.target.value); setPage(0); }}
-            >
-              <option value="">Todos os anúncios</option>
-              {adOptions.map((a) => (
-                <option key={a} value={a}>{truncate(a, 70)}</option>
-              ))}
-            </select>
-            <select
-              className={selectClass}
-              value={platform}
-              onChange={(e) => { setPlatform(e.target.value); setPage(0); }}
-            >
-              <option value="">Todas as plataformas</option>
-              {filtersData?.platforms.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-            <select
-              className={selectClass}
-              value={sentiment}
-              onChange={(e) => { setSentiment(e.target.value); setPage(0); }}
-            >
-              <option value="">Todos os sentimentos</option>
-              {SENTIMENTS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <div className="md:col-span-2 flex flex-wrap gap-2.5 items-center">
-              <label className="flex items-center gap-1.5 text-[12px] text-ink-3">
-                de
-                <input
-                  type="date"
-                  value={from}
-                  max={to || undefined}
-                  onChange={(e) => { setFrom(e.target.value); setPage(0); }}
-                  className={dateClass}
-                />
-              </label>
-              <label className="flex items-center gap-1.5 text-[12px] text-ink-3">
-                até
-                <input
-                  type="date"
-                  value={to}
-                  min={from || undefined}
-                  onChange={(e) => { setTo(e.target.value); setPage(0); }}
-                  className={dateClass}
-                />
-              </label>
-              {(from || to) && (
-                <button
-                  onClick={() => { setFrom(""); setTo(""); setPage(0); }}
-                  className="text-[12px] text-ink-3 hover:text-ink underline underline-offset-2"
-                >
-                  limpar datas
-                </button>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2.5 items-center">
-            <input
-              type="text"
-              value={aiText}
-              onChange={(e) => setAiText(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && applyAiFilter()}
-              placeholder='Filtro em linguagem natural, ex.: "reclamações sobre preço de gasolina"'
-              className="flex-1 min-w-[240px] bg-fill border border-separator rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink-4 focus:outline-none focus:border-accent-border"
-            />
-            <button
-              onClick={applyAiFilter}
-              disabled={aiLoading || !aiText.trim()}
-              className="px-4 py-2 rounded-lg text-[13px] font-semibold border bg-accent-soft border-accent-border text-accent-text hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              {aiLoading ? "Interpretando…" : "Filtrar com IA"}
-            </button>
-            {aiFilter && (
-              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] bg-accent-soft border border-accent-border text-accent-text max-w-full">
-                <span className="truncate" title={aiFilter.where}>IA: {aiFilter.descricao}</span>
-                <button
-                  onClick={() => { setAiFilter(null); setPage(0); }}
-                  className="hover:text-ink shrink-0"
-                  aria-label="Remover filtro IA"
-                >
-                  ✕
-                </button>
-              </span>
-            )}
-          </div>
-          </div>
-        </section>
-
-        {/* ── KPIs ── */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { label: "Comentários", value: kpis.total.toLocaleString("pt-BR"), color: "var(--hud-cyan)" },
-            { label: "Positivos", value: `${kpis.pos.toFixed(1)}%`, color: SENT_COLORS.Positivo },
-            { label: "Negativos", value: `${kpis.neg.toFixed(1)}%`, color: SENT_COLORS.Negativo },
-            { label: "Net sentiment", value: `${kpis.net >= 0 ? "+" : ""}${kpis.net.toFixed(1)}`, color: kpis.net >= 0 ? SENT_COLORS.Positivo : SENT_COLORS.Negativo },
-          ].map((k) => (
-            <div key={k.label} className="relative hud-panel rounded-[12px] px-4 py-3.5">
-              <div className="font-hud text-[9px] uppercase tracking-[0.22em] text-ink-3">{k.label}</div>
+        <div className="max-w-6xl mx-auto px-4 py-6 md:px-6 space-y-5">
+          {/* ── Filtros ── */}
+          <section className="relative hud-panel hud-panel-violet rounded-[16px] px-4 py-5 md:px-6">
+            <HudCorners accent="violet" size={16} inset={8} />
+            <div className="space-y-6">
               <div
-                className="mt-1 text-[22px] font-bold tabular-nums"
-                style={{ color: k.color, textShadow: `0 0 14px color-mix(in srgb, ${k.color} 50%, transparent)` }}
+                className="font-hud text-[11px] uppercase tracking-[0.24em] text-ink flex items-center gap-2"
+                style={{ textShadow: "0 0 12px rgba(39,224,255,0.35)" }}
               >
-                {loading ? "…" : k.value}
+                <span style={{ color: "var(--hud-violet)" }}>◇</span> Filtros
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 items-center">
+                <select
+                  className={selectClass}
+                  value={campaign}
+                  onChange={(e) => { setCampaign(e.target.value); setAd(""); setPage(0); }}
+                >
+                  <option value="">Todas as campanhas</option>
+                  {filtersData?.campaigns.map((c) => (
+                    <option key={c} value={c}>{truncate(c, 70)}</option>
+                  ))}
+                </select>
+                <select
+                  className={selectClass}
+                  value={ad}
+                  onChange={(e) => { setAd(e.target.value); setPage(0); }}
+                >
+                  <option value="">Todos os anúncios</option>
+                  {adOptions.map((a) => (
+                    <option key={a} value={a}>{truncate(a, 70)}</option>
+                  ))}
+                </select>
+                <select
+                  className={selectClass}
+                  value={platform}
+                  onChange={(e) => { setPlatform(e.target.value); setPage(0); }}
+                >
+                  <option value="">Todas as plataformas</option>
+                  {filtersData?.platforms.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+                <select
+                  className={selectClass}
+                  value={sentiment}
+                  onChange={(e) => { setSentiment(e.target.value); setPage(0); }}
+                >
+                  <option value="">Todos os sentimentos</option>
+                  {SENTIMENTS.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <div className="md:col-span-2 flex flex-wrap gap-2.5 items-center">
+                  <label className="flex items-center gap-1.5 text-[12px] text-ink-3">
+                    de
+                    <input
+                      type="date"
+                      value={from}
+                      max={to || undefined}
+                      onChange={(e) => { setFrom(e.target.value); setPage(0); }}
+                      className={dateClass}
+                    />
+                  </label>
+                  <label className="flex items-center gap-1.5 text-[12px] text-ink-3">
+                    até
+                    <input
+                      type="date"
+                      value={to}
+                      min={from || undefined}
+                      onChange={(e) => { setTo(e.target.value); setPage(0); }}
+                      className={dateClass}
+                    />
+                  </label>
+                  {(from || to) && (
+                    <button
+                      onClick={() => { setFrom(""); setTo(""); setPage(0); }}
+                      className="text-[12px] text-ink-3 hover:text-ink underline underline-offset-2"
+                    >
+                      limpar datas
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2.5 items-center">
+                <input
+                  type="text"
+                  value={aiText}
+                  onChange={(e) => setAiText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && applyAiFilter()}
+                  placeholder='Filtro em linguagem natural, ex.: "reclamações sobre preço de gasolina"'
+                  className="flex-1 min-w-[240px] bg-fill border border-separator rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink-4 focus:outline-none focus:border-accent-border"
+                />
+                <button
+                  onClick={applyAiFilter}
+                  disabled={aiLoading || !aiText.trim()}
+                  className="px-4 py-2 rounded-lg text-[13px] font-semibold border bg-accent-soft border-accent-border text-accent-text hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  {aiLoading ? "Interpretando…" : "Filtrar com IA"}
+                </button>
+                {aiFilter && (
+                  <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] bg-accent-soft border border-accent-border text-accent-text max-w-full">
+                    <span className="truncate" title={aiFilter.where}>IA: {aiFilter.descricao}</span>
+                    <button
+                      onClick={() => { setAiFilter(null); setPage(0); }}
+                      className="hover:text-ink shrink-0"
+                      aria-label="Remover filtro IA"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
               </div>
             </div>
-          ))}
-        </section>
+          </section>
 
-        {/* ── Gráficos ── */}
-        <section className="grid grid-cols-1 lg:grid-cols-2 auto-rows-fr gap-4">
-          {donut && <ChartWidget chart={donut} fill />}
-          {trend && <ChartWidget chart={trend} fill />}
-          {byPlatform && <ChartWidget chart={byPlatform} fill />}
-          {topAds && (
-            <div className="flex flex-col gap-2 min-h-0">
-              <div className="flex gap-2 shrink-0">
-                {(["Negativo", "Positivo"] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setTopMode(m)}
-                    className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${
-                      topMode === m
-                        ? "bg-accent-soft border-accent-border text-accent-text"
-                        : "bg-fill border-separator text-ink-3 hover:text-ink"
-                    }`}
-                  >
-                    Mais {m === "Negativo" ? "negativos" : "positivos"}
-                  </button>
-                ))}
+          {/* ── KPIs ── */}
+          <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Comentários", value: kpis.total.toLocaleString("pt-BR"), color: "var(--hud-violet)" },
+              { label: "Positivos", value: `${kpis.pos.toFixed(1)}%`, color: SENT_COLORS.Positivo },
+              { label: "Negativos", value: `${kpis.neg.toFixed(1)}%`, color: SENT_COLORS.Negativo },
+              { label: "Net sentiment", value: `${kpis.net >= 0 ? "+" : ""}${kpis.net.toFixed(1)}`, color: kpis.net >= 0 ? SENT_COLORS.Positivo : SENT_COLORS.Negativo },
+            ].map((k) => (
+              <div key={k.label} className="relative hud-panel hud-panel-violet rounded-[12px] px-4 py-3.5">
+                <div className="font-hud text-[9px] uppercase tracking-[0.22em] text-ink-3">{k.label}</div>
+                <div
+                  className="mt-1 text-[22px] font-bold tabular-nums"
+                  style={{ color: k.color, textShadow: `0 0 14px color-mix(in srgb, ${k.color} 50%, transparent)` }}
+                >
+                  {loading ? "…" : k.value}
+                </div>
               </div>
-              <ChartWidget chart={topAds} fill />
-            </div>
-          )}
-        </section>
+            ))}
+          </section>
 
-        {/* ── Tabela de comentários ── */}
-        <section className="relative hud-panel rounded-[16px] overflow-hidden">
-          <HudCorners accent="cyan" size={16} inset={8} />
-          <div className="px-4 md:px-6 pt-5 pb-3 flex items-center justify-between gap-3">
-            <div
-              className="font-hud text-[11px] uppercase tracking-[0.24em] text-ink flex items-center gap-2"
-              style={{ textShadow: "0 0 12px rgba(39,224,255,0.35)" }}
-            >
-              <span style={{ color: "var(--hud-cyan)" }}>◇</span> Comentários
-            </div>
-            <div className="flex items-center gap-2 text-[12px] text-ink-3">
-              <button
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={page === 0 || loading}
-                className="px-2.5 py-1 rounded border border-separator bg-fill hover:text-ink disabled:opacity-40"
+          {/* ── Gráficos ── */}
+          <section className="grid grid-cols-1 lg:grid-cols-2 auto-rows-fr gap-4">
+            {donut && <ChartWidget chart={donut} fill />}
+            {trend && <ChartWidget chart={trend} fill />}
+            {byPlatform && <ChartWidget chart={byPlatform} fill />}
+            {topAds && (
+              <div className="flex flex-col gap-2 min-h-0">
+                <div className="flex gap-2 shrink-0">
+                  {(["Negativo", "Positivo"] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setTopMode(m)}
+                      className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${topMode === m
+                          ? "bg-accent-soft border-accent-border text-accent-text"
+                          : "bg-fill border-separator text-ink-3 hover:text-ink"
+                        }`}
+                    >
+                      Mais {m === "Negativo" ? "negativos" : "positivos"}
+                    </button>
+                  ))}
+                </div>
+                <ChartWidget chart={topAds} fill />
+              </div>
+            )}
+          </section>
+
+          {/* ── Tabela de comentários ── */}
+          <section className="relative hud-panel hud-panel-violet rounded-[16px] overflow-hidden">
+            <HudCorners accent="violet" size={16} inset={8} />
+            <div className="px-4 md:px-6 pt-5 pb-3 flex items-center justify-between gap-3">
+              <div
+                className="font-hud text-[11px] uppercase tracking-[0.24em] text-ink flex items-center gap-2"
+                style={{ textShadow: "0 0 12px rgba(39,224,255,0.35)" }}
               >
-                ← Anterior
-              </button>
-              <span className="tabular-nums">página {page + 1}</span>
-              <button
-                onClick={() => setPage((p) => p + 1)}
-                disabled={loading || (data?.comments.length ?? 0) < (data?.pageSize ?? 50)}
-                className="px-2.5 py-1 rounded border border-separator bg-fill hover:text-ink disabled:opacity-40"
-              >
-                Próxima →
-              </button>
+                <span style={{ color: "var(--hud-violet)" }}>◇</span> Comentários
+              </div>
+              <div className="flex items-center gap-2 text-[12px] text-ink-3">
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0 || loading}
+                  className="px-2.5 py-1 rounded border border-separator bg-fill hover:text-ink disabled:opacity-40"
+                >
+                  ← Anterior
+                </button>
+                <span className="tabular-nums">página {page + 1}</span>
+                <button
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={loading || (data?.comments.length ?? 0) < (data?.pageSize ?? 50)}
+                  className="px-2.5 py-1 rounded border border-separator bg-fill hover:text-ink disabled:opacity-40"
+                >
+                  Próxima →
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="text-left text-[10px] font-hud uppercase tracking-[0.16em] text-ink-3 border-b border-separator">
-                  <th className="px-4 md:px-6 py-2.5 w-16">Imagem</th>
-                  <th className="px-3 py-2.5 min-w-[220px]">Mensagem do anúncio</th>
-                  <th className="px-3 py-2.5 min-w-[260px]">Comentário</th>
-                  <th className="px-3 py-2.5 pr-4 md:pr-6 w-56">Classificação</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.comments ?? []).map((row) => (
-                  <tr key={row.id} className="border-b border-separator/60 align-top hover:bg-fill/40">
-                    <td className="px-4 md:px-6 py-3"><Thumb url={row.image_url} /></td>
-                    <td className="px-3 py-3">
-                      <p className="text-ink-2" title={row.post_message ?? undefined}>
-                        {truncate(row.post_message, 140)}
-                      </p>
-                      <p className="mt-1 text-[11px] text-ink-4 truncate max-w-[280px]" title={`${row.campaign_name ?? ""} · ${row.ad_name ?? ""}`}>
-                        {row.platform} · {truncate(row.campaign_name, 45)}
-                      </p>
-                    </td>
-                    <td className="px-3 py-3">
-                      <p className="text-ink" title={row.comment ?? undefined}>{truncate(row.comment, 200)}</p>
-                      <p className="mt-1 text-[11px] text-ink-4">
-                        {row.author ?? "anônimo"} · {row.like_count ?? 0} ♥
-                        {row.created_time ? ` · ${new Date(row.created_time).toLocaleDateString("pt-BR")}` : ""}
-                      </p>
-                    </td>
-                    <td className="px-3 py-3 pr-4 md:pr-6">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
-                          style={{ background: SENT_COLORS[sentLabel(row.sentiment)] }}
-                        />
-                        <select
-                          className={selectClass + " py-1 text-[12px]"}
-                          value={row.sentiment ?? ""}
-                          onChange={(e) => correct(row, e.target.value)}
-                        >
-                          {!row.sentiment && <option value="">—</option>}
-                          {SENTIMENTS.map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
-                      </div>
-                      {row.sentiment_source === "human" && (
-                        <p className="mt-1.5 text-[10px] text-ink-4" title={row.audited_by ?? undefined}>
-                          ✎ corrigido por {truncate(row.audited_by, 28)}
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="text-left text-[10px] font-hud uppercase tracking-[0.16em] text-ink-3 border-b border-separator">
+                    <th className="px-4 md:px-6 py-2.5 w-16">Imagem</th>
+                    <th className="px-3 py-2.5 min-w-[220px]">Mensagem do anúncio</th>
+                    <th className="px-3 py-2.5 min-w-[260px]">Comentário</th>
+                    <th className="px-3 py-2.5 pr-4 md:pr-6 w-56">Classificação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data?.comments ?? []).map((row) => (
+                    <tr key={row.id} className="border-b border-separator/60 align-top hover:bg-fill/40">
+                      <td className="px-4 md:px-6 py-3"><Thumb url={row.image_url} /></td>
+                      <td className="px-3 py-3">
+                        <p className="text-ink-2" title={row.post_message ?? undefined}>
+                          {truncate(row.post_message, 140)}
                         </p>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {!loading && !data?.comments.length && (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-10 text-center text-ink-3">
-                      Nenhum comentário para os filtros atuais.
-                    </td>
-                  </tr>
-                )}
-                {loading && (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-10 text-center text-ink-3 animate-pulse">
-                      Carregando…
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
+                        <p className="mt-1 text-[11px] text-ink-4 truncate max-w-[280px]" title={`${row.campaign_name ?? ""} · ${row.ad_name ?? ""}`}>
+                          {row.platform} · {truncate(row.campaign_name, 45)}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3">
+                        <p className="text-ink" title={row.comment ?? undefined}>{truncate(row.comment, 200)}</p>
+                        <p className="mt-1 text-[11px] text-ink-4">
+                          {row.author ?? "anônimo"} · {row.like_count ?? 0} ♥
+                          {row.created_time ? ` · ${new Date(row.created_time).toLocaleDateString("pt-BR")}` : ""}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3 pr-4 md:pr-6">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                            style={{ background: SENT_COLORS[sentLabel(row.sentiment)] }}
+                          />
+                          <select
+                            className={selectClass + " py-1 text-[12px]"}
+                            value={row.sentiment ?? ""}
+                            onChange={(e) => correct(row, e.target.value)}
+                          >
+                            {!row.sentiment && <option value="">—</option>}
+                            {SENTIMENTS.map((s) => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {row.sentiment_source === "human" && (
+                          <p className="mt-1.5 text-[10px] text-ink-4" title={row.audited_by ?? undefined}>
+                            ✎ corrigido por {truncate(row.audited_by, 28)}
+                          </p>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {!loading && !data?.comments.length && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-10 text-center text-ink-3">
+                        Nenhum comentário para os filtros atuais.
+                      </td>
+                    </tr>
+                  )}
+                  {loading && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-10 text-center text-ink-3 animate-pulse">
+                        Carregando…
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       </div>
 
       {error && (

@@ -126,6 +126,8 @@
   --hud-cyan-dim:  rgba(39, 224, 255, 0.12);
   --hud-gold:      #ffb53d;
   --hud-gold-soft: rgba(255, 181, 61, 0.5);
+  --hud-violet:      #818cf8;
+  --hud-violet-soft: rgba(129, 140, 248, 0.5);
   --hud-red:       #ff4133;
   --font-hud:      var(--font-michroma), 'Michroma', system-ui, sans-serif;
 
@@ -514,6 +516,12 @@
 @utility hud-panel-gold {
   --hud-accent: var(--hud-gold);
   --hud-accent-soft: var(--hud-gold-soft);
+}
+
+/* Violet variant — sentimentos HUD. */
+@utility hud-panel-violet {
+  --hud-accent: var(--hud-violet);
+  --hud-accent-soft: var(--hud-violet-soft);
 }
 
 /* Retune the send orb to arc-reactor cyan inside the HUD theme. Plain rule
