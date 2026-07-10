@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { getPool } from '@/lib/mysql';
+import { getPool, isTransientDbError, resetPool } from '@/lib/mysql';
 import { buildWhere } from '@/lib/sentimentos';
 
 export const dynamic = 'force-dynamic';
@@ -34,9 +34,14 @@ export async function GET(req: NextRequest) {
     const wPlatforms = buildWhere({ ...f, platform: undefined });
     const wAds = buildWhere({ ...f, ad: undefined });
     const pool = getPool();
-    const [campaigns, platforms, ads] = await Promise.all([
+    // Platforms is tiny; campaigns + ads are the heavier DISTINCT scans.
+    // Cap peak at 2 so this route can coexist with data's first wave.
+    const platforms = await pool.query(
+      `SELECT DISTINCT platform FROM silver_social_comments WHERE ${wPlatforms.sql} ORDER BY platform`,
+      wPlatforms.params
+    );
+    const [campaigns, ads] = await Promise.all([
       pool.query(`SELECT DISTINCT campaign_name FROM silver_social_comments WHERE ${wCampaigns.sql} AND campaign_name IS NOT NULL AND campaign_name != '' ORDER BY campaign_name`, wCampaigns.params),
-      pool.query(`SELECT DISTINCT platform FROM silver_social_comments WHERE ${wPlatforms.sql} ORDER BY platform`, wPlatforms.params),
       pool.query(`SELECT DISTINCT campaign_name, ad_name FROM silver_social_comments WHERE ${wAds.sql} AND ad_name IS NOT NULL AND ad_name != '' ORDER BY ad_name`, wAds.params),
     ]);
     const data = {
@@ -52,6 +57,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(data);
   } catch (e) {
     console.error('[sentimentos/filters]', e);
+    if (isTransientDbError(e)) {
+      resetPool();
+      return NextResponse.json(
+        { error: 'Conexão com o banco esgotou. Tente novamente.' },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: 'Erro ao carregar filtros' }, { status: 500 });
   }
 }

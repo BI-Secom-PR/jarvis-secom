@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { getPool } from '@/lib/mysql';
+import { getPool, isTransientDbError, resetPool } from '@/lib/mysql';
 import { buildWhere, isSafeWhereFragment, type SentimentFilters } from '@/lib/sentimentos';
 
 export const dynamic = 'force-dynamic';
@@ -48,8 +48,17 @@ export async function POST(req: NextRequest) {
 
   try {
     const pool = getPool();
-    const [dist, trend, byPlatform, topAds, comments] = await Promise.all([
+    // Two waves instead of 5-way Promise.all: keeps peak concurrency low when
+    // filters (3 queries) runs in parallel with this route.
+    const [dist, comments] = await Promise.all([
       pool.query(`SELECT sentiment, COUNT(*) n ${from} GROUP BY sentiment`, params),
+      pool.query(
+        `SELECT id, image_url, post_message, comment, author, like_count, created_time, sentiment, sentiment_source, audited_by, campaign_name, ad_name, platform
+         ${from} ORDER BY created_time DESC LIMIT ${PAGE_SIZE} OFFSET ${page * PAGE_SIZE}`,
+        params
+      ),
+    ]);
+    const [trend, byPlatform, topAds] = await Promise.all([
       pool.query(
         `SELECT DATE_FORMAT(created_time, '%Y-%m') ym, sentiment, COUNT(*) n ${from} AND created_time >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH) GROUP BY ym, sentiment ORDER BY ym`,
         params
@@ -58,11 +67,6 @@ export async function POST(req: NextRequest) {
       pool.query(
         `SELECT ad_name, sentiment, COUNT(*) n FROM silver_social_comments WHERE ${whereNoSent} AND sentiment IN ('Negativo','Positivo') AND ad_name IS NOT NULL GROUP BY ad_name, sentiment ORDER BY n DESC`,
         paramsNoSent
-      ),
-      pool.query(
-        `SELECT id, image_url, post_message, comment, author, like_count, created_time, sentiment, sentiment_source, audited_by, campaign_name, ad_name, platform
-         ${from} ORDER BY created_time DESC LIMIT ${PAGE_SIZE} OFFSET ${page * PAGE_SIZE}`,
-        params
       ),
     ]);
 
@@ -87,6 +91,13 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     console.error('[sentimentos/data]', e);
+    if (isTransientDbError(e)) {
+      resetPool();
+      return NextResponse.json(
+        { error: 'Conexão com o banco esgotou. Tente novamente.' },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: 'Erro ao consultar comentários' }, { status: 500 });
   }
 }

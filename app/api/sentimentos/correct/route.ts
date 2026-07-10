@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { getRwPool } from '@/lib/mysql';
+import { getRwPool, isTransientDbError, resetRwPool } from '@/lib/mysql';
 import { SENTIMENTS } from '@/lib/sentimentos';
 
 export const dynamic = 'force-dynamic';
@@ -42,6 +42,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id, sentiment, sentiment_source: 'human', audited_by: session.email });
   } catch (e) {
     console.error('[sentimentos/correct]', e);
+    if (isTransientDbError(e)) {
+      resetRwPool();
+      return NextResponse.json(
+        { error: 'Conexão com o banco esgotou. Tente novamente.' },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: 'Erro ao gravar correção' }, { status: 500 });
   }
 }

@@ -30,6 +30,9 @@ RK3zVZ5mjoaJ/SbfBxJE+vxpivaqhuINltt/Nqo=
 -----END CERTIFICATE-----`;
 
 let pool: mysql.Pool | null = null;
+let rwPool: mysql.Pool | null = null;
+let poolResetAt = 0;
+let rwPoolResetAt = 0;
 
 // Cert has a generic CN (MySQL_Endpoint_Server), no SAN, and we connect by IP —
 // hostname verification can't pass. Skip the hostname check while keeping full
@@ -42,22 +45,99 @@ const sslOptions: TlsConnectionOptions = {
   checkServerIdentity: () => undefined,
 };
 
-export function getPool(): mysql.Pool {
-  if (!pool) {
-    pool = mysql.createPool({
-      host: process.env.MYSQL_HOST?.trim(),
-      database: process.env.MYSQL_DATABASE?.trim(),
-      user: process.env.MYSQL_USER?.trim(),
-      password: process.env.MYSQL_PASSWORD?.trim(),
-      waitForConnections: true,
-      connectionLimit: 5,
-      ssl: sslOptions as mysql.SslOptions,
-    });
-  }
-  return pool;
+const FATAL_CONN_CODES = new Set([
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'PROTOCOL_CONNECTION_LOST',
+  'PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR',
+  'ER_ACCESS_DENIED_ERROR',
+  'POOL_CLOSED',
+]);
+
+// filters + data often fail together; don't thrash recreate/end on every sibling 503.
+const RESET_COOLDOWN_MS = 3_000;
+// Delay end() so concurrent in-flight queries on the old pool aren't killed mid-request.
+const POOL_END_GRACE_MS = 15_000;
+
+function basePoolOptions() {
+  return {
+    host: process.env.MYSQL_HOST?.trim(),
+    database: process.env.MYSQL_DATABASE?.trim(),
+    waitForConnections: true,
+    // Fail faster than the default ~10s hang and recycle half-open sockets.
+    connectTimeout: 8_000,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10_000,
+    ssl: sslOptions as mysql.SslOptions,
+  } as const;
 }
 
-let rwPool: mysql.Pool | null = null;
+function createReadPool(): mysql.Pool {
+  return mysql.createPool({
+    ...basePoolOptions(),
+    user: process.env.MYSQL_USER?.trim(),
+    password: process.env.MYSQL_PASSWORD?.trim(),
+    // filters + data waves can overlap; 5 was too tight and queued to timeout.
+    connectionLimit: 10,
+  });
+}
+
+function createRwPool(): mysql.Pool {
+  return mysql.createPool({
+    ...basePoolOptions(),
+    user: process.env.MYSQL_RW_USER!.trim(),
+    password: process.env.MYSQL_RW_PASSWORD!.trim(),
+    connectionLimit: 2,
+  });
+}
+
+function retirePool(old: mysql.Pool | null) {
+  if (!old) return;
+  // Never end() synchronously: sibling routes (filters/data) share this pool and
+  // would immediately fail with "Pool is closed" — which then looked like permanent 500s.
+  setTimeout(() => {
+    void old.end().catch(() => undefined);
+  }, POOL_END_GRACE_MS);
+}
+
+/** True when the pool should be thrown away rather than reused. */
+export function isTransientDbError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const code = 'code' in err ? String((err as { code?: unknown }).code ?? '') : '';
+  const message = 'message' in err ? String((err as { message?: unknown }).message ?? '') : '';
+  if (FATAL_CONN_CODES.has(code)) return true;
+  // mysql2 sometimes surfaces this only as a message after pool.end().
+  return /pool is closed/i.test(message);
+}
+
+/**
+ * Drop the shared read pool so the next getPool() rebuilds connections.
+ * Safe under concurrent filters/data failures: cooldown + delayed end().
+ */
+export function resetPool(): void {
+  const now = Date.now();
+  if (now - poolResetAt < RESET_COOLDOWN_MS) return;
+  poolResetAt = now;
+  const old = pool;
+  pool = null;
+  retirePool(old);
+}
+
+/** Drop the write pool so the next getRwPool() rebuilds connections. */
+export function resetRwPool(): void {
+  const now = Date.now();
+  if (now - rwPoolResetAt < RESET_COOLDOWN_MS) return;
+  rwPoolResetAt = now;
+  const old = rwPool;
+  rwPool = null;
+  retirePool(old);
+}
+
+export function getPool(): mysql.Pool {
+  if (!pool) pool = createReadPool();
+  return pool;
+}
 
 /**
  * Write-capable pool for the sentiment-correction path only. The MYSQL_RW_*
@@ -67,16 +147,6 @@ let rwPool: mysql.Pool | null = null;
  */
 export function getRwPool(): mysql.Pool | null {
   if (!process.env.MYSQL_RW_USER || !process.env.MYSQL_RW_PASSWORD) return null;
-  if (!rwPool) {
-    rwPool = mysql.createPool({
-      host: process.env.MYSQL_HOST?.trim(),
-      database: process.env.MYSQL_DATABASE?.trim(),
-      user: process.env.MYSQL_RW_USER.trim(),
-      password: process.env.MYSQL_RW_PASSWORD.trim(),
-      waitForConnections: true,
-      connectionLimit: 2,
-      ssl: sslOptions as mysql.SslOptions,
-    });
-  }
+  if (!rwPool) rwPool = createRwPool();
   return rwPool;
 }

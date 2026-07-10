@@ -55,8 +55,16 @@ type DataResp = {
 const sentLabel = (s: string | null) => s ?? "Sem classificação";
 const truncate = (s: string | null | undefined, n: number) =>
   !s ? "—" : s.length > n ? s.slice(0, n - 1) + "…" : s;
+// DB stores meta/instagram/tiktok; Meta ads = Facebook surface for users.
+const PLATFORM_LABELS: Record<string, string> = {
+  meta: "Facebook",
+  instagram: "Instagram",
+  tiktok: "TikTok",
+};
+const platformLabel = (p: string | null | undefined) =>
+  !p ? "—" : PLATFORM_LABELS[p.toLowerCase()] ?? p;
 
-function Thumb({ url }: { url: string | null }) {
+function Thumb({ url, onOpen }: { url: string | null; onOpen: (url: string) => void }) {
   const [failed, setFailed] = useState(false);
   if (!url || failed)
     return (
@@ -65,14 +73,21 @@ function Thumb({ url }: { url: string | null }) {
       </div>
     );
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={url}
-      alt="criativo"
-      loading="lazy"
-      onError={() => setFailed(true)}
-      className="h-30 w-30 shrink-0 rounded-lg border border-separator object-cover"
-    />
+    <button
+      type="button"
+      onClick={() => onOpen(url)}
+      aria-label="Ampliar criativo"
+      className="group relative h-30 w-30 shrink-0 rounded-lg border border-separator overflow-hidden cursor-pointer p-0 focus:outline-none focus-visible:border-accent-border hover:border-accent-border transition-colors"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt="criativo"
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className="h-full w-full object-cover transition-opacity group-hover:opacity-90"
+      />
+    </button>
   );
 }
 
@@ -95,48 +110,85 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [topMode, setTopMode] = useState<"Negativo" | "Positivo">("Negativo");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFrame, setPreviewFrame] = useState<{ w: number; h: number } | null>(null);
 
-  useEffect(() => {
-    let stale = false; // ignore out-of-order responses from superseded filter states
-    const qs = new URLSearchParams();
-    for (const [k, v] of Object.entries({ from, to, campaign, ad, platform, sentiment }))
-      if (v) qs.set(k, v);
-    fetch(`/api/sentimentos/filters?${qs}`)
-      .then((r) => r.json())
-      .then((d: FiltersData) => {
-        if (stale) return;
-        setFiltersData(d);
-        // drop selections that fell out of the new option universe
-        setCampaign((c) => (c && !d.campaigns.includes(c) ? "" : c));
-        setAd((a) => (a && !d.ads.some((x) => x.ad === a) ? "" : a));
-        setPlatform((p) => (p && !d.platforms.includes(p) ? "" : p));
-      })
-      .catch(() => { if (!stale) setFiltersData({ campaigns: [], platforms: [], ads: [] }); });
-    return () => { stale = true; };
-  }, [from, to, campaign, ad, platform, sentiment]);
-
-  const loadData = useCallback(async (body: Record<string, unknown>) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await postJson("/api/sentimentos/data", body);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-      setData(json);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao carregar dados");
-    } finally {
-      setLoading(false);
-    }
+  const openPreview = useCallback((url: string) => {
+    setPreviewFrame(null);
+    setPreviewUrl(url);
   }, []);
 
   useEffect(() => {
-    loadData({ campaign, ad, platform, sentiment, from, to, aiWhere: aiFilter?.where, page });
-  }, [campaign, ad, platform, sentiment, from, to, aiFilter, page, loadData]);
+    if (!previewUrl) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPreviewUrl(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewUrl]);
+
+  // Debounced filters fetch + abort so rapid filter changes don't stack DB load.
+  useEffect(() => {
+    const ac = new AbortController();
+    const t = window.setTimeout(() => {
+      const qs = new URLSearchParams();
+      for (const [k, v] of Object.entries({ from, to, campaign, ad, platform, sentiment }))
+        if (v) qs.set(k, v);
+      fetch(`/api/sentimentos/filters?${qs}`, { signal: ac.signal })
+        .then(async (r) => {
+          const d = await r.json();
+          if (!r.ok || !Array.isArray(d?.campaigns) || !Array.isArray(d?.platforms) || !Array.isArray(d?.ads))
+            throw new Error(d?.error ?? `HTTP ${r.status}`);
+          return d as FiltersData;
+        })
+        .then((d) => {
+          setFiltersData(d);
+          // drop selections that fell out of the new option universe
+          setCampaign((c) => (c && !d.campaigns.includes(c) ? "" : c));
+          setAd((a) => (a && !d.ads.some((x) => x.ad === a) ? "" : a));
+          setPlatform((p) => (p && !d.platforms.includes(p) ? "" : p));
+        })
+        .catch((e) => {
+          if (ac.signal.aborted || (e instanceof DOMException && e.name === "AbortError")) return;
+          setFiltersData({ campaigns: [], platforms: [], ads: [] });
+        });
+    }, 250);
+    return () => {
+      window.clearTimeout(t);
+      ac.abort();
+    };
+  }, [from, to, campaign, ad, platform, sentiment]);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    const t = window.setTimeout(async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await postJson(
+          "/api/sentimentos/data",
+          { campaign, ad, platform, sentiment, from, to, aiWhere: aiFilter?.where, page },
+          { signal: ac.signal }
+        );
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+        setData(json);
+      } catch (e) {
+        if (ac.signal.aborted || (e instanceof DOMException && e.name === "AbortError")) return;
+        setError(e instanceof Error ? e.message : "Erro ao carregar dados");
+      } finally {
+        if (!ac.signal.aborted) setLoading(false);
+      }
+    }, 250);
+    return () => {
+      window.clearTimeout(t);
+      ac.abort();
+    };
+  }, [campaign, ad, platform, sentiment, from, to, aiFilter, page]);
 
   // server already facets the ads list by the other filters
   const adOptions = useMemo(
-    () => (filtersData ? [...new Set(filtersData.ads.map((a) => a.ad))] : []),
+    () => [...new Set((filtersData?.ads ?? []).map((a) => a.ad))],
     [filtersData]
   );
 
@@ -236,10 +288,10 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
       const total = data.byPlatform.filter((r) => r.platform === p).reduce((s, r) => s + Number(r.n), 0);
       return { p, total, neg: of("Negativo") };
     });
-    return {
+return {
       type: "bar",
       title: "% de comentários negativos por plataforma",
-      labels: rows.map((r) => r.p),
+      labels: rows.map((r) => platformLabel(r.p)),
       datasets: [{
         label: "% negativos",
         data: rows.map((r) => (r.total ? +((r.neg / r.total) * 100).toFixed(1) : 0)),
@@ -335,9 +387,9 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
                   value={platform}
                   onChange={(e) => { setPlatform(e.target.value); setPage(0); }}
                 >
-                  <option value="">Todas as plataformas</option>
+<option value="">Todas as plataformas</option>
                   {filtersData?.platforms.map((p) => (
-                    <option key={p} value={p}>{p}</option>
+                    <option key={p} value={p}>{platformLabel(p)}</option>
                   ))}
                 </select>
                 <select
@@ -500,13 +552,13 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
                 <tbody>
                   {(data?.comments ?? []).map((row) => (
                     <tr key={row.id} className="border-b border-separator/60 align-top hover:bg-fill/40">
-                      <td className="px-4 md:px-6 py-3"><Thumb url={row.image_url} /></td>
+<td className="px-4 md:px-6 py-3"><Thumb url={row.image_url} onOpen={openPreview} /></td>
                       <td className="px-3 py-3">
                         <p className="text-ink-2" title={row.post_message ?? undefined}>
                           {truncate(row.post_message, 140)}
                         </p>
                         <p className="mt-1 text-[11px] text-ink-4 truncate max-w-[280px]" title={`${row.campaign_name ?? ""} · ${row.ad_name ?? ""}`}>
-                          {row.platform} · {truncate(row.campaign_name, 45)}
+{platformLabel(row.platform)} · {truncate(row.campaign_name, 45)}
                         </p>
                       </td>
                       <td className="px-3 py-3">
@@ -562,7 +614,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
         </div>
       </div>
 
-      {error && (
+{error && (
         <div className="fixed bottom-4 inset-x-0 z-50 flex justify-center px-4">
           <div className="bg-fill border border-separator-strong rounded-lg px-4 py-2.5 shadow-lg flex items-center gap-3 text-[13px] text-danger max-w-xl">
             <span className="min-w-0">{error}</span>
@@ -570,6 +622,56 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
               ✕
             </button>
           </div>
+        </div>
+      )}
+
+{previewUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Visualização do criativo"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPreviewUrl(null);
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setPreviewUrl(null)}
+            className="absolute top-4 right-4 z-10 h-10 w-10 rounded-full border border-separator bg-fill/90 text-ink-2 hover:text-ink flex items-center justify-center"
+            aria-label="Fechar"
+          >
+            ✕
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={previewUrl}
+            alt="criativo ampliado"
+            onError={() => setPreviewUrl(null)}
+            onLoad={(e) => {
+              const { naturalWidth: nw, naturalHeight: nh } = e.currentTarget;
+              if (!nw || !nh) return;
+              // Normalize to common ad ratios so same-shaped creatives share a frame size.
+              const r = nw / nh;
+              const targetR =
+                Math.abs(r - 1) <= 0.12 ? 1 :
+                r >= 1.5 ? 16 / 9 :
+                r <= 0.7 ? 9 / 16 :
+                r;
+              const maxW = Math.min(window.innerWidth * 0.9, 1100);
+              const maxH = window.innerHeight * 0.85;
+              let w = maxW;
+              let h = w / targetR;
+              if (h > maxH) {
+                h = maxH;
+                w = h * targetR;
+              }
+              setPreviewFrame({ w: Math.round(w), h: Math.round(h) });
+            }}
+            style={previewFrame ? { width: previewFrame.w, height: previewFrame.h } : undefined}
+            className="max-h-[85vh] max-w-[90vw] rounded-xl border border-separator object-contain shadow-lg bg-fill/40"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>
