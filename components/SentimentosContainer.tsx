@@ -172,7 +172,8 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
         );
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-        setData(json);
+        // page > 0 responses carry only comments; keep the aggregates on screen
+        setData((prev) => (prev && json.distribution === undefined ? { ...prev, ...json } : json));
       } catch (e) {
         if (ac.signal.aborted || (e instanceof DOMException && e.name === "AbortError")) return;
         setError(e instanceof Error ? e.message : "Erro ao carregar dados");
@@ -191,6 +192,13 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
     () => [...new Set((filtersData?.ads ?? []).map((a) => a.ad))],
     [filtersData]
   );
+
+  // distribution shares the comments query's WHERE, so its sum = total rows — no extra query
+  const totalComments = useMemo(
+    () => (data?.distribution ?? []).reduce((s, r) => s + Number(r.n), 0),
+    [data]
+  );
+  const totalPages = Math.max(1, Math.ceil(totalComments / (data?.pageSize ?? 50)));
 
   async function applyAiFilter() {
     if (!aiText.trim()) return;
@@ -288,7 +296,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
       const total = data.byPlatform.filter((r) => r.platform === p).reduce((s, r) => s + Number(r.n), 0);
       return { p, total, neg: of("Negativo") };
     });
-return {
+    return {
       type: "bar",
       title: "% de comentários negativos por plataforma",
       labels: rows.map((r) => platformLabel(r.p)),
@@ -387,7 +395,7 @@ return {
                   value={platform}
                   onChange={(e) => { setPlatform(e.target.value); setPage(0); }}
                 >
-<option value="">Todas as plataformas</option>
+                  <option value="">Todas as plataformas</option>
                   {filtersData?.platforms.map((p) => (
                     <option key={p} value={p}>{platformLabel(p)}</option>
                   ))}
@@ -520,6 +528,11 @@ return {
                 style={{ textShadow: "0 0 12px rgba(39,224,255,0.35)" }}
               >
                 <span style={{ color: "var(--hud-violet)" }}>◇</span> Comentários
+                {totalComments > 0 && (
+                  <span className="normal-case tracking-normal tabular-nums text-ink-4" style={{ textShadow: "none" }}>
+                    · {totalComments.toLocaleString("pt-BR")}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2 text-[12px] text-ink-3">
                 <button
@@ -529,10 +542,10 @@ return {
                 >
                   ← Anterior
                 </button>
-                <span className="tabular-nums">página {page + 1}</span>
+                <span className="tabular-nums">página {page + 1} de {totalPages}</span>
                 <button
                   onClick={() => setPage((p) => p + 1)}
-                  disabled={loading || (data?.comments.length ?? 0) < (data?.pageSize ?? 50)}
+                  disabled={loading || page + 1 >= totalPages}
                   className="px-2.5 py-1 rounded border border-separator bg-fill hover:text-ink disabled:opacity-40"
                 >
                   Próxima →
@@ -546,19 +559,19 @@ return {
                     <th className="px-4 md:px-6 py-2.5 w-16">Imagem</th>
                     <th className="px-3 py-2.5 min-w-[220px]">Mensagem do anúncio</th>
                     <th className="px-3 py-2.5 min-w-[260px]">Comentário</th>
-                    <th className="px-3 py-2.5 pr-4 md:pr-6 w-56">Classificação</th>
+                    <th className="px-3 py-2.5 pr-4 md:pr-6 w-56 text-center">Classificação</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(data?.comments ?? []).map((row) => (
                     <tr key={row.id} className="border-b border-separator/60 align-top hover:bg-fill/40">
-<td className="px-4 md:px-6 py-3"><Thumb url={row.image_url} onOpen={openPreview} /></td>
+                      <td className="px-4 md:px-6 py-3"><Thumb url={row.image_url} onOpen={openPreview} /></td>
                       <td className="px-3 py-3">
                         <p className="text-ink-2" title={row.post_message ?? undefined}>
                           {truncate(row.post_message, 140)}
                         </p>
                         <p className="mt-1 text-[11px] text-ink-4 truncate max-w-[280px]" title={`${row.campaign_name ?? ""} · ${row.ad_name ?? ""}`}>
-{platformLabel(row.platform)} · {truncate(row.campaign_name, 45)}
+                          {platformLabel(row.platform)} · {truncate(row.campaign_name, 45)}
                         </p>
                       </td>
                       <td className="px-3 py-3">
@@ -568,23 +581,22 @@ return {
                           {row.created_time ? ` · ${new Date(row.created_time).toLocaleDateString("pt-BR")}` : ""}
                         </p>
                       </td>
-                      <td className="px-3 py-3 pr-4 md:pr-6">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span
-                            className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
-                            style={{ background: SENT_COLORS[sentLabel(row.sentiment)] }}
-                          />
-                          <select
-                            className={selectClass + " py-1 text-[12px]"}
-                            value={row.sentiment ?? ""}
-                            onChange={(e) => correct(row, e.target.value)}
-                          >
-                            {!row.sentiment && <option value="">—</option>}
-                            {SENTIMENTS.map((s) => (
-                              <option key={s} value={s}>{s}</option>
-                            ))}
-                          </select>
-                        </div>
+                      <td className="px-3 py-3 pr-4 md:pr-6 text-center align-middle">
+                        <select
+                          className={selectClass + " py-1 text-[12px] font-medium"}
+                          style={{
+                            color: SENT_COLORS[sentLabel(row.sentiment)],
+                            borderColor: SENT_COLORS[sentLabel(row.sentiment)] + "66",
+                            boxShadow: `0 0 10px ${SENT_COLORS[sentLabel(row.sentiment)]}40`,
+                          }}
+                          value={row.sentiment ?? ""}
+                          onChange={(e) => correct(row, e.target.value)}
+                        >
+                          {!row.sentiment && <option value="">—</option>}
+                          {SENTIMENTS.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
                         {row.sentiment_source === "human" && (
                           <p className="mt-1.5 text-[10px] text-ink-4" title={row.audited_by ?? undefined}>
                             ✎ corrigido por {truncate(row.audited_by, 28)}
@@ -614,7 +626,7 @@ return {
         </div>
       </div>
 
-{error && (
+      {error && (
         <div className="fixed bottom-4 inset-x-0 z-50 flex justify-center px-4">
           <div className="bg-fill border border-separator-strong rounded-lg px-4 py-2.5 shadow-lg flex items-center gap-3 text-[13px] text-danger max-w-xl">
             <span className="min-w-0">{error}</span>
@@ -625,7 +637,7 @@ return {
         </div>
       )}
 
-{previewUrl && (
+      {previewUrl && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
           role="dialog"

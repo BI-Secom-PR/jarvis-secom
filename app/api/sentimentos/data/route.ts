@@ -25,6 +25,10 @@ function resolveImageUrl(url: string | null): string | null {
   return url;
 }
 
+function resolveComments(rows: Array<Record<string, unknown>>) {
+  return rows.map((c) => ({ ...c, image_url: resolveImageUrl(c.image_url as string | null) }));
+}
+
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -48,15 +52,26 @@ export async function POST(req: NextRequest) {
 
   try {
     const pool = getPool();
+    const commentsSql = `SELECT id, image_url, post_message, comment, author, like_count, created_time, sentiment, sentiment_source, audited_by, campaign_name, ad_name, platform
+         ${from} ORDER BY created_time DESC LIMIT ${PAGE_SIZE} OFFSET ${page * PAGE_SIZE}`;
+
+    // Every filter change resets page to 0 client-side, so page > 0 means the
+    // aggregates already on screen are still valid — fetch only the next
+    // comments page (1 query instead of 5).
+    if (page > 0) {
+      const comments = await pool.query(commentsSql, params);
+      return NextResponse.json({
+        comments: resolveComments(comments[0] as Array<Record<string, unknown>>),
+        page,
+        pageSize: PAGE_SIZE,
+      });
+    }
+
     // Two waves instead of 5-way Promise.all: keeps peak concurrency low when
     // filters (3 queries) runs in parallel with this route.
     const [dist, comments] = await Promise.all([
       pool.query(`SELECT sentiment, COUNT(*) n ${from} GROUP BY sentiment`, params),
-      pool.query(
-        `SELECT id, image_url, post_message, comment, author, like_count, created_time, sentiment, sentiment_source, audited_by, campaign_name, ad_name, platform
-         ${from} ORDER BY created_time DESC LIMIT ${PAGE_SIZE} OFFSET ${page * PAGE_SIZE}`,
-        params
-      ),
+      pool.query(commentsSql, params),
     ]);
     const [trend, byPlatform, topAds] = await Promise.all([
       pool.query(
@@ -74,18 +89,13 @@ export async function POST(req: NextRequest) {
     const topBy = (s: string) =>
       topRows.filter((r) => r.sentiment === s).slice(0, 10).map(({ ad_name, n }) => ({ ad_name, n }));
 
-    const resolvedComments = (comments[0] as Array<Record<string, unknown>>).map((c) => ({
-      ...c,
-      image_url: resolveImageUrl(c.image_url as string | null),
-    }));
-
     return NextResponse.json({
       distribution: dist[0],
       trend: trend[0],
       byPlatform: byPlatform[0],
       topNegative: topBy('Negativo'),
       topPositive: topBy('Positivo'),
-      comments: resolvedComments,
+      comments: resolveComments(comments[0] as Array<Record<string, unknown>>),
       page,
       pageSize: PAGE_SIZE,
     });
