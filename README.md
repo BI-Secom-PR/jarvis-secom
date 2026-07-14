@@ -23,7 +23,7 @@ AI chat assistant for SECOM marketing analytics. Query ad platform data across M
 
 - Node.js 22+
 - PostgreSQL 18 running (see below)
-- API keys for Groq and Google Generative AI
+- API keys for Google Generative AI
 
 ### 2. Environment variables
 
@@ -32,7 +32,6 @@ Copy and fill in `.env.local`:
 ```bash
 # AI providers
 GOOGLE_GENERATIVE_AI_API_KEY=
-GROQ_API_KEY=
 
 # Data warehouse (MySQL — read-only)
 MYSQL_HOST=
@@ -197,7 +196,6 @@ app/
   page.tsx          # Home menu — cards linking to available tools
 components/
   ChatContainer     # Main chat UI + session management
-  MenuCard          # Reusable card for home menu navigation
   UserMenu          # Name display + logout button
   MessageBubble     # Renders markdown + charts
   VoiceMode         # Speech recognition + TTS playback

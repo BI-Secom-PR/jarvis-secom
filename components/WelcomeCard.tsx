@@ -1,6 +1,16 @@
+import HudCorners from "./HudCorners";
+
 export default function WelcomeCard() {
   return (
-    <div className="rounded-[18px] bg-fill border-[0.5px] border-separator shadow-(--shadow-bubble) p-4 md:p-5 text-ink-2 text-sm leading-[1.7] tracking-[-0.1px]">
+    <div className="relative rounded-[14px] hud-panel p-5 md:p-6 text-ink-2 text-sm leading-[1.7] tracking-[-0.1px] self-start max-w-[94%] md:max-w-[88%]">
+      <HudCorners accent="cyan" size={14} inset={6} />
+      <div
+        className="font-hud text-[9px] uppercase tracking-[0.32em] text-accent-text mb-3 flex items-center gap-2"
+        style={{ textShadow: "0 0 10px rgba(39,224,255,0.4)" }}
+      >
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-success animate-pulse-green" />
+        Sistema online
+      </div>
       Olá! 👋 Sou o <strong className="text-accent-text">Jarvis</strong>, assistente de dados da SECOM.
       <br /><br />
       Posso consultar dados de campanhas digitais e responder perguntas como:

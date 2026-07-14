@@ -147,11 +147,11 @@ export default function LoginForm() {
   // ── Enrollment prompt ────────────────────────────────────────────────────
   if (showEnrollPrompt) {
     return (
-      <div className="w-full max-w-sm bg-surface md:backdrop-blur-[60px] border-[0.5px] border-separator rounded-[28px] p-6 sm:p-8 shadow-(--shadow-modal)">
+      <div className="w-full max-w-sm hud-panel rounded-[20px] p-7 sm:p-9 relative">
         <div className="mb-5">
           <div className="text-2xl mb-3">🔑</div>
-          <h1 className="text-xl font-semibold text-ink tracking-[-0.3px]">Chave de acesso</h1>
-          <p className="text-sm text-ink-3 mt-1 leading-relaxed">
+          <h1 className="font-hud text-[16px] uppercase tracking-[0.16em] text-ink" style={{ textShadow: '0 0 12px rgba(39,224,255,0.35)' }}>Chave de acesso</h1>
+          <p className="text-sm text-ink-3 mt-2 leading-relaxed">
             Seu administrador habilitou a criação de uma chave de acesso para sua conta. Use biometria ou PIN para entrar mais rapidamente da próxima vez.
           </p>
         </div>
@@ -182,10 +182,10 @@ export default function LoginForm() {
 
   // ── Login form ───────────────────────────────────────────────────────────
   return (
-    <div className="w-full max-w-sm bg-surface md:backdrop-blur-[60px] border-[0.5px] border-separator rounded-[28px] p-6 sm:p-8 shadow-(--shadow-modal)">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-ink tracking-[-0.3px]">Entrar</h1>
-        <p className="text-sm text-ink-3 mt-1">Jarvis SECOM</p>
+    <div className="w-full max-w-sm hud-panel rounded-[20px] p-7 sm:p-9 relative">
+      <div className="mb-7">
+        <h1 className="font-hud text-[20px] uppercase tracking-[0.2em] text-ink" style={{ textShadow: '0 0 14px rgba(39,224,255,0.4)' }}>Entrar</h1>
+        <p className="font-hud text-[9px] uppercase tracking-[0.34em] text-accent-text mt-2">Jarvis SECOM</p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">

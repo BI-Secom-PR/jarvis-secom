@@ -3,8 +3,8 @@
 import { Fragment, useState, useEffect } from "react";
 import { upload } from "@vercel/blob/client";
 import Link from "next/link";
-import JarvisRing from "./JarvisRing";
-import ThemeToggle from "./ThemeToggle";
+import HudBackground from "./HudBackground";
+import HudCorners from "./HudCorners";
 
 type VehicleResult = {
   veiculo: string;
@@ -275,7 +275,6 @@ function lastDayOfMonth(year: number, month: number): number {
 
 export default function VerificationContainer() {
   const currentYear = new Date().getFullYear();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [adserver, setAdserver] = useState<string | null>(null);
   const [consolidado, setConsolidado] = useState<File[]>([]);
   const [comprovantes, setComprovantes] = useState<File[]>([]);
@@ -501,69 +500,46 @@ export default function VerificationContainer() {
     !!adserver && consolidado.length > 0 && comprovantes.length > 0 && !loading;
 
   return (
-    <div className="h-dvh w-full flex flex-col overflow-hidden relative nebula-bg">
+    <div className="h-dvh w-full flex flex-col overflow-hidden relative hud-void-bg">
+      <HudBackground variant="subtle" />
       {/* Header — breadcrumb left, controls right */}
-      <header className="shrink-0 flex items-center justify-between gap-3 px-4 md:px-6 pb-3 md:pb-4 pt-[max(0.75rem,env(safe-area-inset-top))] md:pt-4 border-b border-separator">
+      <header className="relative z-10 shrink-0 flex items-center justify-between gap-3 px-4 md:px-6 pb-3 md:pb-4 pt-[max(0.75rem,env(safe-area-inset-top))] md:pt-4 border-b border-separator">
         <div className="flex items-center gap-2.5 min-w-0">
           <Link
             href="/"
-            className="text-xs text-ink-3 hover:text-ink transition-colors py-3 -my-3 shrink-0"
+            className="font-hud text-[10px] uppercase tracking-[0.2em] text-ink-3 hover:text-ink transition-colors py-3 -my-3 shrink-0"
           >
             Início
           </Link>
           <span className="text-ink-4 text-xs shrink-0">›</span>
-          <h1 className="text-xs font-semibold text-ink tracking-wide truncate">
+          <h1 className="font-hud text-[10px] uppercase tracking-[0.16em] text-ink truncate" style={{ textShadow: '0 0 10px rgba(39,224,255,0.3)' }}>
             Verificação de Consolidados
           </h1>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Desktop: theme toggle + ring */}
-          <div className="hidden md:flex items-center gap-2">
-            <ThemeToggle />
-            <JarvisRing size={34} />
-          </div>
-          {/* Mobile: hamburger only */}
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            aria-label="Abrir menu"
-            className="md:hidden w-11 h-11 flex items-center justify-center rounded-xl text-ink-3 hover:text-ink-2 hover:bg-fill-2 transition-all duration-150 -mr-1"
+        <div className="flex items-center shrink-0">
+          <span
+            className="text-[15px] leading-none animate-hud-flicker motion-reduce:animate-none"
+            style={{ color: "var(--hud-cyan)", textShadow: "0 0 12px var(--hud-cyan)" }}
           >
-            <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
-              <path d="M0 1h16M0 6h16M0 11h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-          </button>
+            ◇
+          </span>
         </div>
       </header>
 
-      {/* Mobile bottom-sheet drawer for verification */}
-      <div
-        className={`fixed inset-0 z-50 md:hidden transition-opacity duration-200 ${mobileMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
-      >
-        <div
-          className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-        <div
-          className={`absolute bottom-0 left-0 right-0 bg-surface-opaque border-t border-separator rounded-t-3xl transition-transform duration-300 ease-out ${mobileMenuOpen ? "translate-y-0" : "translate-y-full"}`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex justify-center pt-3 pb-1">
-            <div className="w-9 h-1 rounded-full bg-separator" />
-          </div>
-          <div className="px-5 pt-3 pb-[max(2rem,env(safe-area-inset-bottom))]">
-            <div className="flex items-center justify-between py-3 px-1">
-              <span className="text-sm text-ink-2">Tema</span>
-              <ThemeToggle />
+      <div className="relative z-10 flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto px-4 py-6 md:px-6 md:py-8">
+          <section className="relative hud-panel rounded-[16px] px-4 py-6 md:px-7 md:py-7">
+            <HudCorners accent="cyan" size={16} inset={8} />
+            <div className="space-y-6">
+            <div
+              className="font-hud text-[11px] uppercase tracking-[0.24em] text-ink mb-1 flex items-center gap-2"
+              style={{ textShadow: "0 0 12px rgba(39,224,255,0.35)" }}
+            >
+              <span style={{ color: "var(--hud-cyan)" }}>◇</span> Parâmetros
             </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 py-5 md:px-6 md:py-8 space-y-6">
           {/* Seletor de Adserver */}
           <div className="space-y-2">
-            <span className="text-xs text-ink-2 font-medium uppercase tracking-wider">
+            <span className="text-[10px] text-accent-text font-hud uppercase tracking-[0.18em]">
               Adserver
             </span>
             <div className="flex items-center gap-2 flex-wrap">
@@ -617,7 +593,7 @@ export default function VerificationContainer() {
 
           {/* % de URLs analisadas */}
           <div className="flex items-center gap-4 flex-wrap">
-            <span className="text-xs text-ink-2 font-medium uppercase tracking-wider shrink-0">
+            <span className="text-[10px] text-accent-text font-hud uppercase tracking-[0.18em] shrink-0">
               % URLs analisadas por IA
             </span>
             <div className="flex items-center gap-1">
@@ -660,7 +636,7 @@ export default function VerificationContainer() {
           </div>
           {/* Filtro de Praça */}
           <div className="flex items-center gap-4 flex-wrap">
-            <span className="text-xs text-ink-2 font-medium uppercase tracking-wider shrink-0">
+            <span className="text-[10px] text-accent-text font-hud uppercase tracking-[0.18em] shrink-0">
               Praça
             </span>
             <select
@@ -779,7 +755,7 @@ export default function VerificationContainer() {
           <div className="space-y-3">
             {/* Chips de ano */}
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-ink-2 font-medium uppercase tracking-wider shrink-0 mr-1">
+              <span className="text-[10px] text-accent-text font-hud uppercase tracking-[0.18em] shrink-0 mr-1">
                 Ano
               </span>
               {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
@@ -798,7 +774,7 @@ export default function VerificationContainer() {
             </div>
             {/* Chips de mês */}
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-ink-2 font-medium uppercase tracking-wider shrink-0 mr-1">
+              <span className="text-[10px] text-accent-text font-hud uppercase tracking-[0.18em] shrink-0 mr-1">
                 Mês
               </span>
               {MONTHS.map((m) => (
@@ -840,9 +816,9 @@ export default function VerificationContainer() {
           <button
             onClick={handleVerificar}
             disabled={!canSubmit}
-            className="w-full py-3.5 rounded-xl text-sm font-semibold transition-all duration-200
+            className="w-full py-3.5 rounded-xl font-hud text-[12px] uppercase tracking-[0.22em] transition-all duration-200
               bg-accent text-accent-ink hover:opacity-90 active:opacity-80
-              hover:shadow-[0_0_24px_rgba(10,132,255,0.25)]
+              hover:shadow-[0_0_28px_rgba(39,224,255,0.4)]
               disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:shadow-none"
           >
             Verificar
@@ -960,13 +936,13 @@ export default function VerificationContainer() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-separator bg-fill">
-                      <th className="text-left px-4 py-3 text-xs text-ink-2 font-medium uppercase tracking-wider">
+                      <th className="text-left px-4 py-3 text-[10px] text-accent-text font-hud uppercase tracking-[0.18em]">
                         Veículo
                       </th>
-                      <th className="text-left px-4 py-3 text-xs text-ink-2 font-medium uppercase tracking-wider">
+                      <th className="text-left px-4 py-3 text-[10px] text-accent-text font-hud uppercase tracking-[0.18em]">
                         Status
                       </th>
-                      <th className="text-left px-4 py-3 text-xs text-ink-2 font-medium uppercase tracking-wider">
+                      <th className="text-left px-4 py-3 text-[10px] text-accent-text font-hud uppercase tracking-[0.18em]">
                         Devolutiva
                       </th>
                     </tr>
@@ -1152,6 +1128,8 @@ export default function VerificationContainer() {
               )}
             </div>
           )}
+          </div>
+          </section>
         </div>
       </div>
     </div>

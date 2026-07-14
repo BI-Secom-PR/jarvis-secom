@@ -46,6 +46,8 @@
 
   /* Chat bubbles */
   --bubble-user: light-dark(rgba(0, 122, 255, 0.92), rgba(41, 151, 255, 0.32));
+  /* Dark slate gray for contrast on the pale light-mode glass; white in dark */
+  --bubble-user-ink: light-dark(#3a3f4b, #ffffff);
 
   /* Charts */
   --chart-tick:     light-dark(rgba(60, 60, 67, 0.55), rgba(255, 255, 255, 0.45));
@@ -83,6 +85,128 @@
   --shadow-bubble-user:
     inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.22)),
     0 2px 16px light-dark(rgba(0, 122, 255, 0.25), rgba(41, 151, 255, 0.18));
+
+  /* ── Liquid Glass (Apple-style translucent material) ─────────────────────
+     Far more transparent than --surface so the nebula gradient refracts
+     through; the heavy backdrop blur keeps text readable. The signature look
+     is the specular edge: a bright top-left rim that catches light, applied
+     via a masked gradient border on the .liquid-glass ::after pseudo-element. */
+  --glass-tint:        light-dark(rgba(255, 255, 255, 0.55), rgba(26, 24, 52, 0.34));
+  --glass-tint-soft:   light-dark(rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.07));
+  --glass-tint-accent: light-dark(rgba(0, 122, 255, 0.20), rgba(70, 150, 255, 0.26));
+  --glass-edge:        light-dark(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.42));
+  --glass-edge-dim:    light-dark(rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.12));
+  --glass-blur:        saturate(180%) brightness(1.05) blur(32px);
+  --glass-blur-soft:   saturate(170%) blur(18px);
+  --shadow-glass:
+    0 18px 56px light-dark(rgba(40, 50, 120, 0.16), rgba(0, 0, 0, 0.6)),
+    0 2px 10px  light-dark(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.35)),
+    0 0 70px    light-dark(rgba(120, 140, 255, 0.10), rgba(110, 50, 220, 0.16)),
+    inset 0 1px 0   light-dark(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.32)),
+    inset 0 -1px 1px light-dark(rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.04));
+  --shadow-glass-soft:
+    0 6px 22px light-dark(rgba(40, 50, 120, 0.10), rgba(0, 0, 0, 0.4)),
+    inset 0 1px 0   light-dark(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.24)),
+    inset 0 -1px 1px light-dark(rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0.03));
+}
+
+/* ── Iron-Man HUD theme (experimental) ────────────────────────────────────
+   Scoped, FORCED-DARK palette for the "command lattice" UI. Applied to a
+   wrapper element (not <html>), so it overrides the tokens for its whole
+   subtree regardless of the theme cookie — the light/dark toggle can't lift
+   it out of the dark glowing aesthetic. Identity: arc-reactor cyan + repulsor
+   gold + hot-red, floating over a deep void. Values are literal (no
+   light-dark()) precisely so the cookie can't lighten them. */
+.hud-theme {
+  color-scheme: dark;
+
+  /* HUD accent ramp */
+  --hud-cyan:      #27e0ff;
+  --hud-cyan-soft: rgba(39, 224, 255, 0.5);
+  --hud-cyan-dim:  rgba(39, 224, 255, 0.12);
+  --hud-gold:      #ffb53d;
+  --hud-gold-soft: rgba(255, 181, 61, 0.5);
+  --hud-violet:      #818cf8;
+  --hud-violet-soft: rgba(129, 140, 248, 0.5);
+  --hud-red:       #ff4133;
+  --font-hud:      var(--font-michroma), 'Michroma', system-ui, sans-serif;
+
+  /* Backgrounds & surfaces — deep void */
+  --bg-base:        #050410;
+  --surface:        rgba(8, 12, 26, 0.82);
+  --surface-opaque: #070611;
+  --surface-input:  rgba(0, 8, 20, 0.45);
+
+  /* Text — cool HUD white */
+  --ink:   rgba(226, 244, 255, 0.92);
+  --ink-2: rgba(196, 226, 255, 0.62);
+  --ink-3: rgba(170, 210, 255, 0.44);
+  --ink-4: rgba(150, 195, 255, 0.26);
+
+  /* Separators & fills — cyan-tinted */
+  --separator:        rgba(120, 220, 255, 0.14);
+  --separator-strong: rgba(120, 220, 255, 0.24);
+  --fill:   rgba(40, 130, 190, 0.08);
+  --fill-2: rgba(40, 130, 190, 0.14);
+
+  /* Accent → arc-reactor cyan */
+  --accent:        #27e0ff;
+  --accent-ink:    #04121a;
+  --accent-soft:   rgba(39, 224, 255, 0.14);
+  --accent-border: rgba(39, 224, 255, 0.42);
+  --accent-text:   #74e9ff;
+
+  /* Status — keep the cyan/gold/red language */
+  --success: #30d9b8;
+  --warning: var(--hud-gold);
+  --danger:  var(--hud-red);
+
+  /* Chat bubbles — user gets a repulsor-gold warmth */
+  --bubble-user:        rgba(255, 181, 61, 0.18);
+  --bubble-user-ink:    #fdf3e2;
+  --bubble-user-border: rgba(255, 181, 61, 0.5);
+
+  /* Charts — keep readable on the void */
+  --chart-tick:     rgba(180, 220, 255, 0.5);
+  --chart-grid:     rgba(120, 200, 255, 0.06);
+  --chart-contrast: #050410;
+
+  /* Liquid glass → cyan tint, cyan→gold specular rim */
+  --glass-tint:        rgba(8, 18, 34, 0.5);
+  --glass-tint-soft:   rgba(10, 22, 40, 0.4);
+  --glass-tint-accent: rgba(39, 224, 255, 0.16);
+  --glass-edge:        rgba(130, 235, 255, 0.55);
+  --glass-edge-dim:    rgba(255, 181, 61, 0.18);
+  --glass-blur:        saturate(150%) brightness(1.04) blur(26px);
+  --glass-blur-soft:   saturate(150%) blur(16px);
+
+  --shadow-glass:
+    0 18px 56px rgba(0, 0, 0, 0.6),
+    0 0 60px rgba(39, 224, 255, 0.10),
+    inset 0 1px 0   rgba(130, 235, 255, 0.28),
+    inset 0 -1px 1px rgba(255, 181, 61, 0.05);
+  --shadow-glass-soft:
+    0 6px 22px rgba(0, 0, 0, 0.45),
+    0 0 28px rgba(39, 224, 255, 0.06),
+    inset 0 1px 0 rgba(130, 235, 255, 0.20);
+  --shadow-card:
+    0 0 0 0.5px rgba(120, 220, 255, 0.10),
+    0 40px 100px rgba(0, 0, 0, 0.85),
+    0 0 60px rgba(39, 224, 255, 0.10),
+    inset 0 1px 0 rgba(130, 235, 255, 0.2);
+  --shadow-modal:
+    0 40px 100px rgba(0, 0, 0, 0.85),
+    0 0 50px rgba(39, 224, 255, 0.10),
+    inset 0 1px 0 rgba(130, 235, 255, 0.18);
+  --shadow-bezel-focus:
+    inset 0 2px 8px rgba(0, 0, 0, 0.5),
+    0 0 0 2px rgba(39, 224, 255, 0.4),
+    0 0 18px rgba(39, 224, 255, 0.25);
+  --shadow-bubble:
+    inset 0 1px 0 rgba(130, 235, 255, 0.12);
+  --shadow-bubble-user:
+    inset 0 1px 0 rgba(255, 220, 160, 0.22),
+    0 2px 18px rgba(255, 181, 61, 0.18);
 }
 
 /* ── Custom theme tokens ──────────────────────────────────────────────────── */
@@ -108,12 +232,18 @@
   --color-warning: var(--warning);
   --color-danger: var(--danger);
 
+  /* HUD type — Michroma loaded via next/font (--font-michroma); only the
+     `font-hud` utility opts into it, body text keeps the system stack. */
+  --font-hud: var(--font-michroma), 'Michroma', system-ui, sans-serif;
+
   --animate-pulse-green: pulse-green 2.5s ease-in-out infinite;
   --animate-msg-appear: msg-appear 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   --animate-bounce-dot: bounce-dot 1.2s ease-in-out infinite;
   --animate-orb-breathe: orb-breathe 3s ease-in-out infinite;
   --animate-orb-respond: orb-respond 1.8s ease-in-out infinite;
   --animate-orb-ripple: orb-ripple 2s ease-out infinite;
+  --animate-hud-sweep: hud-sweep 4s ease-in-out infinite;
+  --animate-hud-flicker: hud-flicker 3.5s ease-in-out infinite;
 }
 
 /* ── Keyframes ────────────────────────────────────────────────────────────── */
@@ -146,6 +276,29 @@
 @keyframes orb-ripple {
   0%   { transform: scale(0.85); opacity: 0.7; }
   100% { transform: scale(2);    opacity: 0;   }
+}
+
+/* ── HUD keyframes ──────────────────────────────────────────────────────── */
+@keyframes hud-sweep {
+  0%        { transform: translateX(-100%); opacity: 0; }
+  18%, 82%  { opacity: 1; }
+  100%      { transform: translateX(100%);  opacity: 0; }
+}
+
+@keyframes hud-flicker {
+  0%, 100%      { opacity: 1;    }
+  47%           { opacity: 1;    }
+  48%           { opacity: 0.55; }
+  49%           { opacity: 1;    }
+  72%           { opacity: 0.78; }
+  73%           { opacity: 1;    }
+}
+
+@keyframes hud-scan-down {
+  0%   { transform: translateY(-100%); opacity: 0;   }
+  8%   { opacity: 0.7; }
+  92%  { opacity: 0.7; }
+  100% { transform: translateY(100%);  opacity: 0;   }
 }
 
 /* ── Base reset — must be in @layer base so Tailwind utilities override it ── */
@@ -194,6 +347,197 @@
         radial-gradient(ellipse 80% 65% at 80% 75%, light-dark(rgba(120, 170, 255, 0.18), rgba(10, 55, 200, 0.46)) 0%, transparent 60%);
     }
   }
+}
+
+/* ── Liquid Glass utilities ───────────────────────────────────────────────
+   Three weights of the same material. The ::after draws a 1px specular rim
+   (bright top-left → dim bottom-right) using the mask-composite border trick;
+   border-radius:inherit makes it hug whatever corner radius the element has,
+   including per-corner overrides (e.g. the squished bubble tail). */
+@utility liquid-glass {
+  position: relative;
+  background: var(--glass-tint);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-glass);
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, var(--glass-edge) 0%, transparent 34%, transparent 64%, var(--glass-edge-dim) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+    z-index: 3;
+  }
+}
+
+@utility liquid-glass-soft {
+  position: relative;
+  background: var(--glass-tint-soft);
+  backdrop-filter: var(--glass-blur-soft);
+  -webkit-backdrop-filter: var(--glass-blur-soft);
+  box-shadow: var(--shadow-glass-soft);
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 0.5px;
+    background: linear-gradient(135deg, var(--glass-edge) 0%, transparent 40%, transparent 70%, var(--glass-edge-dim) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+    z-index: 3;
+  }
+}
+
+@utility liquid-glass-accent {
+  position: relative;
+  background: var(--glass-tint-accent);
+  backdrop-filter: var(--glass-blur-soft);
+  -webkit-backdrop-filter: var(--glass-blur-soft);
+  box-shadow:
+    0 6px 22px light-dark(rgba(0, 122, 255, 0.22), rgba(41, 151, 255, 0.22)),
+    inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.3));
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 0.5px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, transparent 45%, transparent 70%, rgba(255, 255, 255, 0.2) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+    z-index: 3;
+  }
+}
+
+/* ── Subtle glass orb (send button) ───────────────────────────────────────
+   Clean, near-transparent glass: the blue gradient shows straight through,
+   wrapped in a thin crisp bright rim with a soft top sheen and a faint blue
+   halo. No heavy fill — depth comes from the rim + inner highlight only. */
+@utility orb-button {
+  position: relative;
+  overflow: hidden;
+  background: light-dark(rgba(255, 255, 255, 0.16), rgba(130, 170, 255, 0.10));
+  backdrop-filter: saturate(150%) blur(8px);
+  -webkit-backdrop-filter: saturate(150%) blur(8px);
+  box-shadow:
+    0 0 14px light-dark(rgba(70, 130, 255, 0.3), rgba(120, 170, 255, 0.4)),
+    inset 0 0 0 1px light-dark(rgba(120, 160, 255, 0.7), rgba(190, 215, 255, 0.7)),
+    inset 0 1px 2px light-dark(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.55)),
+    inset 0 -6px 10px light-dark(rgba(40, 80, 200, 0.18), rgba(20, 40, 120, 0.28));
+
+  /* soft top sheen */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 6%;
+    width: 80%;
+    height: 40%;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* keep the icon above the sheen */
+  & > * { position: relative; z-index: 2; }
+}
+
+/* ── HUD utilities (used inside .hud-theme) ───────────────────────────────── */
+
+/* Deep-void page background with a faint arc-reactor core glow + gold ember
+   at the base — mirrors the reference's radial+linear stack. */
+@utility hud-void-bg {
+  background:
+    radial-gradient(circle at 50% 52%, rgba(39, 150, 224, 0.13), transparent 40%),
+    radial-gradient(circle at 50% 92%, rgba(255, 160, 50, 0.06), transparent 30%),
+    linear-gradient(180deg, #050610 0%, #0a0817 48%, #04030a 100%);
+}
+
+/* CRT scanline + vignette overlay. Drop on any positioned element; it paints
+   a non-interactive layer over the content. */
+@utility hud-scanlines {
+  position: relative;
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    pointer-events: none;
+    background:
+      linear-gradient(rgba(150, 220, 255, 0.025) 50%, rgba(0, 0, 0, 0.07) 50%),
+      radial-gradient(circle at 50% 48%, transparent 0 54%, rgba(0, 0, 0, 0.4) 94%);
+    background-size: 100% 4px, 100% 100%;
+    mix-blend-mode: screen;
+    opacity: 0.5;
+  }
+}
+
+/* Corner-bracket glass panel — the reference .hud-box generalized. Dim hairline
+   border with a glowing accent left edge, cyan inner glow, faint blur. Accent
+   color is overridable via --hud-accent (defaults to arc-reactor cyan). */
+@utility hud-panel {
+  --hud-accent: var(--hud-cyan);
+  --hud-accent-soft: var(--hud-cyan-soft);
+  position: relative;
+  border: 1px solid rgba(120, 200, 255, 0.2);
+  border-left: 2.5px solid var(--hud-accent-soft);
+  background: linear-gradient(180deg, rgba(4, 10, 22, 0.9), rgba(6, 8, 20, 0.78));
+  backdrop-filter: saturate(150%) blur(14px);
+  -webkit-backdrop-filter: saturate(150%) blur(14px);
+  box-shadow:
+    0 0 0 1px rgba(39, 224, 255, 0.05),
+    0 0 26px color-mix(in srgb, var(--hud-accent) 18%, transparent),
+    inset 0 0 24px color-mix(in srgb, var(--hud-accent) 5%, transparent);
+
+  &:hover {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--hud-accent) 14%, transparent),
+      0 0 40px color-mix(in srgb, var(--hud-accent) 30%, transparent),
+      inset 0 0 30px color-mix(in srgb, var(--hud-accent) 8%, transparent);
+  }
+}
+
+/* Gold (repulsor) variant of the panel accent. */
+@utility hud-panel-gold {
+  --hud-accent: var(--hud-gold);
+  --hud-accent-soft: var(--hud-gold-soft);
+}
+
+/* Violet variant — sentimentos HUD. */
+@utility hud-panel-violet {
+  --hud-accent: var(--hud-violet);
+  --hud-accent-soft: var(--hud-violet-soft);
+}
+
+/* Retune the send orb to arc-reactor cyan inside the HUD theme. Plain rule
+   (outside @layer) so it wins over the layered orb-button utility. */
+.hud-theme .orb-button {
+  background: rgba(40, 200, 255, 0.12);
+  box-shadow:
+    0 0 16px rgba(39, 224, 255, 0.45),
+    inset 0 0 0 1px rgba(120, 230, 255, 0.7),
+    inset 0 1px 2px rgba(255, 255, 255, 0.5),
+    inset 0 -6px 10px rgba(20, 90, 140, 0.3);
+}
+
+.hud-theme .typing-dot {
+  background: var(--hud-cyan);
+  box-shadow: 0 0 8px var(--hud-cyan);
 }
 
 /* ── Messages scrollbar ───────────────────────────────────────────────────── */

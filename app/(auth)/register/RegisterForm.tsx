@@ -40,11 +40,11 @@ export default function RegisterForm() {
 
   if (done) {
     return (
-      <div className="w-full max-w-sm bg-surface md:backdrop-blur-[60px] border-[0.5px] border-separator rounded-[28px] p-6 sm:p-8 text-center shadow-(--shadow-modal)">
+      <div className="w-full max-w-sm hud-panel rounded-[20px] p-7 sm:p-9 text-center relative">
         <div className="w-12 h-12 rounded-full bg-accent-soft border-[0.5px] border-accent-border flex items-center justify-center mx-auto mb-4 text-2xl">
           ⏳
         </div>
-        <h2 className="text-lg font-semibold text-ink mb-2">Aguardando aprovação!</h2>
+        <h2 className="font-hud text-[15px] uppercase tracking-[0.16em] text-ink mb-2.5" style={{ textShadow: '0 0 12px rgba(39,224,255,0.35)' }}>Aguardando aprovação</h2>
         <p className="text-sm text-ink-2 leading-relaxed">
           Assim que for aprovado você receberá um e-mail.
         </p>
@@ -56,10 +56,10 @@ export default function RegisterForm() {
   }
 
   return (
-    <div className="w-full max-w-sm bg-surface md:backdrop-blur-[60px] border-[0.5px] border-separator rounded-[28px] p-6 sm:p-8 shadow-(--shadow-modal)">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-ink tracking-[-0.3px]">Solicitar acesso</h1>
-        <p className="text-sm text-ink-3 mt-1">Jarvis SECOM</p>
+    <div className="w-full max-w-sm hud-panel rounded-[20px] p-7 sm:p-9 relative">
+      <div className="mb-7">
+        <h1 className="font-hud text-[18px] uppercase tracking-[0.16em] text-ink" style={{ textShadow: '0 0 14px rgba(39,224,255,0.4)' }}>Solicitar acesso</h1>
+        <p className="font-hud text-[9px] uppercase tracking-[0.34em] text-accent-text mt-2">Jarvis SECOM</p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">

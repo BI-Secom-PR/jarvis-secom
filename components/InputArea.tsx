@@ -51,7 +51,7 @@ const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend
   return (
     <div className="px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-5 md:pt-3.5 md:pb-[18px] bg-fill border-t-[0.5px] border-separator flex-shrink-0">
       {/* Input row — visionOS inset bezel */}
-      <div className="flex gap-1.5 md:gap-2 items-end bg-surface-input border-[0.5px] border-separator rounded-3xl md:rounded-2xl px-4 py-1.5 pr-1.5 md:py-2.5 md:pr-2.5 transition-[border-color,box-shadow] duration-200 shadow-(--shadow-bezel) focus-within:border-accent-border focus-within:shadow-(--shadow-bezel-focus)">
+      <div className="flex gap-1.5 md:gap-2 items-end liquid-glass-soft rounded-3xl md:rounded-2xl px-4 py-1.5 pr-1.5 md:py-2.5 md:pr-2.5 transition-[box-shadow] duration-200 focus-within:shadow-(--shadow-bezel-focus)">
         <textarea
           ref={textareaRef}
           rows={1}
@@ -78,7 +78,7 @@ const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend
           onClick={handleSend}
           disabled={disabled}
           title="Enviar"
-          className="w-11 h-11 md:w-9 md:h-9 rounded-full bg-accent text-accent-ink flex items-center justify-center flex-shrink-0 cursor-pointer transition-[background,opacity] duration-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_2px_10px_rgba(0,0,0,0.18)] hover:opacity-90 active:opacity-75 disabled:bg-fill-2 disabled:text-ink-4 disabled:shadow-none disabled:cursor-not-allowed"
+          className="w-11 h-11 md:w-9 md:h-9 rounded-full orb-button text-white flex items-center justify-center flex-shrink-0 cursor-pointer transition-[opacity,filter] duration-150 hover:brightness-110 active:brightness-95 disabled:opacity-45 disabled:cursor-not-allowed"
         >
           <svg
             viewBox="0 0 24 24"
@@ -87,7 +87,7 @@ const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="w-[15px] h-[15px]"
+            className="w-[15px] h-[15px] [filter:drop-shadow(0_1px_2px_rgba(0,30,90,0.55))]"
             style={{ transform: 'translate(-1px, 1px)' }}
           >
             <line x1="22" y1="2" x2="11" y2="13" />
@@ -95,8 +95,8 @@ const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend
           </svg>
         </button>
       </div>
-      <p className="hidden md:block text-[11px] text-ink-4 text-center mt-2.5 tracking-[0.1px]">
-        Enter para enviar &nbsp;·&nbsp; Shift+Enter para nova linha &nbsp;·&nbsp; ctrl+N nova sessão
+      <p className="hidden md:block font-hud text-[9px] uppercase text-ink-4 text-center mt-2.5 tracking-[0.22em]">
+        Enter enviar &nbsp;·&nbsp; Shift+Enter nova linha &nbsp;·&nbsp; ⌘N nova sessão
       </p>
     </div>
   );

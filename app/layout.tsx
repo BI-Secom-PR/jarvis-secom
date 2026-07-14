@@ -1,6 +1,17 @@
 import type { Metadata, Viewport } from 'next';
+import { Michroma } from 'next/font/google';
 import { getTheme } from '@/lib/theme';
 import './globals.css';
+
+// Geometric sci-fi face for the Iron-Man HUD. Self-hosted by next/font (no
+// external request, so the nonce-CSP is unaffected). Exposed as a CSS var —
+// only the `font-hud` utility opts in; body text keeps the system stack.
+const michroma = Michroma({
+  weight: '400',
+  subsets: ['latin'],
+  variable: '--font-michroma',
+  display: 'swap',
+});
 
 // Every page must be rendered per-request so Next can inject the CSP nonce
 // generated in proxy.ts — a prerendered page would ship inline scripts
@@ -49,10 +60,12 @@ export default async function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={theme === 'system' ? undefined : theme}
+      className={theme === 'system' ? michroma.variable : `${theme} ${michroma.variable}`}
       suppressHydrationWarning
     >
-      <body>{children}</body>
+      {/* HUD is the app-wide identity: .hud-theme on the body forces the
+          dark Iron-Man palette everywhere, so every page shares one look. */}
+      <body className="hud-theme">{children}</body>
     </html>
   );
 }

@@ -68,7 +68,8 @@ export const passkeyCredentials = pgTable('passkey_credentials', {
 
 // RAG: (question → SQL) example library, retrieved by embedding similarity
 // and injected into the chat system prompt. Embeddings are 768-dim vectors
-// (nomic-embed-text via Ollama) stored as JSON — at <5k rows, brute-force
+// (Google gemini-embedding-001 with outputDimensionality 768 — see
+// lib/rag.ts EMBED_DIMS) stored as JSON — at <5k rows, brute-force
 // cosine in TS beats a pgvector dependency.
 export const sqlExamples = pgTable('sql_examples', {
   id:        uuid('id').primaryKey().defaultRandom(),

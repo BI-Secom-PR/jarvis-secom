@@ -1,11 +1,11 @@
 import type { ChartSpec } from './types'
-import { PREMIUM_PALETTE } from './chart-palette'
+import { HUD_PALETTE_LIGHT } from './chart-palette'
 
 const W = 720
 const H = 380
 const PAD = { top: 48, right: 30, bottom: 56, left: 70 }
 
-const COLORS = PREMIUM_PALETTE.map((c) => ({ main: c, light: c }))
+const COLORS = HUD_PALETTE_LIGHT.map((c) => ({ main: c, light: c }))
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')

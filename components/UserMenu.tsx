@@ -7,7 +7,13 @@ import { logout } from "@/lib/authClient";
 import { postJson } from "@/lib/fetchUtils";
 import ThemeToggle from "@/components/ThemeToggle";
 
-export default function UserMenu({ user }: { user: SessionUser }) {
+export default function UserMenu({
+  user,
+  hideThemeToggle = false,
+}: {
+  user: SessionUser;
+  hideThemeToggle?: boolean;
+}) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [open, setOpen] = useState(false);
@@ -58,7 +64,7 @@ export default function UserMenu({ user }: { user: SessionUser }) {
     <>
       {/* Desktop layout — unchanged */}
       <div className="hidden md:flex items-center gap-3">
-        <ThemeToggle />
+        {!hideThemeToggle && <ThemeToggle />}
         {user.role === "ADMIN" && (
           <a
             href="/admin"
@@ -116,10 +122,12 @@ export default function UserMenu({ user }: { user: SessionUser }) {
 
           <div className="px-5 pt-3 pb-[max(2rem,env(safe-area-inset-bottom))] space-y-1">
             {/* Theme */}
-            <div className="flex items-center justify-between py-3 px-1">
-              <span className="text-sm text-ink-2">Tema</span>
-              <ThemeToggle />
-            </div>
+            {!hideThemeToggle && (
+              <div className="flex items-center justify-between py-3 px-1">
+                <span className="text-sm text-ink-2">Tema</span>
+                <ThemeToggle />
+              </div>
+            )}
 
             {user.role === "ADMIN" && (
               <a

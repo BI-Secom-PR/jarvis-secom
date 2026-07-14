@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import { asc } from 'drizzle-orm'
 import UsersTable from './UsersTable'
+import HudBackground from '@/components/HudBackground'
 
 export const metadata = { title: 'Usuários — Jarvis SECOM' }
 
@@ -23,10 +24,11 @@ export default async function AdminPage() {
     .orderBy(asc(users.createdAt))
 
   return (
-    <main className="nebula-bg min-h-screen w-screen overflow-auto relative">
-      <div className="max-w-4xl mx-auto px-6 py-10">
-        <h1 className="text-2xl font-semibold text-white tracking-[-0.3px] mb-1">Usuários</h1>
-        <p className="text-sm text-white/30 mb-8">Gerencie o acesso ao Jarvis SECOM</p>
+    <main className="hud-void-bg min-h-screen w-screen overflow-auto relative">
+      <HudBackground variant="subtle" />
+      <div className="relative z-10 max-w-4xl mx-auto px-6 py-10">
+        <h1 className="font-hud text-[22px] uppercase tracking-[0.18em] text-ink mb-1.5" style={{ textShadow: '0 0 14px rgba(39,224,255,0.35)' }}>Usuários</h1>
+        <p className="font-hud text-[9px] uppercase tracking-[0.3em] text-ink-3 mb-8">Gerencie o acesso ao Jarvis SECOM</p>
         <UsersTable initialUsers={allUsers} currentUserId={admin.id} />
       </div>
     </main>

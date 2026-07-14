@@ -1,20 +1,8 @@
-/* Single source of truth for chart series colors.
-   Premium palette: jewel tones that read well on dark and light backgrounds,
-   independent of the app theme. Keep ChartWidget and chart-svg.ts in parity. */
+export const HUD_PALETTE_DARK = ['#22d3ee', '#f97316', '#818cf8', '#4ade80', '#fb923c', '#94a3b8'];
+export const HUD_PALETTE_LIGHT = ['#0891b2', '#ea580c', '#6366f1', '#16a34a', '#d97706', '#475569'];
+export const getChartPalette = (isDark: boolean): string[] => isDark ? HUD_PALETTE_DARK : HUD_PALETTE_LIGHT;
 
-export const PREMIUM_PALETTE = [
-  '#38bdf8', // sky-400   — electric blue
-  '#f472b6', // pink-400  — hot pink
-  '#2dd4bf', // teal-400  — mint
-  '#fb923c', // orange-400 — coral
-  '#a78bfa', // violet-400 — soft indigo
-  '#4ade80', // green-400  — lime
-];
-
-/* Legacy — kept so existing chart-svg.ts compiles without changes until updated */
-export interface ChartHue {
-  bright: string;
-  deep: string;
-}
-
+// backward compat
+export const PREMIUM_PALETTE = HUD_PALETTE_DARK;
+export interface ChartHue { bright: string; deep: string }
 export const CHART_HUES: ChartHue[] = PREMIUM_PALETTE.map((c) => ({ bright: c, deep: c }));
