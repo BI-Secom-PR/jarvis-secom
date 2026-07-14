@@ -24,14 +24,24 @@ Colunas no template (1-indexed):
 # não figuram aqui e retornam None, caindo no verif_extras.
 
 SENSE_CATEGORY_MAP: dict[str, str] = {
-    "sensível":    "conteudo_sensivel",
-    "sensivel":    "conteudo_sensivel",
-    "violência":   "violencia",
-    "violencia":   "violencia",
-    "drogas":      "drogas",
-    "pornografia": "pornografia",
-    "pornography": "pornografia",
-    "safeframe":   "safeframe",
+    # Always_on (K1) + Junho (K2) consolidado / verification labels
+    "sensível":          "conteudo_sensivel",
+    "sensivel":          "conteudo_sensivel",
+    "conteúdo sensível": "conteudo_sensivel",
+    "conteudo sensivel": "conteudo_sensivel",
+    "violência":         "violencia",
+    "violencia":         "violencia",
+    "policial":          "violencia",
+    "polícia":           "violencia",
+    "policia":           "violencia",
+    "drogas":            "drogas",
+    "pornografia":       "pornografia",
+    "pornography":       "pornografia",
+    "safeframe":         "safeframe",
+    "não classificado":  "nao_classificado",
+    "nao classificado":  "nao_classificado",
+    "teste banner":      "teste_tag",
+    "teste de tag":      "teste_tag",
 }
 
 METRIKE_CATEGORY_MAP: dict[str, str] = {
