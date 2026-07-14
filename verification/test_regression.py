@@ -30,9 +30,11 @@ CASES = {
         "verif_glob": "METRIKE/VERIFICATION SP ABRIL/VERIFICATION /CPM/*.xlsx",
     },
     "SENSE": {
-        "consolidado": "SENSE/Consolidado - Always_on_20250064 - 27-05 - Ana.xlsx",
-        "comp_glob": "SENSE/COMPROVANTE /*.xlsx",
-        "verif_glob": "SENSE/VERIFICATION/*.xlsx",
+        # Always_on = C1 diário + V1 verif (baseline leve). Junho multi (C2/C3/V2/V3)
+        # fica em SENSE/Posicionamento_governo_junho/ — smoke manual, não baseline.
+        "consolidado": "SENSE/Always_on_20250064/Consolidado - Always_on_20250064 - 27-05 - Ana.xlsx",
+        "comp_glob": "SENSE/Always_on_20250064/COMPROVANTE /*.xlsx",
+        "verif_glob": "SENSE/Always_on_20250064/VERIFICATION/*.xlsx",
     },
 }
 
