@@ -854,7 +854,7 @@ if __name__ == "__main__":
     ap.add_argument("--output", default=None, metavar="PATH",
                     help="Caminho de saída (padrão: <consolidado> - Verificado.xlsx)")
     ap.add_argument("--url-pct", type=int, default=10, metavar="PCT",
-                    help="% de URLs indevidas a analisar via IA (0 = todas)")
+                    help="Percentual de URLs indevidas a analisar via IA (0 = todas)")
     ap.add_argument("--view-rules", default=None,
                     help="JSON array de regras de visualização por veículo")
     ap.add_argument("--praca", default=None, metavar="UF",
