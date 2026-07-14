@@ -620,14 +620,22 @@ def verificar(
             grouped[key] = dict(item)
     url_pool = list(grouped.values())
 
-    # ── Parseia verification SEM filtro de praça p/ DIF (que não deve filtrar por estado) ──
-    verif_raw_unfiltered: list[dict] = []
-    for vp in verif_paths:
-        try:
-            results = parse_verif(vp, data_ini=data_ini, data_fim=data_fim, praca=None)
-            verif_raw_unfiltered.extend(results)
-        except Exception as e:
-            print(f"[verif/unfiltered] ERRO {Path(vp).name}: {e}", file=sys.stderr)
+    # ── Verification SEM filtro de praça p/ DIF (não deve filtrar por estado) ──
+    # Quando praca is None o 1º pass já é unfiltered — reparsear dobra o tempo
+    # (lotes SENSE com dezenas de MB por arquivo estouram o wall 300s na Vercel).
+    if praca:
+        verif_raw_unfiltered: list[dict] = []
+        for vp in verif_paths:
+            try:
+                results = parse_verif(vp, data_ini=data_ini, data_fim=data_fim, praca=None)
+                # url_sample não é usado no DIF; evita inflar memória
+                for r in results:
+                    r.pop("url_sample", None)
+                verif_raw_unfiltered.extend(results)
+            except Exception as e:
+                print(f"[verif/unfiltered] ERRO {Path(vp).name}: {e}", file=sys.stderr)
+    else:
+        verif_raw_unfiltered = verif_raw
     verif_norm_unfiltered = _merge_by_veiculo(verif_raw_unfiltered)
     verif_names_unfiltered = list(verif_norm_unfiltered.keys())
 
