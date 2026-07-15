@@ -24,6 +24,8 @@ Colunas do consolidado (1-indexed, template 29 colunas):
   11=Viewables  12=Viewability
   14=Conteúdo Sensível  15–22=indevidas individuais
   28=Devolutiva BI SECOM  29=Devolutiva Agência
+  "Fora da Praça" (SENSE) é indevida detectada dinamicamente pelo header,
+  sem coluna fixa no template geral — ver COL_INDEVIDAS["fora_da_praca"].
 """
 
 import importlib
@@ -89,6 +91,7 @@ COL_INDEVIDAS = {
     "teste_tag":          21,
     "nao_classificado":   22,
     "drogas":             23,
+    "fora_da_praca":      24,  # categoria SENSE-only, sem coluna fixa no template geral
 }
 COL_DEVOLUTIVA_BI      = 28
 COL_DEVOLUTIVA_AGENCIA = 29
@@ -97,7 +100,7 @@ COL_URL_INFO           = 30
 
 # ── Detecção dinâmica de colunas por header ────────────────────────────────────
 
-def _detect_consolidado_cols(ws) -> dict:
+def _detect_consolidado_cols(ws, adserver: str | None = None) -> dict:
     """
     Lê o header (HEADER_ROW=8) e retorna posições reais das colunas,
     permitindo que cada adserver use seu próprio layout de consolidado.
@@ -119,7 +122,7 @@ def _detect_consolidado_cols(ws) -> dict:
         text = str(raw).strip()
         tl = text.lower()
 
-        key = normaliza_categoria(text)
+        key = normaliza_categoria(text, adserver=adserver)
         if key:
             indevidas[key] = c
 
@@ -203,14 +206,14 @@ def _to_float_safe(v) -> float | None:
         return None
 
 
-def _read_consolidado(ws) -> tuple[list[dict], int]:
+def _read_consolidado(ws, adserver: str | None = None) -> tuple[list[dict], int]:
     """
     Lê todas as linhas de dados do consolidado.
     Retorna (lista de dicts com métricas por veículo, coluna da devolutiva BI).
     Detecta posições de colunas dinamicamente pelo header — suporta layouts
     adserver-específicos sem branches por adserver.
     """
-    detected = _detect_consolidado_cols(ws)
+    detected = _detect_consolidado_cols(ws, adserver=adserver)
     col_indevidas    = detected["indevidas"]
     col_dev_bi       = detected["devolutiva_bi"]
     col_vs           = detected["col_views_start"]
@@ -679,7 +682,7 @@ def verificar(
     wb = openpyxl.load_workbook(consolidado_path)
     ws = wb.active
     try:
-        consol_rows, col_devolutiva_bi = _read_consolidado(ws)
+        consol_rows, col_devolutiva_bi = _read_consolidado(ws, adserver=adserver)
 
         # ── Match fuzzy veículo-a-veículo ─────────────────────────────────────
         resultado_veiculos: list[dict] = []

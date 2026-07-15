@@ -42,6 +42,8 @@ SENSE_CATEGORY_MAP: dict[str, str] = {
     "nao classificado":  "nao_classificado",
     "teste banner":      "teste_tag",
     "teste de tag":      "teste_tag",
+    "fora da praça":     "fora_da_praca",
+    "fora da praca":     "fora_da_praca",
 }
 
 METRIKE_CATEGORY_MAP: dict[str, str] = {
@@ -152,6 +154,7 @@ INDEVIDAS_ZERO: dict[str, int] = {
     "app_movel":          0,
     "teste_tag":          0,
     "nao_classificado":   0,
+    "fora_da_praca":      0,
 }
 
 
