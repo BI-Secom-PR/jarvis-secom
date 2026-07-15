@@ -150,7 +150,7 @@ export default function LoginForm() {
       <div className="w-full max-w-sm hud-panel rounded-[20px] p-7 sm:p-9 relative">
         <div className="mb-5">
           <div className="text-2xl mb-3">🔑</div>
-          <h1 className="font-hud text-[16px] uppercase tracking-[0.16em] text-ink" style={{ textShadow: '0 0 12px rgba(39,224,255,0.35)' }}>Chave de acesso</h1>
+          <h1 className="font-hud text-[16px] uppercase tracking-[0.16em] text-ink" style={{ textShadow: '0 0 12px color-mix(in srgb, var(--hud-cyan) 35%, transparent)' }}>Chave de acesso</h1>
           <p className="text-sm text-ink-3 mt-2 leading-relaxed">
             Seu administrador habilitou a criação de uma chave de acesso para sua conta. Use biometria ou PIN para entrar mais rapidamente da próxima vez.
           </p>
@@ -184,7 +184,7 @@ export default function LoginForm() {
   return (
     <div className="w-full max-w-sm hud-panel rounded-[20px] p-7 sm:p-9 relative">
       <div className="mb-7">
-        <h1 className="font-hud text-[20px] uppercase tracking-[0.2em] text-ink" style={{ textShadow: '0 0 14px rgba(39,224,255,0.4)' }}>Entrar</h1>
+        <h1 className="font-hud text-[20px] uppercase tracking-[0.2em] text-ink" style={{ textShadow: '0 0 14px color-mix(in srgb, var(--hud-cyan) 40%, transparent)' }}>Entrar</h1>
         <p className="font-hud text-[9px] uppercase tracking-[0.34em] text-accent-text mt-2">Jarvis SECOM</p>
       </div>
 

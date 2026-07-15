@@ -105,9 +105,9 @@ export default function UsersTable({
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <p className="text-sm text-white/40">{users.length} usuário(s)</p>
+        <p className="text-sm text-ink-3">{users.length} usuário(s)</p>
         <div className="flex gap-4">
-          <a href="/" className="text-sm text-white/50 hover:text-white/80 transition-colors">
+          <a href="/" className="text-sm text-ink-2 hover:text-ink transition-colors">
             ← Voltar ao chat
           </a>
           <button
@@ -119,16 +119,16 @@ export default function UsersTable({
         </div>
       </div>
 
-      <div className="bg-[rgba(10,10,20,0.82)] backdrop-blur-[60px] border-[0.5px] border-white/[0.14] rounded-[24px] overflow-hidden">
+      <div className="bg-surface backdrop-blur-[60px] border-[0.5px] border-separator rounded-[24px] overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-white/[0.08]">
-              <th className="text-left text-xs text-white/40 font-medium px-6 py-4">Nome</th>
-              <th className="text-left text-xs text-white/40 font-medium px-6 py-4">E-mail</th>
-              <th className="text-left text-xs text-white/40 font-medium px-6 py-4">Perfil</th>
-              <th className="text-center text-xs text-white/40 font-medium px-6 py-4">Acesso</th>
-              <th className="text-center text-xs text-white/40 font-medium px-6 py-4">Passkey</th>
-              <th className="text-right text-xs text-white/40 font-medium px-6 py-4">Ações</th>
+            <tr className="border-b border-separator">
+              <th className="text-left text-xs text-ink-3 font-medium px-6 py-4">Nome</th>
+              <th className="text-left text-xs text-ink-3 font-medium px-6 py-4">E-mail</th>
+              <th className="text-left text-xs text-ink-3 font-medium px-6 py-4">Perfil</th>
+              <th className="text-center text-xs text-ink-3 font-medium px-6 py-4">Acesso</th>
+              <th className="text-center text-xs text-ink-3 font-medium px-6 py-4">Passkey</th>
+              <th className="text-right text-xs text-ink-3 font-medium px-6 py-4">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -136,15 +136,15 @@ export default function UsersTable({
               <Fragment key={user.id}>
                 {/* Main row */}
                 <tr
-                  className={`border-b border-white/[0.05] last:border-0 transition-colors ${editingId === user.id ? 'bg-white/[0.03]' : ''}`}
+                  className={`border-b border-separator last:border-0 transition-colors ${editingId === user.id ? 'bg-fill' : ''}`}
                 >
-                  <td className="px-6 py-4 text-sm text-white/80">{user.name}</td>
-                  <td className="px-6 py-4 text-sm text-white/50">{user.email}</td>
+                  <td className="px-6 py-4 text-sm text-ink">{user.name}</td>
+                  <td className="px-6 py-4 text-sm text-ink-2">{user.email}</td>
                   <td className="px-6 py-4">
                     <span className={`text-xs px-2 py-1 rounded-full border-[0.5px] ${
                       user.role === 'ADMIN'
-                        ? 'bg-[rgba(160,80,255,0.15)] border-[rgba(160,80,255,0.3)] text-purple-300/80'
-                        : 'bg-white/[0.05] border-white/[0.1] text-white/40'
+                        ? 'bg-(--hud-violet)/15 border-(--hud-violet)/30 text-(--hud-violet)'
+                        : 'bg-fill border-separator text-ink-3'
                     }`}>
                       {user.role === 'ADMIN' ? 'Admin' : 'Usuário'}
                     </span>
@@ -153,7 +153,7 @@ export default function UsersTable({
                   {/* Toggle switch */}
                   <td className="px-6 py-4 text-center">
                     {user.id === currentUserId ? (
-                      <span className="text-xs text-white/20">—</span>
+                      <span className="text-xs text-ink-4">—</span>
                     ) : (
                       <button
                         disabled={toggling === user.id}
@@ -161,14 +161,14 @@ export default function UsersTable({
                         title={user.enabled ? 'Desativar acesso' : 'Aprovar acesso'}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full border-[0.5px] transition-colors duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                           user.enabled
-                            ? 'bg-[rgba(0,200,100,0.25)] border-[rgba(0,200,100,0.4)]'
-                            : 'bg-white/[0.08] border-white/[0.15]'
+                            ? 'bg-success/25 border-success/40'
+                            : 'bg-fill-2 border-separator'
                         }`}
                       >
                         <span className={`inline-block h-4 w-4 rounded-full shadow transition-transform duration-200 ${
                           user.enabled
-                            ? 'translate-x-6 bg-green-400'
-                            : 'translate-x-1 bg-white/30'
+                            ? 'translate-x-6 bg-success'
+                            : 'translate-x-1 bg-ink-3'
                         }`} />
                       </button>
                     )}
@@ -182,14 +182,14 @@ export default function UsersTable({
                       title={user.passkeyAllowed ? 'Revogar permissão de passkey' : 'Permitir criação de passkey'}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full border-[0.5px] transition-colors duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                         user.passkeyAllowed
-                          ? 'bg-[rgba(120,80,255,0.25)] border-[rgba(120,80,255,0.4)]'
-                          : 'bg-white/[0.08] border-white/[0.15]'
+                          ? 'bg-(--hud-violet)/25 border-(--hud-violet)/40'
+                          : 'bg-fill-2 border-separator'
                       }`}
                     >
                       <span className={`inline-block h-4 w-4 rounded-full shadow transition-transform duration-200 ${
                         user.passkeyAllowed
-                          ? 'translate-x-6 bg-purple-400'
-                          : 'translate-x-1 bg-white/30'
+                          ? 'translate-x-6 bg-(--hud-violet)'
+                          : 'translate-x-1 bg-ink-3'
                       }`} />
                     </button>
                   </td>
@@ -197,18 +197,18 @@ export default function UsersTable({
                   {/* Actions */}
                   <td className="px-6 py-4 text-right">
                     {user.id === currentUserId ? (
-                      <span className="text-xs text-white/20">—</span>
+                      <span className="text-xs text-ink-4">—</span>
                     ) : editingId === user.id ? (
                       <button
                         onClick={cancelEdit}
-                        className="text-xs text-white/30 hover:text-white/60 transition-colors cursor-pointer"
+                        className="text-xs text-ink-3 hover:text-ink-2 transition-colors cursor-pointer"
                       >
                         Cancelar
                       </button>
                     ) : (
                       <button
                         onClick={() => startEdit(user)}
-                        className="text-xs text-[rgba(120,180,255,0.7)] hover:text-[rgba(120,180,255,1)] transition-colors cursor-pointer"
+                        className="text-xs text-accent-text hover:text-accent transition-colors cursor-pointer"
                       >
                         Editar
                       </button>
@@ -218,34 +218,34 @@ export default function UsersTable({
 
                 {/* Inline edit row */}
                 {editingId === user.id && editState && (
-                  <tr className="border-b border-white/[0.05] last:border-0 bg-white/[0.02]">
+                  <tr className="border-b border-separator last:border-0 bg-fill">
                     <td colSpan={6} className="px-6 py-5">
                       <div className="flex flex-col gap-4">
                         <div className="grid grid-cols-4 gap-3">
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs text-white/40">Nome</label>
+                            <label className="text-xs text-ink-3">Nome</label>
                             <input
                               type="text"
                               value={editState.name}
                               onChange={e => setEditState(s => s ? { ...s, name: e.target.value } : s)}
-                              className="bg-black/30 border-[0.5px] border-white/[0.12] rounded-xl px-3 py-2 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-[rgba(80,160,255,0.5)] transition-colors"
+                              className="bg-surface-input border-[0.5px] border-separator rounded-xl px-3 py-2 text-sm text-ink placeholder:text-ink-4 outline-none focus:border-accent-border transition-colors"
                             />
                           </div>
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs text-white/40">E-mail</label>
+                            <label className="text-xs text-ink-3">E-mail</label>
                             <input
                               type="email"
                               value={editState.email}
                               onChange={e => setEditState(s => s ? { ...s, email: e.target.value } : s)}
-                              className="bg-black/30 border-[0.5px] border-white/[0.12] rounded-xl px-3 py-2 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-[rgba(80,160,255,0.5)] transition-colors"
+                              className="bg-surface-input border-[0.5px] border-separator rounded-xl px-3 py-2 text-sm text-ink placeholder:text-ink-4 outline-none focus:border-accent-border transition-colors"
                             />
                           </div>
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs text-white/40">Perfil</label>
+                            <label className="text-xs text-ink-3">Perfil</label>
                             <select
                               value={editState.role}
                               onChange={e => setEditState(s => s ? { ...s, role: e.target.value as 'ADMIN' | 'USER' } : s)}
-                              className="bg-black/30 border-[0.5px] border-white/[0.12] rounded-xl px-3 py-2 text-sm text-white/90 outline-none focus:border-[rgba(80,160,255,0.5)] transition-colors cursor-pointer"
+                              className="bg-surface-input border-[0.5px] border-separator rounded-xl px-3 py-2 text-sm text-ink outline-none focus:border-accent-border transition-colors cursor-pointer"
                             >
                               <option value="USER" style={{ background: '#0d0d1a' }}>Usuário</option>
                               <option value="ADMIN" style={{ background: '#0d0d1a' }}>Admin</option>
@@ -253,11 +253,11 @@ export default function UsersTable({
                           </div>
                           <div className="flex flex-col gap-1.5">
                             <div className="flex items-center justify-between">
-                              <label className="text-xs text-white/40">Nova senha</label>
+                              <label className="text-xs text-ink-3">Nova senha</label>
                               <button
                                 type="button"
                                 onClick={() => setEditState(s => s ? { ...s, password: generatePassword() } : s)}
-                                className="text-xs text-[rgba(120,180,255,0.7)] hover:text-[rgba(120,180,255,1)] transition-colors cursor-pointer"
+                                className="text-xs text-accent-text hover:text-accent transition-colors cursor-pointer"
                               >
                                 Gerar
                               </button>
@@ -268,7 +268,7 @@ export default function UsersTable({
                               value={editState.password}
                               placeholder="Deixe em branco para manter"
                               onChange={e => setEditState(s => s ? { ...s, password: e.target.value } : s)}
-                              className="bg-black/30 border-[0.5px] border-white/[0.12] rounded-xl px-3 py-2 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-[rgba(80,160,255,0.5)] transition-colors"
+                              className="bg-surface-input border-[0.5px] border-separator rounded-xl px-3 py-2 text-sm text-ink placeholder:text-ink-4 outline-none focus:border-accent-border transition-colors"
                             />
                           </div>
                         </div>
@@ -287,13 +287,13 @@ export default function UsersTable({
                           <button
                             disabled={saving}
                             onClick={() => saveEdit(user.id)}
-                            className="text-xs px-4 py-2 bg-[rgba(41,151,255,0.22)] border-[0.5px] border-[rgba(80,170,255,0.35)] rounded-lg text-white/80 hover:bg-[rgba(41,151,255,0.36)] transition-colors disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                            className="text-xs px-4 py-2 bg-accent-soft border-[0.5px] border-accent-border rounded-lg text-ink hover:bg-accent/25 transition-colors disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                           >
                             {saving ? 'Salvando...' : 'Salvar'}
                           </button>
                           <button
                             onClick={cancelEdit}
-                            className="text-xs px-4 py-2 border-[0.5px] border-white/[0.1] rounded-lg text-white/40 hover:text-white/60 hover:border-white/20 transition-colors cursor-pointer"
+                            className="text-xs px-4 py-2 border-[0.5px] border-separator rounded-lg text-ink-3 hover:text-ink-2 hover:border-separator-strong transition-colors cursor-pointer"
                           >
                             Cancelar
                           </button>

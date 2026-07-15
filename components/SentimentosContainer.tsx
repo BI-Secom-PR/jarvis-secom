@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import HudBackground from "./HudBackground";
 import HudCorners from "./HudCorners";
+import ThemeToggle from "./ThemeToggle";
 import ChartWidget from "./ChartWidget";
 import { postJson } from "@/lib/fetchUtils";
 import { SENTIMENTS } from "@/lib/sentimentos";
@@ -344,17 +345,20 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
           <span className="text-ink-4 text-xs shrink-0">›</span>
           <h1
             className="font-hud text-[10px] uppercase tracking-[0.16em] text-ink truncate"
-            style={{ textShadow: "0 0 10px rgba(39,224,255,0.3)" }}
+            style={{ textShadow: "0 0 10px color-mix(in srgb, var(--hud-cyan) 30%, transparent)" }}
           >
             Sentimentos
           </h1>
         </div>
-        <span
-          className="text-[15px] leading-none animate-hud-flicker motion-reduce:animate-none"
-          style={{ color: "var(--hud-violet)", textShadow: "0 0 12px var(--hud-violet)" }}
-        >
-          ◇
-        </span>
+        <div className="flex items-center gap-3 shrink-0">
+          <ThemeToggle />
+          <span
+            className="text-[15px] leading-none animate-hud-flicker motion-reduce:animate-none"
+            style={{ color: "var(--hud-violet)", textShadow: "0 0 12px var(--hud-violet)" }}
+          >
+            ◇
+          </span>
+        </div>
       </header>
 
       <div className="relative z-10 flex-1 overflow-y-auto">
@@ -365,7 +369,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
             <div className="space-y-6">
               <div
                 className="font-hud text-[11px] uppercase tracking-[0.24em] text-ink flex items-center gap-2"
-                style={{ textShadow: "0 0 12px rgba(39,224,255,0.35)" }}
+                style={{ textShadow: "0 0 12px color-mix(in srgb, var(--hud-cyan) 35%, transparent)" }}
               >
                 <span style={{ color: "var(--hud-violet)" }}>◇</span> Filtros
               </div>
@@ -525,7 +529,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
             <div className="px-4 md:px-6 pt-5 pb-3 flex items-center justify-between gap-3">
               <div
                 className="font-hud text-[11px] uppercase tracking-[0.24em] text-ink flex items-center gap-2"
-                style={{ textShadow: "0 0 12px rgba(39,224,255,0.35)" }}
+                style={{ textShadow: "0 0 12px color-mix(in srgb, var(--hud-cyan) 35%, transparent)" }}
               >
                 <span style={{ color: "var(--hud-violet)" }}>◇</span> Comentários
                 {totalComments > 0 && (

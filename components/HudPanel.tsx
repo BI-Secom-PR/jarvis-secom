@@ -67,7 +67,7 @@ export default function HudPanel({
         )}
         <span
           className="font-hud text-[13px] font-bold uppercase tracking-[0.22em] text-ink"
-          style={{ textShadow: "0 0 8px rgba(220,240,255,0.3)" }}
+          style={{ textShadow: "0 0 8px color-mix(in srgb, var(--ink) 30%, transparent)" }}
         >
           {title}
         </span>

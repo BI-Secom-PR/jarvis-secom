@@ -5,6 +5,7 @@ import { upload } from "@vercel/blob/client";
 import Link from "next/link";
 import HudBackground from "./HudBackground";
 import HudCorners from "./HudCorners";
+import ThemeToggle from "./ThemeToggle";
 
 type VehicleResult = {
   veiculo: string;
@@ -512,11 +513,12 @@ export default function VerificationContainer() {
             Início
           </Link>
           <span className="text-ink-4 text-xs shrink-0">›</span>
-          <h1 className="font-hud text-[10px] uppercase tracking-[0.16em] text-ink truncate" style={{ textShadow: '0 0 10px rgba(39,224,255,0.3)' }}>
+          <h1 className="font-hud text-[10px] uppercase tracking-[0.16em] text-ink truncate" style={{ textShadow: '0 0 10px color-mix(in srgb, var(--hud-cyan) 30%, transparent)' }}>
             Verificação de Consolidados
           </h1>
         </div>
-        <div className="flex items-center shrink-0">
+        <div className="flex items-center gap-3 shrink-0">
+          <ThemeToggle />
           <span
             className="text-[15px] leading-none animate-hud-flicker motion-reduce:animate-none"
             style={{ color: "var(--hud-cyan)", textShadow: "0 0 12px var(--hud-cyan)" }}
@@ -533,7 +535,7 @@ export default function VerificationContainer() {
             <div className="space-y-6">
             <div
               className="font-hud text-[11px] uppercase tracking-[0.24em] text-ink mb-1 flex items-center gap-2"
-              style={{ textShadow: "0 0 12px rgba(39,224,255,0.35)" }}
+              style={{ textShadow: "0 0 12px color-mix(in srgb, var(--hud-cyan) 35%, transparent)" }}
             >
               <span style={{ color: "var(--hud-cyan)" }}>◇</span> Parâmetros
             </div>
@@ -818,7 +820,7 @@ export default function VerificationContainer() {
             disabled={!canSubmit}
             className="w-full py-3.5 rounded-xl font-hud text-[12px] uppercase tracking-[0.22em] transition-all duration-200
               bg-accent text-accent-ink hover:opacity-90 active:opacity-80
-              hover:shadow-[0_0_28px_rgba(39,224,255,0.4)]
+              hover:shadow-[0_0_28px_var(--hud-cyan-soft)]
               disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:shadow-none"
           >
             Verificar

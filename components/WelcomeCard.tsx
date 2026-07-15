@@ -6,7 +6,7 @@ export default function WelcomeCard() {
       <HudCorners accent="cyan" size={14} inset={6} />
       <div
         className="font-hud text-[9px] uppercase tracking-[0.32em] text-accent-text mb-3 flex items-center gap-2"
-        style={{ textShadow: "0 0 10px rgba(39,224,255,0.4)" }}
+        style={{ textShadow: "0 0 10px color-mix(in srgb, var(--hud-cyan) 40%, transparent)" }}
       >
         <span className="inline-block w-1.5 h-1.5 rounded-full bg-success animate-pulse-green" />
         Sistema online

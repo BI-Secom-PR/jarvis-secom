@@ -44,7 +44,7 @@ export default function RegisterForm() {
         <div className="w-12 h-12 rounded-full bg-accent-soft border-[0.5px] border-accent-border flex items-center justify-center mx-auto mb-4 text-2xl">
           ⏳
         </div>
-        <h2 className="font-hud text-[15px] uppercase tracking-[0.16em] text-ink mb-2.5" style={{ textShadow: '0 0 12px rgba(39,224,255,0.35)' }}>Aguardando aprovação</h2>
+        <h2 className="font-hud text-[15px] uppercase tracking-[0.16em] text-ink mb-2.5" style={{ textShadow: '0 0 12px color-mix(in srgb, var(--hud-cyan) 35%, transparent)' }}>Aguardando aprovação</h2>
         <p className="text-sm text-ink-2 leading-relaxed">
           Assim que for aprovado você receberá um e-mail.
         </p>
@@ -58,7 +58,7 @@ export default function RegisterForm() {
   return (
     <div className="w-full max-w-sm hud-panel rounded-[20px] p-7 sm:p-9 relative">
       <div className="mb-7">
-        <h1 className="font-hud text-[18px] uppercase tracking-[0.16em] text-ink" style={{ textShadow: '0 0 14px rgba(39,224,255,0.4)' }}>Solicitar acesso</h1>
+        <h1 className="font-hud text-[18px] uppercase tracking-[0.16em] text-ink" style={{ textShadow: '0 0 14px color-mix(in srgb, var(--hud-cyan) 40%, transparent)' }}>Solicitar acesso</h1>
         <p className="font-hud text-[9px] uppercase tracking-[0.34em] text-accent-text mt-2">Jarvis SECOM</p>
       </div>
 

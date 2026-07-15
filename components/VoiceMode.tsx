@@ -253,8 +253,9 @@ export default function VoiceMode({ onClose, model }: Props) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center msg-appear"
-      style={{ background: 'rgba(3,3,12,0.96)', backdropFilter: 'blur(28px)' }}
+      className="dark fixed inset-0 z-50 flex flex-col items-center justify-center msg-appear"
+      // Cinematic overlay: always dark regardless of the theme toggle
+      style={{ colorScheme: 'dark', background: 'rgba(3,3,12,0.96)', backdropFilter: 'blur(28px)' }}
     >
       {/* Orb area */}
       <div className="relative flex items-center justify-center mb-12" style={{ width: 260, height: 260 }}>

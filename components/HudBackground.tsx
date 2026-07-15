@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useIsDark } from "@/lib/useIsDark";
 
 /**
  * Iron-Man "command lattice" backdrop — a rotating neural sphere of linked
@@ -15,13 +16,23 @@ import { useEffect, useRef } from "react";
 type RGB = { r: number; g: number; b: number };
 
 // Cyan → gold → hot-red → cool. Cross-fades between adjacent stops.
-const PALETTES: RGB[] = [
+const PALETTES_DARK: RGB[] = [
   { r: 39, g: 224, b: 255 }, // arc-reactor cyan
   { r: 90, g: 200, b: 255 }, // sky cyan
   { r: 255, g: 181, b: 61 }, // repulsor gold
   { r: 255, g: 96, b: 40 }, // hot orange
   { r: 255, g: 60, b: 50 }, // hot red
   { r: 120, g: 180, b: 255 }, // cool return
+];
+
+// Stark-blueprint petrol ramp — dark enough to read on the paper background.
+const PALETTES_LIGHT: RGB[] = [
+  { r: 10, g: 126, b: 164 }, // petrol teal
+  { r: 30, g: 110, b: 170 }, // steel blue
+  { r: 168, g: 106, b: 16 }, // burnt amber
+  { r: 190, g: 80, b: 30 }, // rust orange
+  { r: 217, g: 45, b: 32 }, // signal red
+  { r: 60, g: 100, b: 200 }, // cool return
 ];
 
 export default function HudBackground({
@@ -31,6 +42,7 @@ export default function HudBackground({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const orbRef = useRef<HTMLDivElement>(null);
+  const isDark = useIsDark();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -43,6 +55,7 @@ export default function HudBackground({
       "(prefers-reduced-motion: reduce)",
     ).matches;
     const subtle = variant === "subtle";
+    const PALETTES = isDark ? PALETTES_DARK : PALETTES_LIGHT;
 
     let PARTICLE_COUNT = 650;
     let MAX_DISTANCE = 82;
@@ -169,6 +182,9 @@ export default function HudBackground({
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
     function rgba(c: RGB, alpha: number, ro = 0, go = 0, bo = 0) {
+      // Offsets brighten toward white for the additive dark render; on the
+      // light paper they would wash contrast out, so skip them.
+      if (!isDark) { ro = 0; go = 0; bo = 0; }
       const ch = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
       return `rgba(${ch(c.r + ro)}, ${ch(c.g + go)}, ${ch(c.b + bo)}, ${alpha})`;
     }
@@ -212,15 +228,11 @@ export default function HudBackground({
       const ctx2 = ctx!;
 
       ctx2.clearRect(0, 0, width, height);
-      ctx2.fillStyle = "rgba(3, 2, 10, 0.28)";
+      ctx2.fillStyle = isDark ? "rgba(3, 2, 10, 0.28)" : "rgba(238, 244, 248, 0.28)";
       ctx2.fillRect(0, 0, width, height);
 
-      // Drive the live HUD accent + orb glow from the cycling color.
-      document.documentElement.style.setProperty(
-        "--hud-live",
-        `rgb(${color.r}, ${color.g}, ${color.b})`,
-      );
-      orbGlow!.style.background = `radial-gradient(circle, rgba(${color.r}, ${color.g}, ${color.b}, 0.3) 0%, rgba(${color.r}, ${color.g}, ${color.b}, 0.13) 32%, transparent 66%)`;
+      // Drive the orb glow from the cycling color.
+      orbGlow!.style.background = `radial-gradient(circle, rgba(${color.r}, ${color.g}, ${color.b}, ${isDark ? 0.3 : 0.14}) 0%, rgba(${color.r}, ${color.g}, ${color.b}, ${isDark ? 0.13 : 0.06}) 32%, transparent 66%)`;
 
       particles.forEach((p) => {
         p.rotate();
@@ -228,7 +240,8 @@ export default function HudBackground({
       });
 
       ctx2.save();
-      ctx2.globalCompositeOperation = "lighter";
+      // Additive blending glows on the void but washes out on light paper.
+      ctx2.globalCompositeOperation = isDark ? "lighter" : "source-over";
 
       const max2 = MAX_DISTANCE * MAX_DISTANCE;
       for (let i = 0; i < particles.length; i++) {
@@ -262,7 +275,7 @@ export default function HudBackground({
         ctx2.beginPath();
         ctx2.arc(p.x, p.y, size, 0, Math.PI * 2);
         ctx2.fillStyle = centerBias
-          ? `rgba(255, 252, 255, ${alpha})`
+          ? (isDark ? `rgba(255, 252, 255, ${alpha})` : `rgba(11, 36, 52, ${alpha})`)
           : rgba(color, alpha, 52, 42, 34);
         ctx2.fill();
         if (size > 1.35) {
@@ -321,7 +334,7 @@ export default function HudBackground({
       window.removeEventListener("orientationchange", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
     };
-  }, [variant]);
+  }, [variant, isDark]);
 
   return (
     <div
@@ -334,7 +347,7 @@ export default function HudBackground({
         className="absolute inset-0"
         style={{
           backgroundImage:
-            "radial-gradient(circle, rgba(201,231,255,0.45) 0 1px, transparent 1.5px), radial-gradient(circle, rgba(111,201,255,0.28) 0 1px, transparent 1.3px)",
+            "radial-gradient(circle, light-dark(rgba(20,70,110,0.35), rgba(201,231,255,0.45)) 0 1px, transparent 1.5px), radial-gradient(circle, light-dark(rgba(10,126,164,0.25), rgba(111,201,255,0.28)) 0 1px, transparent 1.3px)",
           backgroundPosition: "7% 11%, 68% 19%",
           backgroundSize: "171px 179px, 263px 211px",
           opacity: 0.22,
@@ -359,10 +372,10 @@ export default function HudBackground({
           transform: "perspective(390px) rotateX(65deg)",
           transformOrigin: "bottom center",
           backgroundImage:
-            "linear-gradient(rgba(57,200,255,0.26) 1px, transparent 1px), linear-gradient(90deg, rgba(57,200,255,0.22) 1px, transparent 1px)",
+            "linear-gradient(light-dark(rgba(10,110,160,0.22), rgba(57,200,255,0.26)) 1px, transparent 1px), linear-gradient(90deg, light-dark(rgba(10,110,160,0.18), rgba(57,200,255,0.22)) 1px, transparent 1px)",
           backgroundSize: "44px 27px",
-          borderTop: "1px solid rgba(80,210,255,0.36)",
-          boxShadow: "0 -20px 46px rgba(39,224,255,0.12)",
+          borderTop: "1px solid light-dark(rgba(10,110,160,0.32), rgba(80,210,255,0.36))",
+          boxShadow: "0 -20px 46px color-mix(in srgb, var(--hud-cyan) 12%, transparent)",
           opacity: 0.72,
         }}
       />

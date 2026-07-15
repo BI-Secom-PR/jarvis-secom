@@ -155,7 +155,7 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
   );
 
   return (
-    <div className="relative z-10 w-full h-full flex flex-col overflow-hidden md:mx-5 md:my-[4dvh] md:max-w-9/12 md:h-[92dvh] md:max-h-225 md:rounded-[18px] md:border md:border-[color:var(--separator-strong)] md:[box-shadow:0_0_50px_rgba(39,224,255,0.08),inset_0_0_60px_rgba(6,12,26,0.6)]">
+    <div className="relative z-10 w-full h-full flex flex-col overflow-hidden md:mx-5 md:my-[4dvh] md:max-w-9/12 md:h-[92dvh] md:max-h-225 md:rounded-[18px] md:border md:border-[color:var(--separator-strong)] md:[box-shadow:var(--shadow-chat-frame)]">
       {/* HUD frame corners (desktop) */}
       <div className="hidden md:block">
         <HudCorners accent="cyan" size={18} inset={8} />
@@ -189,7 +189,7 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
         <div className="min-w-0">
           <h1
             className="font-hud text-[15px] md:text-[17px] font-bold uppercase tracking-[0.24em] text-ink"
-            style={{ textShadow: "0 0 14px rgba(39,224,255,0.45)" }}
+            style={{ textShadow: "0 0 14px color-mix(in srgb, var(--hud-cyan) 45%, transparent)" }}
           >
             Jarvis
           </h1>
@@ -205,7 +205,7 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
             />
             <span className="font-hud text-[8px] uppercase tracking-[0.28em] text-ink-3">Online</span>
           </div>
-          <UserMenu user={user} hideThemeToggle />
+          <UserMenu user={user} />
         </div>
       </div>
 

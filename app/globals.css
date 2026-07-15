@@ -110,103 +110,105 @@
     inset 0 -1px 1px light-dark(rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0.03));
 }
 
-/* ── Iron-Man HUD theme (experimental) ────────────────────────────────────
-   Scoped, FORCED-DARK palette for the "command lattice" UI. Applied to a
-   wrapper element (not <html>), so it overrides the tokens for its whole
-   subtree regardless of the theme cookie — the light/dark toggle can't lift
-   it out of the dark glowing aesthetic. Identity: arc-reactor cyan + repulsor
-   gold + hot-red, floating over a deep void. Values are literal (no
-   light-dark()) precisely so the cookie can't lighten them. */
+/* ── Iron-Man HUD theme ───────────────────────────────────────────────────
+   Scoped palette for the "command lattice" UI, applied to <body>. Both
+   schemes live side by side via light-dark(): dark = the original arc-reactor
+   cyan + repulsor gold over a deep void; light = "Stark blueprint" — paper-
+   blue background, petrol ink/linework, burnt-amber gold. The theme cookie
+   (.light/.dark on <html>) picks which side wins, same as the base tokens. */
 .hud-theme {
-  color-scheme: dark;
-
   /* HUD accent ramp */
-  --hud-cyan:      #27e0ff;
-  --hud-cyan-soft: rgba(39, 224, 255, 0.5);
-  --hud-cyan-dim:  rgba(39, 224, 255, 0.12);
-  --hud-gold:      #ffb53d;
-  --hud-gold-soft: rgba(255, 181, 61, 0.5);
-  --hud-violet:      #818cf8;
-  --hud-violet-soft: rgba(129, 140, 248, 0.5);
-  --hud-red:       #ff4133;
+  --hud-cyan:      light-dark(#0a7ea4, #27e0ff);
+  --hud-cyan-soft: light-dark(rgba(10, 126, 164, 0.5), rgba(39, 224, 255, 0.5));
+  --hud-cyan-dim:  light-dark(rgba(10, 126, 164, 0.10), rgba(39, 224, 255, 0.12));
+  --hud-gold:      light-dark(#a86a10, #ffb53d);
+  --hud-gold-soft: light-dark(rgba(168, 106, 16, 0.45), rgba(255, 181, 61, 0.5));
+  --hud-violet:      light-dark(#4f46e5, #818cf8);
+  --hud-violet-soft: light-dark(rgba(79, 70, 229, 0.45), rgba(129, 140, 248, 0.5));
+  --hud-red:       light-dark(#d92d20, #ff4133);
   --font-hud:      var(--font-michroma), 'Michroma', system-ui, sans-serif;
 
-  /* Backgrounds & surfaces — deep void */
-  --bg-base:        #050410;
-  --surface:        rgba(8, 12, 26, 0.82);
-  --surface-opaque: #070611;
-  --surface-input:  rgba(0, 8, 20, 0.45);
+  /* Backgrounds & surfaces — deep void / blueprint paper */
+  --bg-base:        light-dark(#eef4f8, #050410);
+  --surface:        light-dark(rgba(255, 255, 255, 0.72), rgba(8, 12, 26, 0.82));
+  --surface-opaque: light-dark(#f5f9fc, #070611);
+  --surface-input:  light-dark(rgba(190, 215, 230, 0.30), rgba(0, 8, 20, 0.45));
 
-  /* Text — cool HUD white */
-  --ink:   rgba(226, 244, 255, 0.92);
-  --ink-2: rgba(196, 226, 255, 0.62);
-  --ink-3: rgba(170, 210, 255, 0.44);
-  --ink-4: rgba(150, 195, 255, 0.26);
+  /* Text — petrol navy / cool HUD white */
+  --ink:   light-dark(rgba(11, 36, 52, 0.92),  rgba(226, 244, 255, 0.92));
+  --ink-2: light-dark(rgba(16, 48, 70, 0.64),  rgba(196, 226, 255, 0.62));
+  --ink-3: light-dark(rgba(20, 56, 82, 0.46),  rgba(170, 210, 255, 0.44));
+  --ink-4: light-dark(rgba(24, 62, 92, 0.28),  rgba(150, 195, 255, 0.26));
 
-  /* Separators & fills — cyan-tinted */
-  --separator:        rgba(120, 220, 255, 0.14);
-  --separator-strong: rgba(120, 220, 255, 0.24);
-  --fill:   rgba(40, 130, 190, 0.08);
-  --fill-2: rgba(40, 130, 190, 0.14);
+  /* Separators & fills — blueprint linework / cyan-tinted */
+  --separator:        light-dark(rgba(10, 90, 130, 0.20), rgba(120, 220, 255, 0.14));
+  --separator-strong: light-dark(rgba(10, 90, 130, 0.34), rgba(120, 220, 255, 0.24));
+  --fill:   light-dark(rgba(10, 110, 160, 0.06), rgba(40, 130, 190, 0.08));
+  --fill-2: light-dark(rgba(10, 110, 160, 0.11), rgba(40, 130, 190, 0.14));
 
-  /* Accent → arc-reactor cyan */
-  --accent:        #27e0ff;
-  --accent-ink:    #04121a;
-  --accent-soft:   rgba(39, 224, 255, 0.14);
-  --accent-border: rgba(39, 224, 255, 0.42);
-  --accent-text:   #74e9ff;
+  /* Accent → petrol teal / arc-reactor cyan */
+  --accent:        light-dark(#0a7ea4, #27e0ff);
+  --accent-ink:    light-dark(#f2fbff, #04121a);
+  --accent-soft:   light-dark(rgba(10, 126, 164, 0.12), rgba(39, 224, 255, 0.14));
+  --accent-border: light-dark(rgba(10, 126, 164, 0.45), rgba(39, 224, 255, 0.42));
+  --accent-text:   light-dark(#076587, #74e9ff);
 
   /* Status — keep the cyan/gold/red language */
-  --success: #30d9b8;
+  --success: light-dark(#0c7f68, #30d9b8);
   --warning: var(--hud-gold);
   --danger:  var(--hud-red);
 
   /* Chat bubbles — user gets a repulsor-gold warmth */
-  --bubble-user:        rgba(255, 181, 61, 0.18);
-  --bubble-user-ink:    #fdf3e2;
-  --bubble-user-border: rgba(255, 181, 61, 0.5);
+  --bubble-user:        light-dark(rgba(168, 106, 16, 0.14), rgba(255, 181, 61, 0.18));
+  --bubble-user-ink:    light-dark(#4a3305, #fdf3e2);
+  --bubble-user-border: light-dark(rgba(168, 106, 16, 0.42), rgba(255, 181, 61, 0.5));
 
-  /* Charts — keep readable on the void */
-  --chart-tick:     rgba(180, 220, 255, 0.5);
-  --chart-grid:     rgba(120, 200, 255, 0.06);
-  --chart-contrast: #050410;
+  /* Charts — keep readable on the void / paper */
+  --chart-tick:     light-dark(rgba(15, 55, 80, 0.55), rgba(180, 220, 255, 0.5));
+  --chart-grid:     light-dark(rgba(10, 90, 130, 0.10), rgba(120, 200, 255, 0.06));
+  --chart-contrast: light-dark(#ffffff, #050410);
 
-  /* Liquid glass → cyan tint, cyan→gold specular rim */
-  --glass-tint:        rgba(8, 18, 34, 0.5);
-  --glass-tint-soft:   rgba(10, 22, 40, 0.4);
-  --glass-tint-accent: rgba(39, 224, 255, 0.16);
-  --glass-edge:        rgba(130, 235, 255, 0.55);
-  --glass-edge-dim:    rgba(255, 181, 61, 0.18);
+  /* Liquid glass → white/petrol rim in light; cyan tint, cyan→gold rim in dark */
+  --glass-tint:        light-dark(rgba(255, 255, 255, 0.55), rgba(8, 18, 34, 0.5));
+  --glass-tint-soft:   light-dark(rgba(255, 255, 255, 0.46), rgba(10, 22, 40, 0.4));
+  --glass-tint-accent: light-dark(rgba(10, 126, 164, 0.14), rgba(39, 224, 255, 0.16));
+  --glass-edge:        light-dark(rgba(255, 255, 255, 0.95), rgba(130, 235, 255, 0.55));
+  --glass-edge-dim:    light-dark(rgba(168, 106, 16, 0.28), rgba(255, 181, 61, 0.18));
   --glass-blur:        saturate(150%) brightness(1.04) blur(26px);
   --glass-blur-soft:   saturate(150%) blur(16px);
 
   --shadow-glass:
-    0 18px 56px rgba(0, 0, 0, 0.6),
-    0 0 60px rgba(39, 224, 255, 0.10),
-    inset 0 1px 0   rgba(130, 235, 255, 0.28),
-    inset 0 -1px 1px rgba(255, 181, 61, 0.05);
+    0 18px 56px light-dark(rgba(20, 70, 110, 0.14), rgba(0, 0, 0, 0.6)),
+    0 0 60px light-dark(rgba(10, 126, 164, 0.08), rgba(39, 224, 255, 0.10)),
+    inset 0 1px 0   light-dark(rgba(255, 255, 255, 0.9), rgba(130, 235, 255, 0.28)),
+    inset 0 -1px 1px light-dark(rgba(168, 106, 16, 0.06), rgba(255, 181, 61, 0.05));
   --shadow-glass-soft:
-    0 6px 22px rgba(0, 0, 0, 0.45),
-    0 0 28px rgba(39, 224, 255, 0.06),
-    inset 0 1px 0 rgba(130, 235, 255, 0.20);
+    0 6px 22px light-dark(rgba(20, 70, 110, 0.10), rgba(0, 0, 0, 0.45)),
+    0 0 28px light-dark(rgba(10, 126, 164, 0.05), rgba(39, 224, 255, 0.06)),
+    inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.85), rgba(130, 235, 255, 0.20));
   --shadow-card:
-    0 0 0 0.5px rgba(120, 220, 255, 0.10),
-    0 40px 100px rgba(0, 0, 0, 0.85),
-    0 0 60px rgba(39, 224, 255, 0.10),
-    inset 0 1px 0 rgba(130, 235, 255, 0.2);
+    0 0 0 0.5px light-dark(rgba(10, 90, 130, 0.12), rgba(120, 220, 255, 0.10)),
+    0 40px 100px light-dark(rgba(20, 70, 110, 0.16), rgba(0, 0, 0, 0.85)),
+    0 0 60px light-dark(rgba(10, 126, 164, 0.08), rgba(39, 224, 255, 0.10)),
+    inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.9), rgba(130, 235, 255, 0.2));
   --shadow-modal:
-    0 40px 100px rgba(0, 0, 0, 0.85),
-    0 0 50px rgba(39, 224, 255, 0.10),
-    inset 0 1px 0 rgba(130, 235, 255, 0.18);
+    0 40px 100px light-dark(rgba(20, 70, 110, 0.22), rgba(0, 0, 0, 0.85)),
+    0 0 50px light-dark(rgba(10, 126, 164, 0.08), rgba(39, 224, 255, 0.10)),
+    inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.85), rgba(130, 235, 255, 0.18));
   --shadow-bezel-focus:
-    inset 0 2px 8px rgba(0, 0, 0, 0.5),
-    0 0 0 2px rgba(39, 224, 255, 0.4),
-    0 0 18px rgba(39, 224, 255, 0.25);
+    inset 0 2px 8px light-dark(rgba(20, 70, 110, 0.08), rgba(0, 0, 0, 0.5)),
+    0 0 0 2px light-dark(rgba(10, 126, 164, 0.4), rgba(39, 224, 255, 0.4)),
+    0 0 18px light-dark(rgba(10, 126, 164, 0.2), rgba(39, 224, 255, 0.25));
   --shadow-bubble:
-    inset 0 1px 0 rgba(130, 235, 255, 0.12);
+    inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.6), rgba(130, 235, 255, 0.12));
   --shadow-bubble-user:
-    inset 0 1px 0 rgba(255, 220, 160, 0.22),
-    0 2px 18px rgba(255, 181, 61, 0.18);
+    inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.6), rgba(255, 220, 160, 0.22)),
+    0 2px 18px light-dark(rgba(168, 106, 16, 0.14), rgba(255, 181, 61, 0.18));
+
+  /* Chat desktop frame (ChatContainer md:[box-shadow:…]) */
+  --shadow-chat-frame:
+    0 0 50px light-dark(rgba(10, 126, 164, 0.08), rgba(39, 224, 255, 0.08)),
+    inset 0 0 60px light-dark(rgba(200, 225, 240, 0.35), rgba(6, 12, 26, 0.6));
 }
 
 /* ── Custom theme tokens ──────────────────────────────────────────────────── */
@@ -463,9 +465,9 @@
    at the base — mirrors the reference's radial+linear stack. */
 @utility hud-void-bg {
   background:
-    radial-gradient(circle at 50% 52%, rgba(39, 150, 224, 0.13), transparent 40%),
-    radial-gradient(circle at 50% 92%, rgba(255, 160, 50, 0.06), transparent 30%),
-    linear-gradient(180deg, #050610 0%, #0a0817 48%, #04030a 100%);
+    radial-gradient(circle at 50% 52%, light-dark(rgba(10, 126, 164, 0.08), rgba(39, 150, 224, 0.13)), transparent 40%),
+    radial-gradient(circle at 50% 92%, light-dark(rgba(168, 106, 16, 0.05), rgba(255, 160, 50, 0.06)), transparent 30%),
+    linear-gradient(180deg, light-dark(#f2f7fa, #050610) 0%, light-dark(#e9f1f6, #0a0817) 48%, light-dark(#e2edf4, #04030a) 100%);
 }
 
 /* CRT scanline + vignette overlay. Drop on any positioned element; it paints
@@ -479,12 +481,20 @@
     z-index: 6;
     pointer-events: none;
     background:
-      linear-gradient(rgba(150, 220, 255, 0.025) 50%, rgba(0, 0, 0, 0.07) 50%),
-      radial-gradient(circle at 50% 48%, transparent 0 54%, rgba(0, 0, 0, 0.4) 94%);
+      linear-gradient(light-dark(rgba(10, 90, 130, 0.04), rgba(150, 220, 255, 0.025)) 50%, light-dark(transparent, rgba(0, 0, 0, 0.07)) 50%),
+      radial-gradient(circle at 50% 48%, transparent 0 54%, light-dark(rgba(30, 70, 100, 0.10), rgba(0, 0, 0, 0.4)) 94%);
     background-size: 100% 4px, 100% 100%;
-    mix-blend-mode: screen;
+    /* mix-blend screen only works over the dark void; light relies on the
+       low-alpha colors with normal blending */
+    mix-blend-mode: normal;
     opacity: 0.5;
   }
+}
+
+/* Preserve the original CRT screen-blend on the dark void (forced or OS dark). */
+:root.dark .hud-scanlines::before { mix-blend-mode: screen; }
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .hud-scanlines::before { mix-blend-mode: screen; }
 }
 
 /* Corner-bracket glass panel — the reference .hud-box generalized. Dim hairline
@@ -494,13 +504,13 @@
   --hud-accent: var(--hud-cyan);
   --hud-accent-soft: var(--hud-cyan-soft);
   position: relative;
-  border: 1px solid rgba(120, 200, 255, 0.2);
+  border: 1px solid light-dark(rgba(10, 90, 130, 0.28), rgba(120, 200, 255, 0.2));
   border-left: 2.5px solid var(--hud-accent-soft);
-  background: linear-gradient(180deg, rgba(4, 10, 22, 0.9), rgba(6, 8, 20, 0.78));
+  background: linear-gradient(180deg, light-dark(rgba(255, 255, 255, 0.82), rgba(4, 10, 22, 0.9)), light-dark(rgba(244, 250, 253, 0.7), rgba(6, 8, 20, 0.78)));
   backdrop-filter: saturate(150%) blur(14px);
   -webkit-backdrop-filter: saturate(150%) blur(14px);
   box-shadow:
-    0 0 0 1px rgba(39, 224, 255, 0.05),
+    0 0 0 1px light-dark(rgba(10, 126, 164, 0.06), rgba(39, 224, 255, 0.05)),
     0 0 26px color-mix(in srgb, var(--hud-accent) 18%, transparent),
     inset 0 0 24px color-mix(in srgb, var(--hud-accent) 5%, transparent);
 
@@ -527,12 +537,12 @@
 /* Retune the send orb to arc-reactor cyan inside the HUD theme. Plain rule
    (outside @layer) so it wins over the layered orb-button utility. */
 .hud-theme .orb-button {
-  background: rgba(40, 200, 255, 0.12);
+  background: light-dark(rgba(10, 126, 164, 0.10), rgba(40, 200, 255, 0.12));
   box-shadow:
-    0 0 16px rgba(39, 224, 255, 0.45),
-    inset 0 0 0 1px rgba(120, 230, 255, 0.7),
+    0 0 16px light-dark(rgba(10, 126, 164, 0.35), rgba(39, 224, 255, 0.45)),
+    inset 0 0 0 1px light-dark(rgba(10, 126, 164, 0.6), rgba(120, 230, 255, 0.7)),
     inset 0 1px 2px rgba(255, 255, 255, 0.5),
-    inset 0 -6px 10px rgba(20, 90, 140, 0.3);
+    inset 0 -6px 10px light-dark(rgba(20, 90, 140, 0.15), rgba(20, 90, 140, 0.3));
 }
 
 .hud-theme .typing-dot {

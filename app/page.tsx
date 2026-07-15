@@ -71,14 +71,14 @@ export default async function Home() {
       <HudBackground variant="full" />
 
       <div className="absolute top-[max(1.25rem,env(safe-area-inset-top))] right-4 sm:right-6 z-20">
-        <UserMenu user={user} hideThemeToggle />
+        <UserMenu user={user} />
       </div>
 
       {/* Hero wordmark — top-center, over the lattice */}
       <div className="absolute inset-x-0 top-[max(3.5rem,env(safe-area-inset-top))] z-10 flex flex-col items-center gap-2 px-4 text-center">
         <h1
           className="font-hud text-[26px] sm:text-[34px] font-bold uppercase tracking-[0.42em] text-ink animate-hud-flicker motion-reduce:animate-none"
-          style={{ textShadow: "0 0 22px rgba(39,224,255,0.45)" }}
+          style={{ textShadow: "0 0 22px color-mix(in srgb, var(--hud-cyan) 45%, transparent)" }}
         >
           Jarvis
         </h1>
@@ -118,7 +118,7 @@ export default async function Home() {
       {/* Footer */}
       <p
         className="absolute inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-10 px-4 text-center font-hud text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.5em]"
-        style={{ color: "rgba(116, 233, 255, 0.55)", textShadow: "0 0 14px rgba(39,224,255,0.5)" }}
+        style={{ color: "var(--accent-text)", textShadow: "0 0 14px color-mix(in srgb, var(--hud-cyan) 50%, transparent)" }}
       >
         JARVIS · Assistente de dados da SECOM
       </p>

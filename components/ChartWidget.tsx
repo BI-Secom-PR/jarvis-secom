@@ -3,6 +3,7 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { ChartData, ScatterPoint } from "@/types/chat";
 import { getChartPalette } from "@/lib/exports/chart-palette";
+import { useIsDark } from "@/lib/useIsDark";
 
 interface Props {
   chart: ChartData;
@@ -44,28 +45,6 @@ interface SeriesPoint {
 }
 
 interface GeoFeature { type: string; properties?: Record<string, unknown>; geometry: unknown }
-
-function useIsDark(): boolean {
-  // .hud-theme on <body> forces dark visuals app-wide regardless of html class / OS scheme
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof document === "undefined") return true;
-    if (document.body?.classList.contains("hud-theme")) return true;
-    const cls = document.documentElement.classList;
-    return cls.contains("dark") || (!cls.contains("light") && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  });
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const compute = () => setIsDark(document.body.classList.contains("hud-theme") || root.classList.contains("dark") || (!root.classList.contains("light") && mq.matches));
-    mq.addEventListener("change", compute);
-    const obs = new MutationObserver(compute);
-    obs.observe(root, { attributes: true, attributeFilter: ["class"] });
-    return () => { mq.removeEventListener("change", compute); obs.disconnect(); };
-  }, []);
-
-  return isDark;
-}
 
 function formatCompact(v: number): string {
   const abs = Math.abs(v);

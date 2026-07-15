@@ -3,9 +3,9 @@
  * Drop inside any `relative` element. Accent is cyan, gold, or violet.
  */
 const ACCENT_COLORS = {
-  cyan: "rgba(39,224,255,0.55)",
-  gold: "rgba(255,181,61,0.55)",
-  violet: "rgba(129,140,248,0.55)",
+  cyan: "color-mix(in srgb, var(--hud-cyan) 55%, transparent)",
+  gold: "color-mix(in srgb, var(--hud-gold) 55%, transparent)",
+  violet: "color-mix(in srgb, var(--hud-violet) 55%, transparent)",
 } as const;
 
 export default function HudCorners({

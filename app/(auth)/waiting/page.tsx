@@ -10,7 +10,7 @@ export default function WaitingPage() {
         <div className="w-12 h-12 rounded-full bg-accent-soft border-[0.5px] border-accent-border flex items-center justify-center mx-auto mb-4 text-2xl">
           ⏳
         </div>
-        <h1 className="font-hud text-[15px] uppercase tracking-[0.18em] text-ink mb-2.5" style={{ textShadow: '0 0 12px rgba(39,224,255,0.35)' }}>
+        <h1 className="font-hud text-[15px] uppercase tracking-[0.18em] text-ink mb-2.5" style={{ textShadow: '0 0 12px color-mix(in srgb, var(--hud-cyan) 35%, transparent)' }}>
           Aguardando aprovação
         </h1>
         <p className="text-sm text-ink-2 leading-relaxed">
