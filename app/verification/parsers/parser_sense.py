@@ -27,7 +27,7 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
-import openpyxl
+import fastxlsx
 
 from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename
 
@@ -172,7 +172,7 @@ def parse_comprovante(
     if not path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
 
-    wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+    wb = fastxlsx.load_workbook(path)
     try:
         # Prefer Contabilizações (C1/C4); else multi TOTAL/PLACEMENT; else first sheet
         daily_sheets = [ws for ws in wb.worksheets if "contabiliza" in ws.title.lower()]
@@ -225,7 +225,7 @@ def _parse_comprovante_daily(
 ) -> list[dict]:
     """C1/C4: sheet Contabilizações, linhas diárias, 1 veículo por arquivo."""
     path = Path(filepath)
-    wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+    wb = fastxlsx.load_workbook(path)
 
     sheets = [ws for ws in wb.worksheets if "contabiliza" in ws.title.lower()]
     if not sheets:
@@ -346,7 +346,7 @@ def _parse_comprovante_multi(
     """
     del data_ini, data_fim  # explicit: multi export has no daily grain
     path = Path(filepath)
-    wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+    wb = fastxlsx.load_workbook(path)
 
     multi_sheets = [
         ws for ws in wb.worksheets
@@ -445,7 +445,7 @@ def parse_verif(
     if not path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
 
-    wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+    wb = fastxlsx.load_workbook(path)
 
     # Prefer RELATÓRIO SIMPLIFICADO; else first sheet with valid header
     preferred = [

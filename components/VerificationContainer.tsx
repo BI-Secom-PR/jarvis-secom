@@ -402,20 +402,36 @@ export default function VerificationContainer() {
         const allFiles = [consolidado[0], ...comprovantes, ...verifs];
         setUploadProgress({ done: 0, total: allFiles.length });
 
+        const uploadedUrls: string[] = [];
         const blobUpload = async (file: File) => {
           const blob = await upload(file.name, file, {
             access: "private",
             handleUploadUrl: "/api/verification/blob-upload",
           });
+          uploadedUrls.push(blob.url);
           setUploadProgress((p) => p && { ...p, done: p.done + 1 });
           return blob.url;
         };
 
-        const consolidadoUrl = await blobUpload(consolidado[0]);
+        let consolidadoUrl: string;
         const compUrls: string[] = [];
-        for (const f of comprovantes) compUrls.push(await blobUpload(f));
         const verifUrls: string[] = [];
-        for (const f of verifs) verifUrls.push(await blobUpload(f));
+        try {
+          consolidadoUrl = await blobUpload(consolidado[0]);
+          for (const f of comprovantes) compUrls.push(await blobUpload(f));
+          for (const f of verifs) verifUrls.push(await blobUpload(f));
+        } catch (err) {
+          // Batch failed mid-way — delete the blobs already uploaded, or they
+          // leak (server-side cleanup only starts once /run receives the URLs).
+          if (uploadedUrls.length) {
+            void fetch("/api/verification/blob-upload", {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ urls: uploadedUrls }),
+            }).catch(() => {});
+          }
+          throw err;
+        }
         setUploadProgress(null);
         setProgressPct(8);
         setProgressLabel('Aguardando processamento...');

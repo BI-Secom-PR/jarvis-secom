@@ -222,15 +222,20 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as BlobBody;
 
     const { adserver, consolidado_url, consolidado_name, comp_urls, verif_urls = [] } = body;
-    if (!adserver)          return NextResponse.json({ error: 'Adserver não informado.' }, { status: 400 });
-    if (!consolidado_url)   return NextResponse.json({ error: 'Arquivo consolidado não enviado.' }, { status: 400 });
-    if (!comp_urls?.length) return NextResponse.json({ error: 'Nenhum comprovante enviado.' }, { status: 400 });
+    const allBlobUrls = [consolidado_url, ...(comp_urls ?? []), ...verif_urls].filter(Boolean);
+    // Blobs are already uploaded by the client at this point — delete them on
+    // validation failure too, or they leak into the (free-tier) Blob store.
+    const reject = async (msg: string) => {
+      await del(allBlobUrls).catch(() => {});
+      return NextResponse.json({ error: msg }, { status: 400 });
+    };
+    if (!adserver)          return reject('Adserver não informado.');
+    if (!consolidado_url)   return reject('Arquivo consolidado não enviado.');
+    if (!comp_urls?.length) return reject('Nenhum comprovante enviado.');
     const adserverErr = validateAdserver(adserver);
-    if (adserverErr) return NextResponse.json({ error: adserverErr }, { status: 400 });
-    if (body.ini) { const e = validateDate('ini', body.ini); if (e) return NextResponse.json({ error: e }, { status: 400 }); }
-    if (body.fim) { const e = validateDate('fim', body.fim); if (e) return NextResponse.json({ error: e }, { status: 400 }); }
-
-    const allBlobUrls = [consolidado_url, ...comp_urls, ...verif_urls];
+    if (adserverErr) return reject(adserverErr);
+    if (body.ini) { const e = validateDate('ini', body.ini); if (e) return reject(e); }
+    if (body.fim) { const e = validateDate('fim', body.fim); if (e) return reject(e); }
     const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
     // proxy.ts gates /api/py/: shared secret when configured, else the
     // forwarded session cookie satisfies the token-presence check.
