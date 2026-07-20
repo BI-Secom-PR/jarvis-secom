@@ -5,7 +5,7 @@ import { eq, and, ne } from 'drizzle-orm'
 import { cookies } from 'next/headers'
 import { db } from '@/lib/db'
 import { users, sessions } from '@/lib/db/schema'
-import { getSession, BCRYPT_ROUNDS, SESSION_COOKIE } from '@/lib/auth'
+import { getSession, BCRYPT_ROUNDS, SESSION_COOKIE, weakPasswordReason } from '@/lib/auth'
 import { rateLimit, clientIp, tooManyRequests } from '@/lib/rateLimit'
 
 const schema = z.object({
@@ -29,6 +29,9 @@ export async function POST(req: NextRequest) {
   }
 
   const { currentPassword, newPassword } = parsed.data
+
+  const weakReason = weakPasswordReason(newPassword, session.email)
+  if (weakReason) return NextResponse.json({ error: weakReason }, { status: 400 })
 
   const rows = await db
     .select({ passwordHash: users.passwordHash })

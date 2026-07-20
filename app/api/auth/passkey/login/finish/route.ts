@@ -57,7 +57,11 @@ export async function POST(req: NextRequest) {
       requireUserVerification: false,
     })
   } catch (err) {
-    return NextResponse.json({ error: 'Verificação falhou.', detail: String(err) }, { status: 401 })
+    console.error('[passkey/login/finish] verification error:', err)
+    return NextResponse.json(
+      { error: 'Verificação falhou.', ...(IS_PROD ? {} : { detail: String(err) }) },
+      { status: 401 },
+    )
   }
 
   if (!verification.verified) {

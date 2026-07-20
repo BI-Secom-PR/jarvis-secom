@@ -6,6 +6,8 @@ import { db } from '@/lib/db'
 import { users, passkeyCredentials } from '@/lib/db/schema'
 import { RP_ID, ORIGIN, verifyChallengeToken } from '@/lib/webauthn'
 
+const IS_PROD = process.env.NODE_ENV === 'production'
+
 export async function POST(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
@@ -37,7 +39,11 @@ export async function POST(req: NextRequest) {
       requireUserVerification: false,
     })
   } catch (err) {
-    return NextResponse.json({ error: 'Verificação falhou.', detail: String(err) }, { status: 400 })
+    console.error('[passkey/register/finish] verification error:', err)
+    return NextResponse.json(
+      { error: 'Verificação falhou.', ...(IS_PROD ? {} : { detail: String(err) }) },
+      { status: 400 },
+    )
   }
 
   if (!verification.verified || !verification.registrationInfo) {

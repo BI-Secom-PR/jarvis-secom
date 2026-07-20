@@ -3,7 +3,7 @@ import { z } from 'zod/v3'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
-import { BCRYPT_ROUNDS } from '@/lib/auth'
+import { BCRYPT_ROUNDS, weakPasswordReason } from '@/lib/auth'
 import { rateLimit, clientIp, tooManyRequests } from '@/lib/rateLimit'
 
 const schema = z.object({
@@ -24,6 +24,9 @@ export async function POST(req: NextRequest) {
 
   const { email, name, password } = parsed.data
   const normalizedEmail = email.toLowerCase()
+
+  const weakReason = weakPasswordReason(password, normalizedEmail)
+  if (weakReason) return NextResponse.json({ error: weakReason }, { status: 400 })
 
   // Hash unconditionally and respond identically whether the e-mail is new or
   // already registered — prevents account enumeration via response or timing.

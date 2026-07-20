@@ -10,6 +10,23 @@ import type { User } from '@/lib/db/schema'
 export const SESSION_COOKIE = 'jarvis_session_token'
 export const BCRYPT_ROUNDS = 12
 
+// A handful of the most-guessed passwords — not a full deny-list (that's
+// overkill for this app's threat model), just catches the laziest picks.
+const COMMON_PASSWORDS = new Set([
+  '12345678', 'password', 'password1', 'senha1234', 'senha123',
+  '11111111', 'qwertyui', 'admin123', 'abc12345', 'letmein1',
+])
+
+export function weakPasswordReason(password: string, email?: string): string | null {
+  if (email && password.toLowerCase() === email.toLowerCase()) {
+    return 'A senha não pode ser igual ao e-mail.'
+  }
+  if (COMMON_PASSWORDS.has(password.toLowerCase())) {
+    return 'Senha muito comum. Escolha outra.'
+  }
+  return null
+}
+
 const SESSION_MAX_AGE_MS  = 30 * 24 * 60 * 60 * 1000 // 30 days (absolute)
 const SESSION_IDLE_MAX_MS = 3 * 24 * 60 * 60 * 1000  // 3 days without activity
 

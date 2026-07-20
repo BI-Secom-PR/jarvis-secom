@@ -14,6 +14,24 @@ export const maxDuration = 300;
 
 const VALID_ADSERVERS = new Set(['00px', 'adforce', 'admotion', 'ahead', 'metrike', 'brz', 'sense']);
 const DATE_RE = /^\d{2}\/\d{2}\/\d{4}$/;
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+// The Python trace is always logged server-side; only echoed to the client
+// (SSE 'error' event) outside prod, where it's a normal debugging aid.
+function describePyError(status: number, pyRespText: string): string {
+  let errText = pyRespText;
+  try {
+    const errJson = JSON.parse(pyRespText) as { error?: string; trace?: string; openpyxl_version?: string; python_version?: string };
+    const meta = [errJson.openpyxl_version && `openpyxl=${errJson.openpyxl_version}`, errJson.python_version && `py=${errJson.python_version.split(' ')[0]}`].filter(Boolean).join(' ');
+    console.error('[verification/run] python engine error:', errJson.error, meta, errJson.trace ?? '');
+    const trace = !IS_PROD && errJson.trace ? `\n${errJson.trace}` : '';
+    errText = `${errJson.error ?? pyRespText}${meta ? ` [${meta}]` : ''}${trace}`;
+  } catch {
+    console.error('[verification/run] python engine error (non-JSON):', pyRespText.slice(0, 2000));
+    if (IS_PROD) errText = 'Erro no engine de verificação.';
+  }
+  return `Python engine error (HTTP ${status}): ${errText}`;
+}
 
 function validateAdserver(adserver: string): string | null {
   return VALID_ADSERVERS.has(adserver) ? null : `Adserver inválido: ${adserver}`;
@@ -293,14 +311,7 @@ export async function POST(req: NextRequest) {
         }
         const pyRespText = await pyResp.text();
         if (!pyResp.ok) {
-          let errText = pyRespText;
-          try {
-            const errJson = JSON.parse(pyRespText) as { error?: string; trace?: string; openpyxl_version?: string; python_version?: string };
-            const meta = [errJson.openpyxl_version && `openpyxl=${errJson.openpyxl_version}`, errJson.python_version && `py=${errJson.python_version.split(' ')[0]}`].filter(Boolean).join(' ');
-            const trace = errJson.trace ? `\n${errJson.trace}` : '';
-            errText = `${errJson.error ?? pyRespText}${meta ? ` [${meta}]` : ''}${trace}`;
-          } catch { /* keep raw body */ }
-          throw new Error(`Python engine error (HTTP ${pyResp.status}): ${errText}`);
+          throw new Error(describePyError(pyResp.status, pyRespText));
         }
         try {
           engineResult = JSON.parse(pyRespText) as Record<string, unknown>;
@@ -378,14 +389,7 @@ export async function POST(req: NextRequest) {
       }
       const pyRespText = await pyResp.text();
       if (!pyResp.ok) {
-        let errText = pyRespText;
-        try {
-          const errJson = JSON.parse(pyRespText) as { error?: string; trace?: string; openpyxl_version?: string; python_version?: string };
-          const meta = [errJson.openpyxl_version && `openpyxl=${errJson.openpyxl_version}`, errJson.python_version && `py=${errJson.python_version.split(' ')[0]}`].filter(Boolean).join(' ');
-          const trace = errJson.trace ? `\n${errJson.trace}` : '';
-          errText = `${errJson.error ?? pyRespText}${meta ? ` [${meta}]` : ''}${trace}`;
-        } catch { /* keep raw body if response is not valid JSON (e.g. Vercel HTML error page) */ }
-        throw new Error(`Python engine error (HTTP ${pyResp.status}): ${errText}`);
+        throw new Error(describePyError(pyResp.status, pyRespText));
       }
       try {
         engineResult = JSON.parse(pyRespText) as Record<string, unknown>;
