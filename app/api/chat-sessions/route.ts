@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { desc, eq } from 'drizzle-orm'
-import { requireAuth } from '@/lib/auth'
+import { requireAuthApi } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { chatSessions } from '@/lib/db/schema'
 
 export async function GET() {
-  const user = await requireAuth()
+  const user = await requireAuthApi()
+  if (user instanceof NextResponse) return user
 
   const list = await db
     .select()
@@ -17,7 +18,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await requireAuth()
+  const user = await requireAuthApi()
+  if (user instanceof NextResponse) return user
   const body = await req.json().catch(() => ({}))
   const title = typeof body.title === 'string' ? body.title : 'Nova conversa'
 

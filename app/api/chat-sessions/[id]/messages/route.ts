@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { and, asc, eq } from 'drizzle-orm'
 import { z } from 'zod/v3'
-import { requireAuth } from '@/lib/auth'
+import { requireAuthApi } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { chatMessages, chatSessions } from '@/lib/db/schema'
 
@@ -24,7 +24,8 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await requireAuth()
+  const user = await requireAuthApi()
+  if (user instanceof NextResponse) return user
   const { id } = await params
 
   const session = await verifyOwnership(id, user.id)
@@ -43,7 +44,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await requireAuth()
+  const user = await requireAuthApi()
+  if (user instanceof NextResponse) return user
   const { id } = await params
 
   const session = await verifyOwnership(id, user.id)

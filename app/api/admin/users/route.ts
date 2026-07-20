@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { asc } from 'drizzle-orm'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdminApi } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 
 export async function GET() {
-  await requireAdmin()
+  const admin = await requireAdminApi()
+  if (admin instanceof NextResponse) return admin
 
   const allUsers = await db
     .select({

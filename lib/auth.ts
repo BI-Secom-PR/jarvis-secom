@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { NextResponse } from 'next/server'
 import { and, eq, gte } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { sessions, users } from '@/lib/db/schema'
@@ -64,5 +65,21 @@ export async function requireAuth(): Promise<SessionUser> {
 export async function requireAdmin(): Promise<SessionUser> {
   const user = await requireAuth()
   if (user.role !== 'ADMIN') redirect('/')
+  return user
+}
+
+// API-route variant: a redirect() response is HTML, which a fetch() caller
+// can't parse as JSON. These return a 401/403 JSON NextResponse instead —
+// check `instanceof NextResponse` and return it straight from the handler.
+export async function requireAuthApi(): Promise<SessionUser | NextResponse> {
+  const user = await getSession()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  return user
+}
+
+export async function requireAdminApi(): Promise<SessionUser | NextResponse> {
+  const user = await requireAuthApi()
+  if (user instanceof NextResponse) return user
+  if (user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   return user
 }

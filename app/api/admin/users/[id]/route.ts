@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod/v3'
 import bcrypt from 'bcryptjs'
 import { eq } from 'drizzle-orm'
-import { requireAdmin, BCRYPT_ROUNDS } from '@/lib/auth'
+import { requireAdminApi, BCRYPT_ROUNDS } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { users, sessions } from '@/lib/db/schema'
 import { sendApprovalEmail } from '@/lib/email'
@@ -20,7 +20,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const admin = await requireAdmin()
+  const admin = await requireAdminApi()
+  if (admin instanceof NextResponse) return admin
   const { id } = await params
 
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { requireAuthApi } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { fileExports } from '@/lib/db/schema'
 import { escapeHtml, wrapPrintableHtml } from '@/lib/exports/html'
@@ -29,7 +29,8 @@ function buildHtml(png: Buffer, title?: string): Buffer {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await requireAuth()
+  const user = await requireAuthApi()
+  if (user instanceof NextResponse) return user
   const body = await req.json().catch(() => null)
   if (!body || typeof body.png !== 'string') {
     return NextResponse.json({ error: 'png (data URL) required' }, { status: 400 })
