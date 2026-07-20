@@ -40,8 +40,18 @@ next-env.d.ts
 # claude code
 .claude/
 
-# data files
-/verification/
+# macOS zip artifacts (found under verification/, e.g. unzipped client deliverables)
+__MACOSX/
+._*
+
+# verification/: real client campaign data (xlsx/pdf deliverables, ~1GB) — keep out of
+# git history; code, docs, and blank templates in this directory ARE tracked
+/verification/ADFORCE/
+/verification/METRIKE/
+/verification/SENSE/
+/verification/Novo Posicionamento Regional Dec 25/
+/verification/comprovantes/
+/verification/verifications_url/
 
 # obsidian vault
 Jarvis_mem/
