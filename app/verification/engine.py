@@ -303,6 +303,7 @@ def _merge_by_veiculo(results: list[dict]) -> dict[str, dict]:
             merged[key] = dict(r)
             merged[key]["indevidas"]         = dict(r.get("indevidas", {}))
             merged[key]["indevidas_cpv"]     = dict(r.get("indevidas_cpv", {}))
+            merged[key]["indevidas_cpm"]     = dict(r.get("indevidas_cpm", {}))
             merged[key]["indevidas_sem_url"] = dict(r.get("indevidas_sem_url", {}))
         else:
             m = merged[key]
@@ -316,6 +317,8 @@ def _merge_by_veiculo(results: list[dict]) -> dict[str, dict]:
                 m["indevidas"][cat] = m["indevidas"].get(cat, 0) + val
             for cat, val in r.get("indevidas_cpv", {}).items():
                 m["indevidas_cpv"][cat] = m["indevidas_cpv"].get(cat, 0) + val
+            for cat, val in r.get("indevidas_cpm", {}).items():
+                m["indevidas_cpm"][cat] = m["indevidas_cpm"].get(cat, 0) + val
             for cat, val in r.get("indevidas_sem_url", {}).items():
                 m["indevidas_sem_url"][cat] = m["indevidas_sem_url"].get(cat, 0) + val
     return merged
@@ -392,6 +395,8 @@ def _compare(
         tipo_compra = consol_row.get("tipo_compra", "")
         if tipo_compra == "CPV" and verif_result.get("indevidas_cpv"):
             verif_indev_raw = verif_result.get("indevidas_cpv", {})
+        elif tipo_compra == "CPM" and verif_result.get("indevidas_cpm"):
+            verif_indev_raw = verif_result.get("indevidas_cpm", {})
         else:
             verif_indev_raw = verif_result.get("indevidas", {})
         verif_indev: dict[str, int] = {}
@@ -648,6 +653,29 @@ def verificar(
     verif_names = list(verif_norm.keys())
     comp_names  = list(comp_norm.keys())
 
+    # ── Override (veiculo_norm, tipo_compra) → comp_norm reconstruído por subconjunto ──
+    # comp_norm blenda todos os rows de comp_raw por veículo, mesmo quando 2+ rows do
+    # MESMO veículo têm tipo_compra real diferente (ex.: um CPM, outro CPV) — caso real
+    # do ADFORCE (consolidado com 2 linhas para o mesmo veículo, uma por objetivo de
+    # mídia). Só ativa quando existe colisão genuína (2+ tipos distintos no comprovante
+    # para aquele veículo); caso contrário comp_norm já está correto e nada muda.
+    comp_raw_by_tipo: dict[tuple, list[dict]] = defaultdict(list)
+    comp_tipos_by_vk: dict[str, set[str]] = defaultdict(set)
+    for r in comp_raw:
+        vk = _normalize(r["veiculo"])
+        tipo = r.get("tipo_compra") or ""
+        if tipo:
+            comp_raw_by_tipo[(vk, tipo)].append(r)
+            comp_tipos_by_vk[vk].add(tipo)
+
+    comp_override_by_tipo: dict[tuple, dict] = {}
+    for vk, tipos in comp_tipos_by_vk.items():
+        if len(tipos) < 2:
+            continue
+        for tipo in tipos:
+            subset = comp_raw_by_tipo[(vk, tipo)]
+            comp_override_by_tipo[(vk, tipo)] = _merge_by_veiculo(subset)[vk]
+
     # ── Mapa de regras de visualização: (veiculo_norm, duracao | None) → criterio
     rule_map: dict[tuple, str] = {}
     for r in (view_rules or []):
@@ -688,7 +716,7 @@ def verificar(
         resultado_veiculos: list[dict] = []
         matched_verif_names: set[str] = set()
         matched_comp_names:  set[str] = set()
-        tipo_by_verif_norm: dict[str, str] = {}
+        tipo_by_verif_norm: dict[str, set[str]] = defaultdict(set)
 
         for crow in consol_rows:
             consol_norm = _normalize(crow["veiculo"])
@@ -697,9 +725,13 @@ def verificar(
             comp_match,  comp_score  = _fuzzy_match(consol_norm, comp_names,  comp_norm)
             verif_match_dif, _       = _fuzzy_match(consol_norm, verif_names_unfiltered, verif_norm_unfiltered)
 
+            if comp_match is not None:
+                override_key = (_normalize(comp_match["veiculo"]), crow.get("tipo_compra", ""))
+                comp_match = comp_override_by_tipo.get(override_key, comp_match)
+
             if verif_match:
                 matched_verif_names.add(_normalize(verif_match["veiculo"]))
-                tipo_by_verif_norm[_normalize(verif_match["veiculo"])] = crow.get("tipo_compra", "")
+                tipo_by_verif_norm[_normalize(verif_match["veiculo"])].add(crow.get("tipo_compra", ""))
             if comp_match:
                 matched_comp_names.add(_normalize(comp_match["veiculo"]))
 
@@ -776,8 +808,15 @@ def verificar(
     # CPM → só URLs com métrica cpm > 0; CPV → só URLs com cpv > 0. Aplica-se
     # apenas quando o verification file traz métricas por URL (ex.: ADFORCE);
     # parsers sem essas colunas não emitem as chaves e passam direto.
+    # Quando um veículo tem 2+ tipos distintos no consolidado (ex.: uma linha CPM
+    # e outra CPV), não dá para atribuir uma URL do pool flat a uma linha
+    # específica — filtrar por um único objetivo derrubaria URLs legítimas do
+    # outro. Nesse caso o filtro é desativado para o veículo (passa tudo).
     def _passa_objetivo(item: dict) -> bool:
-        tipo = tipo_by_verif_norm.get(_normalize(item.get("veiculo", "")), "")
+        tipos = tipo_by_verif_norm.get(_normalize(item.get("veiculo", "")), set())
+        if len(tipos) != 1:
+            return True
+        tipo = next(iter(tipos))
         if tipo == "CPM" and "cpm" in item:
             return (item.get("cpm") or 0) > 0
         if tipo == "CPV" and "cpv" in item:
@@ -789,7 +828,10 @@ def verificar(
     # Para CPM/CPV, o volume relevante da URL é a métrica do objetivo — não o
     # total combinado (que somaria cliques/views de outros objetivos).
     for item in url_pool:
-        tipo = tipo_by_verif_norm.get(_normalize(item.get("veiculo", "")), "")
+        tipos = tipo_by_verif_norm.get(_normalize(item.get("veiculo", "")), set())
+        if len(tipos) != 1:
+            continue
+        tipo = next(iter(tipos))
         if tipo == "CPM" and "cpm" in item:
             item["impressoes"] = item.get("cpm") or 0
         elif tipo == "CPV" and "cpv" in item:
