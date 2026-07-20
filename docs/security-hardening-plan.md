@@ -125,11 +125,13 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 3. Não quebrar `tooManyRequests` / header `Retry-After`.
 4. Documentar vars no README / env example (sem secrets).
 
+**Status:** BLOQUEADO — sem `UPSTASH_REDIS_REST_URL`/`TOKEN` em `.env.local` e sem client Redis instalado. Provisionar é decisão de infra do usuário; não instalar dependência nem credenciais especulativamente. P1.2–P1.5 seguiram no Map in-memory como o próprio plano sugeria ("ou issue se credencial não pronta → P1.2/1.4 no Map primeiro").
+
 **Validar**
 
-- [ ] Duas “instâncias” (ou dois deploys) compartilham contagem em login.
-- [ ] Local sem Redis ainda limita (Map).
-- [ ] 429 com `Retry-After` legível.
+- [x] Local sem Redis ainda limita (Map). (todo P1.2–P1.4 live-testado sobre o Map atual)
+- [ ] Duas “instâncias” (ou dois deploys) compartilham contagem em login. (precisa do backend Redis/KV)
+- [ ] 429 com `Retry-After` legível — testado no Map, falta confirmar contrato igual no backend Redis quando existir.
 
 ---
 
@@ -150,9 +152,9 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 
 **Validar**
 
-- [ ] 6ª tentativa no mesmo IP+email → 429.
-- [ ] 11ª falha no mesmo email com IPs diferentes (simular headers se possível) → 429 na key global.
-- [ ] E-mail inexistente e senha errada: resposta idêntica e latência similar.
+- [x] 6ª tentativa no mesmo IP+email → 429. (comportamento pré-existente, ainda ok)
+- [x] 11ª falha no mesmo email com IPs diferentes (`X-Forwarded-For` simulado) → 429 na key global. (live-tested: 11 IPs distintos, 429 exatamente na 11ª)
+- [x] E-mail inexistente: antes retornava quase instantâneo (DUMMY_HASH malformado, bcrypt.compare em ~0ms) — bug real de timing oracle confirmado e corrigido; agora ~300-600ms, igual a uma comparação real. (live-tested)
 
 ---
 
@@ -169,9 +171,9 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 
 **Validar**
 
-- [ ] Senha errada 6× → 429.
-- [ ] Troca ok → sessão em outro browser cai; browser atual continua ou reloga limpo.
-- [ ] Admin reset (já revoga) não regrediu.
+- [x] Senha errada 6× → 429. (live-tested com sessões reais)
+- [x] Troca ok → sessão em outro browser (token2) cai (307/redirect); browser atual (token1) continua autenticado. (live-tested: 2 sessões reais no mesmo user, revogação seletiva confirmada)
+- [ ] Admin reset (já revoga) não regrediu — não retestado nesta rodada (não foi tocado).
 
 ---
 
@@ -189,9 +191,9 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 
 **Validar**
 
-- [ ] Chat normal funciona.
-- [ ] TTS com texto enorme → 400.
-- [ ] Rajada de chat → 429 sem estourar cota Google/Ollama.
+- [x] Chat normal funciona. (live-tested: "responda apenas OK" e uma pergunta real com SQL, ambas OK)
+- [x] TTS com texto enorme → 400. (live-tested)
+- [x] Rajada de chat → 429 sem estourar cota Google/Ollama. (live-tested: 21ª chamada bloqueada; mesmo padrão confirmado em tts 11ª, ai-filter 31ª, verification/run 6ª)
 
 ---
 
@@ -217,11 +219,11 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 
 **Validar**
 
-- [ ] `SELECT … FROM gold_campaigns_classified` → ok.
-- [ ] `SELECT … FROM silver_social_comments` → rejeitado.
-- [ ] `SELECT … FROM gold_x; DROP…` → rejeitado.
-- [ ] Query com comentário `--` → rejeitado.
-- [ ] Chat real de performance ainda funciona (few-shots do agent).
+- [x] `SELECT … FROM gold_campaigns_classified` → ok. (todos os 41 exemplos reais extraídos de lib/agent.ts passam)
+- [x] `SELECT … FROM silver_social_comments` → rejeitado. (+ 18 outros probes maliciosos: UNION, INFORMATION_SCHEMA, mysql./sys./performance_schema, SLEEP/BENCHMARK, OUTFILE/LOAD_FILE, gold_platforms_)
+- [x] `SELECT … FROM gold_x; DROP…` → rejeitado.
+- [x] Query com comentário `--` → rejeitado. (achou 1 falso-positivo real: exemplo #20 do agent.ts tinha um `-- usar ASC` dentro da própria query SQL; corrigido movendo a nota pra fora do SQL, não afrouxando o guard)
+- [x] Chat real de performance ainda funciona (few-shots do agent). (live-tested via /api/chat real: log do servidor mostra a query gerada pelo modelo passando por assertSafeQuery() e executando)
 
 ---
 
@@ -327,11 +329,11 @@ Manhã
   [ ] Smoke: verification Blob em staging/prod preview — pendente (precisa de env com BLOB_READ_WRITE_TOKEN real)
 
 Tarde
-  [ ] P1.1 Rate limit Redis/KV (ou issue se credencial não pronta → P1.2/1.4 no Map primeiro)
-  [ ] P1.2 Login global + dummy hash
-  [ ] P1.3 Change-password
-  [ ] P1.4 Caps chat/tts/verification
-  [ ] P1.5 lib/sqlGuard.ts + wiring
+  [ ] P1.1 Rate limit Redis/KV — BLOQUEADO (sem credencial Upstash/KV); seguiu no Map como o próprio plano previa
+  [x] P1.2 Login global + dummy hash
+  [x] P1.3 Change-password
+  [x] P1.4 Caps chat/tts/verification
+  [x] P1.5 lib/sqlGuard.ts + wiring
 
 Se sobrar
   [ ] P2.1 requireAuthApi
@@ -343,12 +345,12 @@ Se sobrar
 
 ## Critérios de “done” do dia
 
-- [ ] Nenhuma URL arbitrária é fetchada pelo verification com Bearer do Blob.
-- [ ] Nenhum path de upload usa `file.name` cru.
-- [ ] Login tem limite por conta (não só IP+email).
-- [ ] Chat/TTS/verification têm teto de abuso.
-- [ ] SQL do agente rejeita `silver_*` e multi-statement no código.
-- [ ] Smoke manual: login, 1 chat com gráfico, 1 verification (adserver de teste), change-password.
+- [x] Nenhuma URL arbitrária é fetchada pelo verification com Bearer do Blob.
+- [x] Nenhum path de upload usa `file.name` cru.
+- [x] Login tem limite por conta (não só IP+email).
+- [x] Chat/TTS/verification têm teto de abuso.
+- [x] SQL do agente rejeita `silver_*` e multi-statement no código.
+- [ ] Smoke manual: login, 1 chat com gráfico, 1 verification (adserver de teste), change-password. (chat + change-password + verification/DELETE cobertos via live-verify pontual; falta um passe manual pela UI real no browser e 1 verification ponta-a-ponta com xlsx real)
 
 ---
 
