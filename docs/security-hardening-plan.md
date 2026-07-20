@@ -51,10 +51,10 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 
 **Validar**
 
-- [ ] URL legítima de Blob → verification roda.
-- [ ] `https://example.com/x` → 400, sem download.
-- [ ] `http://169.254.169.254/` → 400.
-- [ ] Com URL atacante: logs/proxy **não** mostram request com Bearer do blob token.
+- [x] `https://example.com/x` → 400, sem download. (live-tested against dev server 2026-07-20)
+- [x] `http://169.254.169.254/` → 400. (live-tested)
+- [x] Com URL atacante: resposta 400 instantânea, sem round-trip de rede — nenhum fetch disparado.
+- [ ] URL legítima de Blob → verification roda ponta-a-ponta. (precisa de upload real via staging/preview com `BLOB_READ_WRITE_TOKEN` configurado — não testável em dev local)
 
 ---
 
@@ -76,8 +76,8 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 
 **Validar**
 
-- [ ] Upload normal de xlsx → engine OK.
-- [ ] Nome `../../tmp-escape.xlsx` → grava só dentro do `secom-verif-*` tmp.
+- [x] Nome de arquivo com traversal (`../../../../../../tmp/marker.xlsx`) → grava só dentro do `secom-verif-*` tmp; nenhum arquivo aparece fora (live-tested via multipart real contra dev server + controle com nome normal para confirmar que o erro "not a zip file" vem do conteúdo dummy, não do sanitizer).
+- [ ] Upload normal de xlsx real (não dummy) → engine OK ponta-a-ponta. (não testado com xlsx válido nesta rodada — só a sanitização de path foi verificada)
 
 ---
 
@@ -95,9 +95,12 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 
 **Validar**
 
-- [ ] DELETE de URL própria / allowlisted → ok.
-- [ ] DELETE de `https://evil.com` → 400.
-- [ ] Sem sessão → 401.
+- [x] DELETE de URL allowlisted (host Blob) → 200 `{ok:true}`. (live-tested)
+- [x] DELETE de `https://evil.example.com` → 400. (live-tested)
+- [x] DELETE de URL `http://` (mesmo host, protocolo errado) → 400. (live-tested)
+- [x] Sem sessão → 401. (live-tested)
+- [x] 21ª chamada em 60s na mesma sessão → 429. (live-tested: 20 passam, 21ª bloqueia)
+- [ ] Prefixo por `userId` (ownership real) — não implementado nesta rodada; ficou como Tier B / P1-P2 (ver nota abaixo).
 
 ---
 
@@ -318,10 +321,10 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 
 ```text
 Manhã
-  [ ] P0.1 Allowlist Blob + token
-  [ ] P0.2 Basename / UUID nos paths
-  [ ] P0.3 DELETE blobs
-  [ ] Smoke: verification Blob em staging/prod preview
+  [x] P0.1 Allowlist Blob + token — `lib/blobUrl.ts` + mirror em `api/py/verification.py`
+  [x] P0.2 Basename nos paths (TS + Python) — path.basename/os.path.basename, sem UUID-rename (preserva nome de saída/erros)
+  [x] P0.3 DELETE blobs — allowlist de host + rate limit 20/min/sessão (ownership por userId ficou pra depois)
+  [ ] Smoke: verification Blob em staging/prod preview — pendente (precisa de env com BLOB_READ_WRITE_TOKEN real)
 
 Tarde
   [ ] P1.1 Rate limit Redis/KV (ou issue se credencial não pronta → P1.2/1.4 no Map primeiro)
