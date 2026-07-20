@@ -238,7 +238,9 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 - `requireAuthApi()` → 401 JSON se sem sessão (em vez de `redirect('/login')`).
 - Migrar: `chat-sessions/*`, `exports/*`, admin se aplicável.
 
-**Validar:** `curl` sem cookie em `/api/chat-sessions` → `401` JSON, não HTML do login.
+**Status:** feito. Migrado: `chat-sessions/*`, `admin/users/*`, `exports/from-image`. **`exports/[id]` deliberadamente deixado em `requireAuth()`** — é aberto via `window.open()` (navegação direta, confirmado por grep em `ChartWidget.tsx`), onde um redirect pro `/login` é a UX certa e um JSON cru seria pior.
+
+**Validar:** ✅ `curl` sem cookie → o middleware (`proxy.ts`) já 401a antes da rota rodar (não era o gap real). O gap real é cookie **presente mas inválido** (sessão expirada/revogada): testado com token forjado — rotas migradas voltam 401 JSON; `exports/[id]` (não tocado, controle) volta um 307 real com content-type vazio, confirmando que o bug era real e o fix tem o escopo certo.
 
 ---
 
@@ -252,6 +254,8 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 - Opcional: prefixo `__Host-jarvis_session` (exige secure + path `/` + sem Domain) — só se não quebrar deploys multi-host.
 - Não setar `Domain=.algo.com` aberto.
 
+**Status:** já estava correto, nada pra mudar. `httpOnly`/`secure` (prod)/`sameSite: 'lax'`/`path: '/'` presentes em login e passkey finish; `grep domain:` não encontrou nada. `__Host-` prefix **deliberadamente pulado**: exige `Secure` sempre, o que quebraria dev local (HTTP puro) e possíveis deploys on-prem sem TLS — ganho marginal dado que já não há `Domain` aberto.
+
 ---
 
 ### P2.3 — Passkey: user verification
@@ -262,6 +266,8 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 
 - `requireUserVerification: true` se os devices SECOM suportarem (testar YubiKey/Touch ID/Windows Hello).
 - Se UX quebrar em algum notebook corporativo, documentar exceção e manter false só em dev.
+
+**Status:** PULADO por decisão do usuário — muda comportamento real de verificação WebAuthn pra quem já tem passkey cadastrada; sem hardware real (YubiKey/Touch ID/Windows Hello) pra testar aqui, o risco de travar alguém não compensa. Continua `userVerification: 'preferred'` (start) / `requireUserVerification: false` (finish) nos 4 arquivos (`register/start`, `register/finish`, `login/start`, `login/finish`). Retomar quando houver hardware real pra validar.
 
 ---
 
@@ -276,6 +282,10 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 - Opcional: lista curta de senhas proibidas (`12345678`, `password`, `senha1234`).
 - Não bloquear caracteres especiais (bcrypt trunca em 72 bytes — documentar).
 
+**Status:** feito em `register` + `change-password` via `weakPasswordReason()` em `lib/auth.ts` (senha==email + lista curta de 10 senhas comuns). **Admin password patch deliberadamente não tocado** — reset de senha por admin é ação confiável, não é o vetor de abuso que essa regra mira.
+
+**Validar:** ✅ live-tested no `/api/auth/register` real: `password === email` → 400; `password1` → 400; senha forte → 201.
+
 ---
 
 ### P2.5 — Menos vazamento em erros/logs
@@ -288,6 +298,10 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 - Passkey: não devolver `detail: String(err)` cru.
 - Chat: `console.log('[SQL]')` → em prod logar hash/length ou desligar; evitar PII em plain text.
 
+**Status:** feito em `verification/run/route.ts` (`describePyError()`, trace só fora de prod, sempre logado no server) e nos dois passkey finish routes (`detail` só fora de prod). `console.log('[SQL]')` revisado e **deixado como está** — só server-side, sem credenciais/PII, SQL gerado pela IA não é input cru do usuário.
+
+**Validar:** lógica do `IS_PROD ? {} : {detail}` confirmada (node -e). Caminho completo (`/api/py/verification` retornando erro real) não testável em dev local — precisa de deploy Vercel/preview; não bloqueante pro merge, mas falta smoke em staging.
+
 ---
 
 ### P2.6 — Middleware `/api/verification`
@@ -299,6 +313,8 @@ Vazamento de token / SSRF e path traversal: um usuário autenticado já consegue
 - Hoje verification é “public” no matcher e confia no `getSession` da rota.
 - Opção A (mínima): comentário + checklist para nunca esquecer `getSession`.
 - Opção B: **remover** `/api/verification/` da lista pública e exigir cookie no edge (Blob webhook de upload-completed já é assinado — confirmar que não quebra).
+
+**Status:** Opção A escolhida. `blob-upload`'s POST dobra como webhook assinado do Vercel (sem cookie de sessão por design) — gatear no edge quebraria upload de blob. Ambas as rotas já chamam `getSession()` internamente (confirmado por leitura); comentário adicionado em `proxy.ts` documentando o contrato e apontando pra este doc.
 
 **Validar:** unauthenticated POST `/api/verification/run` → 401 em qualquer camada.
 
@@ -336,9 +352,13 @@ Tarde
   [x] P1.5 lib/sqlGuard.ts + wiring
 
 Se sobrar
-  [ ] P2.1 requireAuthApi
-  [ ] P2.5 Erros/logs
-  [ ] Commit/PR com nota de segurança
+  [x] P2.1 requireAuthApi
+  [x] P2.2 Cookie de sessão (já estava ok)
+  [ ] P2.3 Passkey user verification — PULADO, precisa hardware real pra testar
+  [x] P2.4 Política de senha leve
+  [x] P2.5 Erros/logs
+  [x] P2.6 Middleware /api/verification (Opção A: comentário)
+  [ ] Commit/PR com nota de segurança — 3 branches locais (`security/p0-ssrf-upload`, `security/p1-rate-limit-auth`, `security/p2-polish`), nada pushed ainda
 ```
 
 ---
