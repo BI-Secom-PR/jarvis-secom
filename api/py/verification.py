@@ -21,11 +21,33 @@ import json
 import os
 import shutil
 import sys
+import re
 import tempfile
 import urllib.request
 from datetime import date
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+from urllib.parse import urlparse
+
+# Mirrors lib/blobUrl.ts — defense in depth, don't trust that Node already validated.
+_BLOB_HOST_RE = re.compile(r"^[a-z0-9]+\.(public\.)?blob\.vercel-storage\.com$", re.IGNORECASE)
+
+
+def _is_allowed_blob_url(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    return parsed.scheme == "https" and bool(_BLOB_HOST_RE.match(parsed.hostname or ""))
+
+
+def _safe_filename(name: str) -> str:
+    """Strip any directory component from a client-supplied filename before it's
+    joined into a filesystem path — blocks `../../x` traversal out of tmpdir."""
+    base = os.path.basename(name or "")
+    if not base or base in (".", "..") or ".." in base:
+        raise ValueError(f"Nome de arquivo inválido: {name!r}")
+    return base
 
 # ── Path setup — engine.py lives at app/verification/ relative to repo root ──
 _ROOT = str(Path(__file__).parent.parent.parent)
@@ -77,6 +99,8 @@ def _patch_openpyxl_colors():
 def _download_url(url: str, dest: str, token: str | None = None) -> None:
     """Download a file from a URL (e.g. Vercel Blob) to a local path.
     If token is provided, sends it as a Bearer Authorization header."""
+    if not _is_allowed_blob_url(url):
+        raise ValueError(f"URL não permitida (host fora da allowlist de Blob): {url}")
     if token:
         req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
         with urllib.request.urlopen(req) as resp, open(dest, "wb") as f:
@@ -96,7 +120,7 @@ def _run_engine(body: dict) -> dict:
     tmpdir = tempfile.mkdtemp(prefix="secom-verif-")
     try:
         # Save consolidado — supports both blob URL and legacy base64
-        consol_name = body.get("consolidado_name", "consolidado.xlsx")
+        consol_name = _safe_filename(body.get("consolidado_name", "consolidado.xlsx"))
         consol_path = os.path.join(tmpdir, consol_name)
         if "consolidado_url" in body:
             _download_url(body["consolidado_url"], consol_path, blob_token)
@@ -108,13 +132,13 @@ def _run_engine(body: dict) -> dict:
         comp_paths = []
         if "comp_urls" in body:
             for url in body["comp_urls"]:
-                name = url.split("?")[0].rsplit("/", 1)[-1]
+                name = _safe_filename(url.split("?")[0].rsplit("/", 1)[-1])
                 p = os.path.join(tmpdir, name)
                 _download_url(url, p, blob_token)
                 comp_paths.append(p)
         else:
             for item in body.get("comp_files", []):
-                p = os.path.join(tmpdir, item["name"])
+                p = os.path.join(tmpdir, _safe_filename(item["name"]))
                 with open(p, "wb") as f:
                     f.write(base64.b64decode(item["b64"]))
                 comp_paths.append(p)
@@ -123,13 +147,13 @@ def _run_engine(body: dict) -> dict:
         verif_paths = []
         if "verif_urls" in body:
             for url in body["verif_urls"]:
-                name = url.split("?")[0].rsplit("/", 1)[-1]
+                name = _safe_filename(url.split("?")[0].rsplit("/", 1)[-1])
                 p = os.path.join(tmpdir, name)
                 _download_url(url, p, blob_token)
                 verif_paths.append(p)
         else:
             for item in body.get("verif_files", []):
-                p = os.path.join(tmpdir, item["name"])
+                p = os.path.join(tmpdir, _safe_filename(item["name"]))
                 with open(p, "wb") as f:
                     f.write(base64.b64decode(item["b64"]))
                 verif_paths.append(p)

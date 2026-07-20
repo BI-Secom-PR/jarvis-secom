@@ -2,6 +2,8 @@ import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 import { del } from '@vercel/blob';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
+import { isAllowedBlobUrl } from '@/lib/blobUrl';
+import { rateLimit, tooManyRequests } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const body = (await request.json()) as HandleUploadBody;
@@ -36,7 +38,16 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const limit = rateLimit(`blob-delete:${session.id}`, 20, 60_000);
+  if (!limit.ok) return tooManyRequests(limit.retryAfterSec);
+
   const { urls } = (await request.json()) as { urls?: string[] };
-  if (urls?.length) await del(urls).catch(() => {});
+  if (!urls?.length) return NextResponse.json({ ok: true });
+
+  if (!urls.every(isAllowedBlobUrl)) {
+    return NextResponse.json({ error: 'URL(s) fora da allowlist de Blob.' }, { status: 400 });
+  }
+
+  await del(urls).catch(() => {});
   return NextResponse.json({ ok: true });
 }

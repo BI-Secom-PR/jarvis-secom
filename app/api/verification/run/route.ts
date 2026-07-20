@@ -7,6 +7,7 @@ import path from 'path';
 import os from 'os';
 import { del } from '@vercel/blob';
 import { Ollama } from 'ollama';
+import { isAllowedBlobUrl } from '@/lib/blobUrl';
 
 export const maxDuration = 300;
 
@@ -18,6 +19,16 @@ function validateAdserver(adserver: string): string | null {
 }
 function validateDate(label: string, val: string): string | null {
   return DATE_RE.test(val) ? null : `${label} deve estar no formato DD/MM/YYYY`;
+}
+
+// Strip any directory component from a client-supplied filename before it's
+// joined into a filesystem path — blocks `../../x` traversal out of tmpDir.
+function safeFilename(name: string): string {
+  const base = path.basename(name || '');
+  if (!base || base === '.' || base === '..' || base.includes('..')) {
+    throw new Error(`Nome de arquivo inválido: ${JSON.stringify(name)}`);
+  }
+  return base;
 }
 
 const ollamaClient = new Ollama({
@@ -223,10 +234,12 @@ export async function POST(req: NextRequest) {
 
     const { adserver, consolidado_url, consolidado_name, comp_urls, verif_urls = [] } = body;
     const allBlobUrls = [consolidado_url, ...(comp_urls ?? []), ...verif_urls].filter(Boolean);
-    // Blobs are already uploaded by the client at this point — delete them on
-    // validation failure too, or they leak into the (free-tier) Blob store.
+    // Blobs are already uploaded by the client at this point — delete only the
+    // ones that are genuinely ours (allowlisted host) on validation failure too,
+    // or they leak into the (free-tier) Blob store.
+    const ownedBlobUrls = allBlobUrls.filter(isAllowedBlobUrl);
     const reject = async (msg: string) => {
-      await del(allBlobUrls).catch(() => {});
+      await del(ownedBlobUrls).catch(() => {});
       return NextResponse.json({ error: msg }, { status: 400 });
     };
     if (!adserver)          return reject('Adserver não informado.');
@@ -236,6 +249,7 @@ export async function POST(req: NextRequest) {
     if (adserverErr) return reject(adserverErr);
     if (body.ini) { const e = validateDate('ini', body.ini); if (e) return reject(e); }
     if (body.fim) { const e = validateDate('fim', body.fim); if (e) return reject(e); }
+    if (allBlobUrls.some((u) => !isAllowedBlobUrl(u))) return reject('URL de arquivo inválida.');
     const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
     // proxy.ts gates /api/py/: shared secret when configured, else the
     // forwarded session cookie satisfies the token-presence check.
@@ -379,19 +393,19 @@ export async function POST(req: NextRequest) {
       const tmpDir = path.join(os.tmpdir(), `secom-verif-${randomUUID()}`);
       await fs.mkdir(tmpDir, { recursive: true });
       try {
-        const consolidadoPath = path.join(tmpDir, consolidadoFile.name);
+        const consolidadoPath = path.join(tmpDir, safeFilename(consolidadoFile.name));
         await fs.writeFile(consolidadoPath, Buffer.from(await consolidadoFile.arrayBuffer()));
 
         const compPaths: string[] = [];
         for (const file of compFiles) {
-          const dest = path.join(tmpDir, file.name);
+          const dest = path.join(tmpDir, safeFilename(file.name));
           await fs.writeFile(dest, Buffer.from(await file.arrayBuffer()));
           compPaths.push(dest);
         }
 
         const verifPaths: string[] = [];
         for (const file of verifFiles) {
-          const dest = path.join(tmpDir, file.name);
+          const dest = path.join(tmpDir, safeFilename(file.name));
           await fs.writeFile(dest, Buffer.from(await file.arrayBuffer()));
           verifPaths.push(dest);
         }
