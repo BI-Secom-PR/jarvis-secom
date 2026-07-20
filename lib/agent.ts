@@ -482,7 +482,7 @@ WHERE porta_voz IN ('INFLU','OFF') AND dark_feed IS NOT NULL AND formato = 'VIDE
 GROUP BY porta_voz, dark_feed
 HAVING COUNT(DISTINCT ad_name) >= 3;
 
--- 20. Top/Bottom 10 códigos criativos por CTR (com piso de investimento)
+-- 20. Top 10 códigos criativos por CTR (com piso de investimento). Para bottom 10, use ORDER BY ctr ASC.
 SELECT creative_code,
        COUNT(DISTINCT ad_name)                     AS pecas,
        SUM(cost)                                   AS investimento,
@@ -492,7 +492,7 @@ WHERE creative_code IS NOT NULL AND classification_source = 'code'
   AND date >= '2026-04-01'
 GROUP BY creative_code
 HAVING SUM(cost) >= 1000
-ORDER BY ctr DESC   -- usar ASC para bottom 10
+ORDER BY ctr DESC
 LIMIT 10;
 
 -- 21. Fadiga criativa: evolução semanal de uma combinação

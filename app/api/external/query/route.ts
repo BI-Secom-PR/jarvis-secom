@@ -6,6 +6,7 @@ import { timingSafeEqual, createHash } from 'node:crypto';
 import { getPool } from '@/lib/mysql';
 import { getSystemPrompt, parseChartRequest, DEFAULT_MODEL, MODELS, getModelProvider, type ModelId } from '@/lib/agent';
 import { rateLimit, clientIp, tooManyRequests } from '@/lib/rateLimit';
+import { assertSafeQuery } from '@/lib/sqlGuard';
 
 const VALID_MODEL_IDS = new Set(MODELS.map((m) => m.id));
 
@@ -58,10 +59,7 @@ export async function POST(req: NextRequest) {
               .describe('A valid SELECT targeting only airbyte_secom.gold_* tables.'),
           }),
           execute: async ({ sql_query }): Promise<unknown> => {
-            const SAFE_QUERY = /^\s*(?:WITH\b|SELECT\b)(?![\s\S]*\b(?:INTO\s+(?:OUTFILE|DUMPFILE)|LOAD_FILE)\b)[\s\S]+\bFROM\b/i;
-            const BLOCKED_PATTERNS = /\b(UNION[\s\S]*SELECT|SLEEP\s*\(|BENCHMARK\s*\(|INFORMATION_SCHEMA|mysql\s*\.|sys\s*\.|performance_schema)\b|gold_platforms_/i;
-            if (!SAFE_QUERY.test(sql_query) || BLOCKED_PATTERNS.test(sql_query))
-              throw new Error('Only SELECT queries on airbyte_secom are allowed.');
+            assertSafeQuery(sql_query);
             console.log('[SQL][external]', sql_query);
             const [rows] = await pool.query(sql_query);
             const sanitized = (rows as Record<string, unknown>[]).map((row) => {

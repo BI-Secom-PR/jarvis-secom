@@ -10,6 +10,7 @@ import { db } from '@/lib/db';
 import { fileExports } from '@/lib/db/schema';
 import { generateExport, MIME, type ChartSpec, type ExportFormat } from '@/lib/exports/generate';
 import { retrieveSimilarExamples } from '@/lib/rag';
+import { assertSafeQuery } from '@/lib/sqlGuard';
 
 // Ollama-cloud Gemma with the multi-step SQL tool loop routinely runs past
 // Vercel's default function duration; the platform then kills the function
@@ -30,14 +31,11 @@ function resolveModel(id: ModelId) {
   return google(id);
 }
 
-const SAFE_QUERY = /^\s*(?:WITH\b|SELECT\b)(?![\s\S]*\b(?:INTO\s+(?:OUTFILE|DUMPFILE)|LOAD_FILE)\b)[\s\S]+\bFROM\b/i;
-const BLOCKED_PATTERNS = /\b(UNION[\s\S]*SELECT|SLEEP\s*\(|BENCHMARK\s*\(|INFORMATION_SCHEMA|mysql\s*\.|sys\s*\.|performance_schema)\b|gold_platforms_/i;
 const EXPORT_TTL_DAYS = 7;
 const EXPORT_ROW_CAP = 50_000;
 
 async function executeSql(sql_query: string): Promise<Record<string, unknown>[]> {
-  if (!SAFE_QUERY.test(sql_query) || BLOCKED_PATTERNS.test(sql_query))
-    throw new Error('Only SELECT queries on airbyte_secom are allowed.');
+  assertSafeQuery(sql_query);
   console.log('[SQL]', sql_query);
   const pool = getPool();
   const [rows] = await pool.query(sql_query);
