@@ -81,6 +81,12 @@ export async function proxy(req: NextRequest) {
     PUBLIC_PATHS.some(p => pathname.startsWith(p)) ||
     pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/api/external/') || // Bearer-key auth inside the route
+    // /api/verification/blob-upload's POST doubles as Vercel's server-to-server
+    // upload-completed webhook — it has no session cookie by design (verified by
+    // handleUpload's own signature check), so this whole prefix can't be cookie-
+    // gated at the edge without breaking blob uploads. Both routes under this
+    // prefix call getSession()/requireAuth themselves — do not remove those
+    // checks, they're the only auth layer here. See docs/security-hardening-plan.md P2.6.
     pathname.startsWith('/api/verification/') ||
     pathname.startsWith('/_next/') ||
     pathname === '/icon' ||
