@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Self-check: ADFORCE consolidado com 2 linhas do mesmo veículo, uma CPM e
 outra CPV (caso real: F5 ADS em CONSOLIDADO_ABRIL, cada objetivo num arquivo
-de comprovante/verification separado). Sem isso, _merge_by_veiculo() somava
-os dois objetivos num total único e ambas as linhas do consolidado eram
-comparadas contra o total combinado — gerando DIVERGENCIA falsa.
+comprovante E num arquivo verification separado). Sem isso, _merge_by_veiculo()
+somava os dois objetivos num total único tanto do lado do comprovante (entregue/
+views/cliques) quanto do verification (indevidas e o total usado no resumo DIF),
+e ambas as linhas do consolidado eram comparadas contra o mesmo total combinado —
+gerando DIVERGENCIA falsa e um "DIF impressoes/views" idêntico nas duas linhas.
 
 Constrói fixtures mínimas em memória (não depende dos arquivos reais do
 usuário, que ficam fora do repo) e roda engine.py de ponta a ponta.
@@ -40,14 +42,22 @@ def _build_comp_cpv(path: str) -> None:
     wb.save(path)
 
 
-def _build_verif(path: str) -> None:
-    """Flat ADFORCE: mesma planilha traz linhas cpm e linhas cpv para o mesmo veículo."""
+def _build_verif_cpm(path: str) -> None:
+    """Flat ADFORCE, arquivo puro-CPM (caso real: 1 verif file por objetivo)."""
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.append(["vehicle", "categories", "url", "cpm", "cpv"])
-    ws.append([VEICULO, "Safeframe", "http://sitea.com/1", 300, 0])
-    ws.append([VEICULO, "Safeframe", "http://sitea.com/2", 200, 0])
-    ws.append([VEICULO, "Safeframe", "http://siteb.com/1", 0, 400])
+    ws.append(["vehicle", "categories", "url", "cpm"])
+    ws.append([VEICULO, "Safeframe", "http://sitea.com/1", 300])
+    ws.append([VEICULO, "Safeframe", "http://sitea.com/2", 200])
+    wb.save(path)
+
+
+def _build_verif_cpv(path: str) -> None:
+    """Flat ADFORCE, arquivo puro-CPV."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["vehicle", "categories", "url", "cpv"])
+    ws.append([VEICULO, "Safeframe", "http://siteb.com/1", 400])
     wb.save(path)
 
 
@@ -76,7 +86,9 @@ def _build_consolidado(path: str) -> None:
 
     row_cpv = [""] * 28
     row_cpv[0], row_cpv[2], row_cpv[3] = VEICULO, "CPV", 20000
-    row_cpv[4], row_cpv[6], row_cpv[8] = 20000, 100, 12000
+    # Views (col 9) espera views iniciadas (0%), não completadas (100%) — 18000 é
+    # o valor de "0%" no comprovante CPV abaixo, não o de "100%".
+    row_cpv[4], row_cpv[6], row_cpv[8] = 20000, 100, 18000
     row_cpv[18] = 400
     ws.append(row_cpv)
 
@@ -88,18 +100,20 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as outdir:
         comp_cpm = os.path.join(outdir, "comp_cpm.xlsx")
         comp_cpv = os.path.join(outdir, "comp_cpv.xlsx")
-        verif = os.path.join(outdir, "verif.xlsx")
+        verif_cpm = os.path.join(outdir, "verif_cpm.xlsx")
+        verif_cpv = os.path.join(outdir, "verif_cpv.xlsx")
         consolidado = os.path.join(outdir, "consolidado.xlsx")
         _build_comp_cpm(comp_cpm)
         _build_comp_cpv(comp_cpv)
-        _build_verif(verif)
+        _build_verif_cpm(verif_cpm)
+        _build_verif_cpv(verif_cpv)
         _build_consolidado(consolidado)
 
         cmd = [
             sys.executable, ENGINE, consolidado,
             "--adserver", "adforce",
             "--comp", comp_cpm, comp_cpv,
-            "--verif", verif,
+            "--verif", verif_cpm, verif_cpv,
             "--url-pct", "100",
             "--output", os.path.join(outdir, "out.xlsx"),
         ]
@@ -125,16 +139,22 @@ def main() -> None:
                     failures.append(f"linha CPM status={cpm_row['status']} (esperava OK): {cpm_row['devolutiva']}")
                 if "OK safeframe: 500" not in cpm_row["devolutiva"]:
                     failures.append(f"linha CPM safeframe != 500 (indevidas_cpm não isolado): {cpm_row['devolutiva']}")
+                # DIF: verif do arquivo CPM (500) isolado, não o blend com o CPV (900)
+                if "verif 500" not in cpm_row["devolutiva"]:
+                    failures.append(f"linha CPM DIF usou verif blendado (esperava 'verif 500'): {cpm_row['devolutiva']}")
 
             if cpv_row is None:
                 failures.append(f"linha CPV não bateu entregue=20.000 (blend teria dado 120.000): {veiculos}")
             else:
                 if cpv_row["status"] != "OK":
                     failures.append(f"linha CPV status={cpv_row['status']} (esperava OK): {cpv_row['devolutiva']}")
-                if "OK views: 12.000" not in cpv_row["devolutiva"]:
-                    failures.append(f"linha CPV views != 12.000: {cpv_row['devolutiva']}")
+                if "OK views: 18.000" not in cpv_row["devolutiva"]:
+                    failures.append(f"linha CPV views != 18.000: {cpv_row['devolutiva']}")
                 if "OK safeframe: 400" not in cpv_row["devolutiva"]:
                     failures.append(f"linha CPV safeframe != 400 (indevidas_cpv não isolado): {cpv_row['devolutiva']}")
+                # DIF: verif do arquivo CPV (400) isolado, não o blend com o CPM (900)
+                if "verif 400" not in cpv_row["devolutiva"]:
+                    failures.append(f"linha CPV DIF usou verif blendado (esperava 'verif 400'): {cpv_row['devolutiva']}")
 
         # tipo_by_verif_norm: com 2 tipos no mesmo veículo, filtro de objetivo deve
         # ser desativado — URLs de origem CPM (sitea.com) E CPV (siteb.com) devem

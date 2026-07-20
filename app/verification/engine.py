@@ -114,6 +114,8 @@ def _detect_consolidado_cols(ws, adserver: str | None = None) -> dict:
     col_views_100:    int | None = None
     col_viewables:    int | None = None
     col_viewability:  int | None = None
+    col_cliques:      int | None = None
+    col_views:        int | None = None
 
     for c in range(1, 36):
         raw = _cell_value(ws, HEADER_ROW, c)
@@ -140,6 +142,10 @@ def _detect_consolidado_cols(ws, adserver: str | None = None) -> dict:
             col_viewables = c
         elif tl in ("va%", "viewability", "viewability%", "taxa de viewability"):
             col_viewability = c
+        elif tl in ("cliques", "clicks", "cliques únicos", "cliques unicos"):
+            col_cliques = c
+        elif tl == "views":
+            col_views = c
 
     return {
         "indevidas":       indevidas if indevidas else dict(COL_INDEVIDAS),
@@ -150,6 +156,8 @@ def _detect_consolidado_cols(ws, adserver: str | None = None) -> dict:
         "col_views_100":   col_views_100,
         "col_viewables":   col_viewables,
         "col_viewability": col_viewability,
+        "col_cliques":     col_cliques,
+        "col_views":       col_views,
     }
 
 
@@ -221,6 +229,8 @@ def _read_consolidado(ws, adserver: str | None = None) -> tuple[list[dict], int]
     col_v100         = detected["col_views_100"]
     col_va           = detected["col_viewables"]   or COL_VIEWABLES
     col_va_pct       = detected["col_viewability"] or COL_VIEWABILITY
+    col_cliques      = detected["col_cliques"]     or COL_CLIQUES
+    col_views        = detected["col_views"]       or COL_VIEWS
 
     rows = []
     for row_idx in range(DATA_START_ROW, ws.max_row + 1):
@@ -230,7 +240,7 @@ def _read_consolidado(ws, adserver: str | None = None) -> tuple[list[dict], int]
 
 
         entregue = _to_int_safe(_cell_value(ws, row_idx, COL_IMPRESSOES))
-        views    = _to_int_safe(_cell_value(ws, row_idx, COL_VIEWS))
+        views    = _to_int_safe(_cell_value(ws, row_idx, col_views))
 
         indevidas = {
             cat: _to_int_safe(_cell_value(ws, row_idx, col))
@@ -257,7 +267,7 @@ def _read_consolidado(ws, adserver: str | None = None) -> tuple[list[dict], int]
             "views_start":   _to_int_safe(_cell_value(ws, row_idx, col_vs))   if col_vs  else None,
             "views_50":      _to_int_safe(_cell_value(ws, row_idx, col_v50))  if col_v50 else None,
             "views_100":     _to_int_safe(_cell_value(ws, row_idx, col_v100)) if col_v100 else None,
-            "cliques":       _to_int_safe(_cell_value(ws, row_idx, COL_CLIQUES)),
+            "cliques":       _to_int_safe(_cell_value(ws, row_idx, col_cliques)),
             "viewables":     _to_int_safe(_cell_value(ws, row_idx, col_va)),
             "viewability":   viewability_val,
             "indevidas":     indevidas,
@@ -322,6 +332,32 @@ def _merge_by_veiculo(results: list[dict]) -> dict[str, dict]:
             for cat, val in r.get("indevidas_sem_url", {}).items():
                 m["indevidas_sem_url"][cat] = m["indevidas_sem_url"].get(cat, 0) + val
     return merged
+
+
+def _build_tipo_override(raw_rows: list[dict]) -> dict[tuple, dict]:
+    """
+    Agrupa raw_rows por (veiculo_norm, tipo_compra) e devolve, só para veículos
+    com 2+ tipos distintos entre suas linhas, o merge de cada subconjunto —
+    reconstrói comp_norm/verif_norm por objetivo de mídia quando um veículo tem
+    mais de uma linha no consolidado (ex.: uma CPM e outra CPV) que a fusão por
+    veículo normal (_merge_by_veiculo) já blendou num total único.
+    """
+    by_tipo: dict[tuple, list[dict]] = defaultdict(list)
+    tipos_by_vk: dict[str, set[str]] = defaultdict(set)
+    for r in raw_rows:
+        vk = _normalize(r["veiculo"])
+        tipo = r.get("tipo_compra") or ""
+        if tipo:
+            by_tipo[(vk, tipo)].append(r)
+            tipos_by_vk[vk].add(tipo)
+
+    override: dict[tuple, dict] = {}
+    for vk, tipos in tipos_by_vk.items():
+        if len(tipos) < 2:
+            continue
+        for tipo in tipos:
+            override[(vk, tipo)] = _merge_by_veiculo(by_tipo[(vk, tipo)])[vk]
+    return override
 
 
 # ── Comparação de métricas ──────────────────────────────────────────────────────
@@ -653,28 +689,19 @@ def verificar(
     verif_names = list(verif_norm.keys())
     comp_names  = list(comp_norm.keys())
 
-    # ── Override (veiculo_norm, tipo_compra) → comp_norm reconstruído por subconjunto ──
-    # comp_norm blenda todos os rows de comp_raw por veículo, mesmo quando 2+ rows do
-    # MESMO veículo têm tipo_compra real diferente (ex.: um CPM, outro CPV) — caso real
-    # do ADFORCE (consolidado com 2 linhas para o mesmo veículo, uma por objetivo de
-    # mídia). Só ativa quando existe colisão genuína (2+ tipos distintos no comprovante
-    # para aquele veículo); caso contrário comp_norm já está correto e nada muda.
-    comp_raw_by_tipo: dict[tuple, list[dict]] = defaultdict(list)
-    comp_tipos_by_vk: dict[str, set[str]] = defaultdict(set)
-    for r in comp_raw:
-        vk = _normalize(r["veiculo"])
-        tipo = r.get("tipo_compra") or ""
-        if tipo:
-            comp_raw_by_tipo[(vk, tipo)].append(r)
-            comp_tipos_by_vk[vk].add(tipo)
-
-    comp_override_by_tipo: dict[tuple, dict] = {}
-    for vk, tipos in comp_tipos_by_vk.items():
-        if len(tipos) < 2:
-            continue
-        for tipo in tipos:
-            subset = comp_raw_by_tipo[(vk, tipo)]
-            comp_override_by_tipo[(vk, tipo)] = _merge_by_veiculo(subset)[vk]
+    # ── Override (veiculo_norm, tipo_compra) → norm reconstruído por subconjunto ──
+    # comp_norm/verif_norm blendam todas as linhas por veículo, mesmo quando 2+ linhas
+    # do MESMO veículo têm tipo_compra real diferente (ex.: um CPM, outro CPV) — caso
+    # real do ADFORCE (consolidado com 2 linhas para o mesmo veículo, uma por objetivo
+    # de mídia, cada uma normalmente vinda de um arquivo comprovante/verif separado).
+    # Só ativa quando existe colisão genuína (2+ tipos distintos); caso contrário
+    # comp_norm/verif_norm já estão corretos e nada muda. Cobre tanto a comparação
+    # contra o comprovante (comp_match) quanto o total do verification usado no
+    # resumo DIF (verif_match/verif_match_dif) — sem isso, "DIF impressoes"/"DIF
+    # views" comparava as duas linhas do consolidado contra o mesmo total blendado.
+    comp_override_by_tipo   = _build_tipo_override(comp_raw)
+    verif_override_by_tipo  = _build_tipo_override(verif_raw)
+    verif_override_by_tipo_dif = _build_tipo_override(verif_raw_unfiltered)
 
     # ── Mapa de regras de visualização: (veiculo_norm, duracao | None) → criterio
     rule_map: dict[tuple, str] = {}
@@ -725,13 +752,20 @@ def verificar(
             comp_match,  comp_score  = _fuzzy_match(consol_norm, comp_names,  comp_norm)
             verif_match_dif, _       = _fuzzy_match(consol_norm, verif_names_unfiltered, verif_norm_unfiltered)
 
+            crow_tipo = crow.get("tipo_compra", "")
             if comp_match is not None:
-                override_key = (_normalize(comp_match["veiculo"]), crow.get("tipo_compra", ""))
-                comp_match = comp_override_by_tipo.get(override_key, comp_match)
+                comp_match = comp_override_by_tipo.get(
+                    (_normalize(comp_match["veiculo"]), crow_tipo), comp_match)
+            if verif_match is not None:
+                verif_match = verif_override_by_tipo.get(
+                    (_normalize(verif_match["veiculo"]), crow_tipo), verif_match)
+            if verif_match_dif is not None:
+                verif_match_dif = verif_override_by_tipo_dif.get(
+                    (_normalize(verif_match_dif["veiculo"]), crow_tipo), verif_match_dif)
 
             if verif_match:
                 matched_verif_names.add(_normalize(verif_match["veiculo"]))
-                tipo_by_verif_norm[_normalize(verif_match["veiculo"])].add(crow.get("tipo_compra", ""))
+                tipo_by_verif_norm[_normalize(verif_match["veiculo"])].add(crow_tipo)
             if comp_match:
                 matched_comp_names.add(_normalize(comp_match["veiculo"]))
 

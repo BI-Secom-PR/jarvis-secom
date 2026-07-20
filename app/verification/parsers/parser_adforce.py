@@ -251,7 +251,10 @@ def parse_comprovante(
             "views_start":       views_start[key] or None if i_views_start is not None else None,
             "views_50":          views_50[key]    or None if i_views_50    is not None else None,
             "views_100":         views50[key]     or None if i_views50     is not None else None,
-            "views":             views50[key]     or None,
+            # Campo legado "views": consolidados de coluna única (sem breakdown por
+            # quartil) esperam views iniciadas (0%), não completadas (100%) — confirmado
+            # batendo exato com o "Views" do consolidado real (191.378 = views_start).
+            "views":             views_start[key] or None,
             "viewables":         viewables[key]   or None,
             "viewability":       viewability.get(vname),
             "duracao_segundos":  dur,
@@ -292,14 +295,16 @@ def _is_flat_format(wb) -> bool:
     return bool(vals & vehicle_cols) and bool(vals & category_cols)
 
 
-def _parse_verif_flat(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, list, int, dict, dict, dict, dict, dict]:
+def _parse_verif_flat(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, list, int, dict, dict, dict, dict, dict, dict]:
     """
     Parseia o formato flat ADFORCE (Result 1, header na linha 1).
     Indevidas = soma de CPM+CPC+CPV+CPCV por categoria (apenas uma terá valor por linha).
-    Retorna (indev, entregue_dict, url_pool, pool_count, cpv_indev, cpv_total_by_vehicle, total_dict, sem_url, cpm_indev).
+    Retorna (indev, entregue_dict, url_pool, pool_count, cpv_indev, cpv_total_by_vehicle, total_dict, sem_url, cpm_indev, cpm_total_by_vehicle).
     cpv_indev é separado para indevidas; cpv_total_by_vehicle alimenta DIF views;
     sem_url soma impressões de linhas sem URL por categoria; cpm_indev isola CPM+CPC+CPCV
     (tudo que não é CPV) para comparar linhas do consolidado tipadas como CPM.
+    cpm_total_by_vehicle espelha cpv_total_by_vehicle (não filtrado por categoria) e
+    permite inferir se o arquivo é puro-CPM/puro-CPV para o DIF de entregue/views.
     """
     ws = wb.worksheets[0]
     header = [str(v).strip() if v is not None else "" for v in
@@ -323,6 +328,7 @@ def _parse_verif_flat(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, l
     cpv_indev: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     cpm_indev: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     cpv_total_by_vehicle: dict[str, int] = defaultdict(int)
+    cpm_total_by_vehicle: dict[str, int] = defaultdict(int)
     veiculos_entregue: dict[str, int] = defaultdict(int)
     veiculos_total:    dict[str, int] = defaultdict(int)
     reservoir = StratifiedReservoir(cap=500)
@@ -361,6 +367,7 @@ def _parse_verif_flat(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, l
         veiculos_total[veiculo] += total_val
         veiculos_entregue_total = total_val # Temp for clarity
         cpv_total_by_vehicle[veiculo] += v_cpv
+        cpm_total_by_vehicle[veiculo] += (v_cpm + v_cpc + v_cpcv)
 
         if praca and i_estado is not None and i_estado < len(row):
             estado_row = str(row[i_estado]).strip().upper() if row[i_estado] else ""
@@ -392,7 +399,7 @@ def _parse_verif_flat(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, l
                      "impressoes": total_val, "cpm": v_cpm, "cpv": v_cpv}
             reservoir.add((veiculo, cat_str.lower(), v_cpv > 0), entry)
 
-    return indev, veiculos_entregue, reservoir.items(), pool_count, cpv_indev, cpv_total_by_vehicle, veiculos_total, sem_url, cpm_indev
+    return indev, veiculos_entregue, reservoir.items(), pool_count, cpv_indev, cpv_total_by_vehicle, veiculos_total, sem_url, cpm_indev, cpm_total_by_vehicle
 
 
 def _parse_verif_multitab(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, list, int, dict, dict, dict, dict]:
@@ -524,7 +531,7 @@ def parse_verif(
 
     if _is_flat_format(wb):
         formato = "adforce_verif_flat"
-        indev, veiculos_entregue, url_pool, _, cpv_indev, cpv_total, veiculos_total, sem_url, cpm_indev = _parse_verif_flat(
+        indev, veiculos_entregue, url_pool, _, cpv_indev, cpv_total, veiculos_total, sem_url, cpm_indev, cpm_total = _parse_verif_flat(
             wb, data_ini, data_fim, praca=praca
         )
     else:
@@ -533,6 +540,7 @@ def parse_verif(
             wb, data_ini, data_fim, praca=praca
         )
         cpv_total = {}
+        cpm_total = {}
 
     wb.close()
 
@@ -541,8 +549,20 @@ def parse_verif(
         cpv_total_vehicle = cpv_total.get(veiculo) if formato == "adforce_verif_flat" else None
         if cpv_total_vehicle is None:
             cpv_total_vehicle = sum(cpv_indev.get(veiculo, {}).values())
+        cpm_total_vehicle = cpm_total.get(veiculo) if formato == "adforce_verif_flat" else None
+        if cpm_total_vehicle is None:
+            cpm_total_vehicle = sum(cpm_indev.get(veiculo, {}).values())
+        # Arquivo puro CPM ou puro CPV (caso comum: 1 verif file por objetivo de
+        # mídia) → tipo_compra inferível; misto/ambíguo → None (sem override no engine).
+        if cpv_total_vehicle and not cpm_total_vehicle:
+            tipo_compra = "CPV"
+        elif cpm_total_vehicle and not cpv_total_vehicle:
+            tipo_compra = "CPM"
+        else:
+            tipo_compra = None
         results.append({
             "veiculo":           veiculo,
+            "tipo_compra":       tipo_compra,
             "contratado":        None,
             "entregue":          veiculos_entregue[veiculo],
             "views":             cpv_total_vehicle or None,
