@@ -11,6 +11,7 @@ import { fileExports } from '@/lib/db/schema';
 import { generateExport, MIME, type ChartSpec, type ExportFormat } from '@/lib/exports/generate';
 import { retrieveSimilarExamples } from '@/lib/rag';
 import { assertSafeQuery } from '@/lib/sqlGuard';
+import { rateLimit, tooManyRequests } from '@/lib/rateLimit';
 
 // Ollama-cloud Gemma with the multi-step SQL tool loop routinely runs past
 // Vercel's default function duration; the platform then kills the function
@@ -214,11 +215,23 @@ const CHART_SPEC_SCHEMA = z.object({
   datasets: z.array(z.object({ label: z.string(), data: z.array(z.number()) })),
 });
 
+const CHAT_INPUT_MAX_CHARS = 16_000;
+const CHAT_HISTORY_MAX_MESSAGES = 100;
+
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const limit = rateLimit(`chat:${session.id}`, 20, 10 * 60_000);
+  if (!limit.ok) return tooManyRequests(limit.retryAfterSec);
+
   const { chatInput, messages: history = [], model: requestedModel, chatSessionId } = await req.json();
+  if (typeof chatInput !== 'string' || !chatInput.trim() || chatInput.length > CHAT_INPUT_MAX_CHARS) {
+    return NextResponse.json({ error: 'Mensagem vazia ou longa demais.' }, { status: 400 });
+  }
+  if (!Array.isArray(history) || history.length > CHAT_HISTORY_MAX_MESSAGES) {
+    return NextResponse.json({ error: 'Histórico de conversa inválido ou longo demais.' }, { status: 400 });
+  }
   const modelId: ModelId = VALID_MODEL_IDS.has(requestedModel) ? requestedModel : DEFAULT_MODEL;
 
   const messages = [

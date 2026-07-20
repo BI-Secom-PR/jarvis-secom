@@ -3,6 +3,7 @@ import { Ollama } from 'ollama';
 import { getSession } from '@/lib/auth';
 import { DEFAULT_MODEL } from '@/lib/agent';
 import { isSafeWhereFragment, ISO_DATE, SENTIMENTS } from '@/lib/sentimentos';
+import { rateLimit, tooManyRequests } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -57,6 +58,9 @@ Pedido: "comentários da campanha do pé de meia"
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const limit = rateLimit(`ai-filter:${session.id}`, 30, 60_000);
+  if (!limit.ok) return tooManyRequests(limit.retryAfterSec);
 
   let text: string;
   try {

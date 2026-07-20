@@ -8,6 +8,7 @@ import os from 'os';
 import { del } from '@vercel/blob';
 import { Ollama } from 'ollama';
 import { isAllowedBlobUrl } from '@/lib/blobUrl';
+import { rateLimit, tooManyRequests } from '@/lib/rateLimit';
 
 export const maxDuration = 300;
 
@@ -213,6 +214,9 @@ function sseResponse(work: (send: Send) => Promise<void>): Response {
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const limit = rateLimit(`verification-run:${session.id}`, 5, 10 * 60_000);
+  if (!limit.ok) return tooManyRequests(limit.retryAfterSec);
 
   const isJson = req.headers.get('content-type')?.includes('application/json');
 
