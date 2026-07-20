@@ -13,7 +13,10 @@ const schema = z.object({
   password: z.string().min(1),
 })
 
-const DUMMY_HASH = '$2b$12$invaliddummyhashforconstanttimingXXXXXXXXXXXXXXXXXXXXX'
+// Real bcrypt hash (cost 12) of an arbitrary constant — must be well-formed so
+// bcrypt.compare() burns the same ~250-300ms as a real comparison. A malformed
+// string short-circuits instantly and leaks account existence via timing.
+const DUMMY_HASH = '$2b$12$NM8/nyPsM2ZwjjuVwnuvzu4NPQoP8eymJ7r2LQX1pq2WBxGjpnUEm'
 const IS_PROD    = process.env.NODE_ENV === 'production'
 
 export async function POST(req: NextRequest) {
@@ -31,6 +34,11 @@ export async function POST(req: NextRequest) {
 
   const accountLimit = rateLimit(`login:acct:${ip}:${email.toLowerCase()}`, 5, 15 * 60_000)
   if (!accountLimit.ok) return tooManyRequests(accountLimit.retryAfterSec)
+
+  // Global per-account limit (any IP) — stops credential stuffing distributed
+  // across many IPs against the same target account.
+  const globalAcctLimit = rateLimit(`login:acct-global:${email.toLowerCase()}`, 10, 15 * 60_000)
+  if (!globalAcctLimit.ok) return tooManyRequests(globalAcctLimit.retryAfterSec)
 
   const rows = await db
     .select()
