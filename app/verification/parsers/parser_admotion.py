@@ -24,9 +24,8 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
-import openpyxl
 
-from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename
+from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename, load_workbook_fast
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -80,7 +79,7 @@ def parse_comprovante(
     if not path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
 
-    wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+    wb = load_workbook_fast(str(path))
 
     # Tentar sheet "Data" primeiro; fallback para todas as sheets
     data_ws = next(
@@ -196,7 +195,7 @@ def parse_verif(
     if not path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
 
-    wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+    wb = load_workbook_fast(str(path))
     ws = wb.active
 
     header_row_idx, header = _find_verif_header(ws)

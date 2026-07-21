@@ -24,6 +24,7 @@ from pathlib import Path
 
 import openpyxl
 
+import fastxlsx
 from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename, StratifiedReservoir
 
 
@@ -32,8 +33,15 @@ from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehi
 _NAN_CELL_RE = re.compile(rb"<v>NaN</v>", re.IGNORECASE)
 
 
-def _load_workbook_safe(path: str, read_only: bool = False) -> openpyxl.Workbook:
-    """Loads workbook, sanitizing NaN cell values that crash openpyxl."""
+def _load_workbook_safe(path: str, read_only: bool = False):
+    """Loads workbook via calamine (Rust, ~10-50x faster than openpyxl on large
+    sheets — ADFORCE comprovante/verif files can be 10-20MB+ and were hitting
+    Vercel's 300s cap under openpyxl). Falls back to openpyxl (with its
+    NaN-cell XML sanitizing retry) if calamine can't parse the file."""
+    try:
+        return fastxlsx.load_workbook(path)
+    except Exception:
+        pass
     try:
         return openpyxl.load_workbook(path, read_only=read_only, data_only=True)
     except Exception:

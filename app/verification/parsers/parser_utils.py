@@ -7,6 +7,21 @@ import re
 from datetime import date, datetime
 from pathlib import Path
 
+import fastxlsx
+import openpyxl
+
+
+def load_workbook_fast(path: str, read_only: bool = True):
+    """Loads an xlsx workbook via calamine (Rust, ~10-50x faster than openpyxl
+    on large sheets — verification files can be 10-20MB+ and were hitting
+    Vercel's 300s cap under openpyxl). Falls back to openpyxl if calamine
+    can't parse the file."""
+    try:
+        return fastxlsx.load_workbook(path)
+    except Exception:
+        pass
+    return openpyxl.load_workbook(path, read_only=read_only, data_only=True)
+
 
 def to_int(v) -> int:
     if v is None:

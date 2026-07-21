@@ -2,8 +2,8 @@
 openpyxl on large sheets. Exposes only the openpyxl surface the parsers use:
 wb.worksheets / wb.close() / ws.title / ws.iter_rows(values_only=True).
 
-ponytail: only parser_sense uses this (the one that hit Vercel's 300s cap);
-convert other parsers if they start timing out too.
+ponytail: used by parser_sense and parser_adforce (the ones that hit Vercel's
+300s cap on large files); convert other parsers if they start timing out too.
 """
 
 from python_calamine import CalamineWorkbook
@@ -33,6 +33,7 @@ class FastWorkbook:
             FastSheet(name, wb.get_sheet_by_name(name).to_python(skip_empty_area=False))
             for name in wb.sheet_names
         ]
+        self.active = self.worksheets[0] if self.worksheets else None
 
     def close(self):
         pass
