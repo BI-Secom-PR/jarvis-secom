@@ -54,6 +54,7 @@ PARSER_MAP: dict[str, str] = {
     "metrike":  "parser_metrike",
     "brz":      "parser_brz",
     "sense":    "parser_sense",
+    "dgbrasil": "parser_dgbrasil",
 }
 
 # ── Constantes ─────────────────────────────────────────────────────────────────
@@ -237,7 +238,11 @@ def _read_consolidado(ws, adserver: str | None = None) -> tuple[list[dict], int]
         veiculo = _cell_value(ws, row_idx, COL_VEICULO)
         if not veiculo or not str(veiculo).strip():
             continue
-
+        # Linhas de rodapé/observação (ex.: "*OBS: ...") preenchem só a col. Veículo
+        # com texto livre — sem Contratado nem Impressões, não é um veículo real.
+        if (_cell_value(ws, row_idx, COL_CONTRATADO) is None
+                and _cell_value(ws, row_idx, COL_IMPRESSOES) is None):
+            continue
 
         entregue = _to_int_safe(_cell_value(ws, row_idx, COL_IMPRESSOES))
         views    = _to_int_safe(_cell_value(ws, row_idx, col_views))

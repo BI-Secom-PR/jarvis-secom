@@ -140,6 +140,9 @@ CATEGORY_MAP: dict[str, str] = {
     "nao classificado":                 "nao_classificado",
     "indeterminado":                    "nao_classificado",
     "indeterminados":                   "nao_classificado",
+    # Fora da Praça (DGBRASIL, SENSE)
+    "fora da praça":                    "fora_da_praca",
+    "fora da praca":                    "fora_da_praca",
 }
 
 # Todas as chaves internas zeradas — base para inicializar indevidas

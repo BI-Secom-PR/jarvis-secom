@@ -249,6 +249,7 @@ const ADSERVERS: { id: string; label: string; disabled?: boolean }[] = [
   { id: "metrike", label: "METRIKE" },
   { id: "sense", label: "SENSE" },
   { id: "brz", label: "BRZ", disabled: true },
+  { id: "dgbrasil", label: "DGBRASIL" },
 ];
 
 function formatElapsed(s: number): string {

@@ -36,15 +36,26 @@ CASES = {
         "comp_glob": "SENSE/Always_on_20250064/COMPROVANTE /*.xlsx",
         "verif_glob": "SENSE/Always_on_20250064/VERIFICATION/*.xlsx",
     },
+    "DGBRASIL": {
+        # Consolidado CPM (19 veículos display); glob de comp/verif inclui também
+        # os 3 veículos de vídeo (Claro/Tim/Vivo Ads), que ficam em "sem_consolidado"
+        # aqui pois pertencem ao consolidado CPV separado — smoke manual, não baseline.
+        "consolidado": "DBbrasil/Junho/Consolidado/Consolidado Junho - CPM.xlsx",
+        "comp_glob": "DBbrasil/Junho/Comprovante de Veiculação/*.xlsx",
+        "verif_glob": "DBbrasil/Junho/Verification/*.xlsx",
+    },
 }
 
-# Baseline pinado na rodada verde de 2026-07-03. Mudou uma regra de parser/engine
-# de propósito? Rode, confira o diff a olho e atualize estes números.
+# Baseline pinado na rodada verde de 2026-07-03 (DGBRASIL adicionado em 2026-07-21).
+# Mudou uma regra de parser/engine de propósito? Rode, confira o diff a olho e
+# atualize estes números.
 EXPECTED: dict = {
     "ADFORCE": {"n_veiculos": 12, "statuses": ["DIVERGENCIA"] * 2 + ["OK"] * 10},
     "METRIKE": {"n_veiculos": 23,
                 "statuses": ["DIVERGENCIA"] * 6 + ["OK"] * 11 + ["PENDENTE"] * 6},
     "SENSE": {"n_veiculos": 8, "statuses": ["DIVERGENCIA"] * 3 + ["OK"] * 5},
+    "DGBRASIL": {"n_veiculos": 22,
+                 "statuses": ["DIVERGENCIA"] * 14 + ["OK"] * 7 + ["PENDENTE"] * 1},
 }
 
 
