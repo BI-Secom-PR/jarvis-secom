@@ -12,6 +12,10 @@ export interface InputAreaHandle {
   focus: () => void;
 }
 
+const isMac =
+  typeof navigator !== 'undefined' &&
+  /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+
 const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend, disabled, onVoiceClick }, ref) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -96,7 +100,7 @@ const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend
         </button>
       </div>
       <p className="hidden md:block font-hud text-[9px] uppercase text-ink-4 text-center mt-2.5 tracking-[0.22em]">
-        Enter enviar &nbsp;·&nbsp; Shift+Enter nova linha &nbsp;·&nbsp; ⌘N nova sessão
+        Enter enviar &nbsp;·&nbsp; Shift+Enter nova linha &nbsp;·&nbsp; {isMac ? 'ctrl+N' : 'Ctrl+N'} nova sessão
       </p>
     </div>
   );

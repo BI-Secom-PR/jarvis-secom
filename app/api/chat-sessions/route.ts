@@ -21,6 +21,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const title = typeof body.title === 'string' ? body.title : 'Nova conversa'
 
+  // 1 conversa ativa por usuário: nova sessão apaga as anteriores (mensagens cascateiam)
+  await db.delete(chatSessions).where(eq(chatSessions.userId, user.id))
+
   const [session] = await db
     .insert(chatSessions)
     .values({ userId: user.id, title })

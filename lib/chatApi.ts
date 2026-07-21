@@ -11,6 +11,29 @@ export async function createSession(title: string): Promise<string | null> {
   }
 }
 
+export async function getLatestSession(): Promise<{ id: string; updatedAt: string } | null> {
+  try {
+    const res = await fetch('/api/chat-sessions');
+    if (!res.ok) return null;
+    const list = await res.json();
+    return list[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getMessages(
+  sessionId: string,
+): Promise<Array<{ role: 'USER' | 'AI'; content: string; chartData: unknown }>> {
+  try {
+    const res = await fetch(`/api/chat-sessions/${sessionId}/messages`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+
 export async function saveMessage(
   sessionId: string,
   role: 'USER' | 'AI',

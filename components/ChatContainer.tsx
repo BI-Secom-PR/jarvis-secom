@@ -84,9 +84,26 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
     }
   }, []);
 
-  // Create initial chat session on mount
+  // On mount: resume the last conversation if active within 48h, else start fresh
   useEffect(() => {
-    createChatSession();
+    (async () => {
+      const latest = await chatApi.getLatestSession();
+      if (latest && Date.now() - new Date(latest.updatedAt).getTime() < 48 * 3600_000) {
+        sessionIdRef.current = latest.id;
+        const msgs = await chatApi.getMessages(latest.id);
+        isFirstMsgRef.current = msgs.length === 0;
+        setMessages(
+          msgs.map((m, i) => ({
+            id: String(i),
+            role: m.role === "USER" ? "user" : "ai",
+            text: m.content,
+            chartData: m.chartData as Message["chartData"],
+          })),
+        );
+      } else {
+        await createChatSession();
+      }
+    })();
   }, [createChatSession]);
 
   // Cmd+N (Mac) / Ctrl+N (Win/Linux) → new chat session
