@@ -69,7 +69,7 @@ function Thumb({ url, onOpen }: { url: string | null; onOpen: (url: string) => v
   const [failed, setFailed] = useState(false);
   if (!url || failed)
     return (
-      <div className="h-12 w-12 shrink-0 rounded-lg border border-separator bg-fill flex items-center justify-center text-ink-4">
+      <div className="h-12 w-12 shrink-0 rounded-lg border border-separator bg-fill flex items-center justify-center text-ink-3">
         ◇
       </div>
     );
@@ -452,7 +452,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
                   onChange={(e) => setAiText(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && applyAiFilter()}
                   placeholder='Filtro em linguagem natural, ex.: "reclamações sobre preço de gasolina"'
-                  className="flex-1 min-w-[240px] bg-fill border border-separator rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink-4 focus:outline-none focus:border-accent-border"
+                  className="flex-1 min-w-[240px] bg-fill border border-separator rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent-border"
                 />
                 <button
                   onClick={applyAiFilter}
@@ -510,8 +510,8 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
                       key={m}
                       onClick={() => setTopMode(m)}
                       className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${topMode === m
-                          ? "bg-accent-soft border-accent-border text-accent-text"
-                          : "bg-fill border-separator text-ink-3 hover:text-ink"
+                        ? "bg-accent-soft border-accent-border text-accent-text"
+                        : "bg-fill border-separator text-ink-3 hover:text-ink"
                         }`}
                     >
                       Mais {m === "Negativo" ? "negativos" : "positivos"}
@@ -533,7 +533,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
               >
                 <span style={{ color: "var(--hud-violet)" }}>◇</span> Comentários
                 {totalComments > 0 && (
-                  <span className="normal-case tracking-normal tabular-nums text-ink-4" style={{ textShadow: "none" }}>
+                  <span className="normal-case tracking-normal tabular-nums text-ink-3" style={{ textShadow: "none" }}>
                     · {totalComments.toLocaleString("pt-BR")}
                   </span>
                 )}
@@ -574,13 +574,13 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
                         <p className="text-ink-2" title={row.post_message ?? undefined}>
                           {truncate(row.post_message, 140)}
                         </p>
-                        <p className="mt-1 text-[11px] text-ink-4 truncate max-w-[280px]" title={`${row.campaign_name ?? ""} · ${row.ad_name ?? ""}`}>
+                        <p className="mt-1 text-[11px] text-ink-3 truncate max-w-[280px]" title={`${row.campaign_name ?? ""} · ${row.ad_name ?? ""}`}>
                           {platformLabel(row.platform)} · {truncate(row.campaign_name, 45)}
                         </p>
                       </td>
                       <td className="px-3 py-3">
                         <p className="text-ink" title={row.comment ?? undefined}>{truncate(row.comment, 200)}</p>
-                        <p className="mt-1 text-[11px] text-ink-4">
+                        <p className="mt-1 text-[11px] text-ink-3">
                           {row.author ?? "anônimo"} · {row.like_count ?? 0} ♥
                           {row.created_time ? ` · ${new Date(row.created_time).toLocaleDateString("pt-BR")}` : ""}
                         </p>
@@ -602,7 +602,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
                           ))}
                         </select>
                         {row.sentiment_source === "human" && (
-                          <p className="mt-1.5 text-[10px] text-ink-4" title={row.audited_by ?? undefined}>
+                          <p className="mt-1.5 text-[10px] text-ink-3" title={row.audited_by ?? undefined}>
                             ✎ corrigido por {truncate(row.audited_by, 28)}
                           </p>
                         )}
@@ -671,9 +671,9 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
               const r = nw / nh;
               const targetR =
                 Math.abs(r - 1) <= 0.12 ? 1 :
-                r >= 1.5 ? 16 / 9 :
-                r <= 0.7 ? 9 / 16 :
-                r;
+                  r >= 1.5 ? 16 / 9 :
+                    r <= 0.7 ? 9 / 16 :
+                      r;
               const maxW = Math.min(window.innerWidth * 0.9, 1100);
               const maxH = window.innerHeight * 0.85;
               let w = maxW;
