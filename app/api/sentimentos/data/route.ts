@@ -8,6 +8,10 @@ export const maxDuration = 60;
 
 const PAGE_SIZE = 50;
 
+const MINIO_PUBLIC_BASE_URL =
+  process.env.MINIO_PUBLIC_BASE_URL || 'https://purveyor-undead-oops.ngrok-free.dev';
+const MINIO_BUCKET = process.env.MINIO_BUCKET || 'social-ad-creatives';
+
 // Meta ad-creative rows store a signed external-*.fbcdn.net wrapper URL whose
 // `oe=` expiry passes within ~1-2 days; the inner `url=` (the actual
 // facebook.com/ads/image/ link) stays valid much longer, so unwrap it.
@@ -25,8 +29,21 @@ function resolveImageUrl(url: string | null): string | null {
   return url;
 }
 
+// creative_image_path is a MinIO object key (e.g. "meta/....jpg"), not a URL —
+// durable, unlike the fbcdn wrapper above. Prioritize it over image_url.
+function resolveThumbUrl(path: string | null, imageUrl: string | null): string | null {
+  if (path) {
+    if (/^https?:\/\//i.test(path)) return path; // defensive: already absolute
+    return `${MINIO_PUBLIC_BASE_URL.replace(/\/$/, '')}/${MINIO_BUCKET}/${path.replace(/^\/+/, '')}`;
+  }
+  return resolveImageUrl(imageUrl);
+}
+
 function resolveComments(rows: Array<Record<string, unknown>>) {
-  return rows.map((c) => ({ ...c, image_url: resolveImageUrl(c.image_url as string | null) }));
+  return rows.map(({ creative_image_path, image_url, ...rest }) => ({
+    ...rest,
+    image_url: resolveThumbUrl(creative_image_path as string | null, image_url as string | null),
+  }));
 }
 
 export async function POST(req: NextRequest) {
@@ -52,7 +69,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const pool = getPool();
-    const commentsSql = `SELECT id, image_url, post_message, comment, author, like_count, created_time, sentiment, sentiment_source, audited_by, campaign_name, ad_name, platform
+    const commentsSql = `SELECT id, image_url, creative_image_path, post_message, comment, author, like_count, created_time, sentiment, sentiment_source, audited_by, campaign_name, ad_name, platform
          ${from} ORDER BY created_time DESC LIMIT ${PAGE_SIZE} OFFSET ${page * PAGE_SIZE}`;
 
     // Every filter change resets page to 0 client-side, so page > 0 means the
