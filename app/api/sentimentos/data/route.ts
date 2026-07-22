@@ -8,10 +8,6 @@ export const maxDuration = 60;
 
 const PAGE_SIZE = 50;
 
-const MINIO_PUBLIC_BASE_URL =
-  process.env.MINIO_PUBLIC_BASE_URL || 'https://purveyor-undead-oops.ngrok-free.dev';
-const MINIO_BUCKET = process.env.MINIO_BUCKET || 'social-ad-creatives';
-
 // Meta ad-creative rows store a signed external-*.fbcdn.net wrapper URL whose
 // `oe=` expiry passes within ~1-2 days; the inner `url=` (the actual
 // facebook.com/ads/image/ link) stays valid much longer, so unwrap it.
@@ -30,11 +26,13 @@ function resolveImageUrl(url: string | null): string | null {
 }
 
 // creative_image_path is a MinIO object key (e.g. "meta/....jpg"), not a URL —
-// durable, unlike the fbcdn wrapper above. Prioritize it over image_url.
+// durable, unlike the fbcdn wrapper above. Prioritize it over image_url, and
+// route it through our own proxy (see thumb/route.ts) since the ngrok tunnel
+// in front of MinIO blocks direct browser <img> requests with an interstitial.
 function resolveThumbUrl(path: string | null, imageUrl: string | null): string | null {
   if (path) {
     if (/^https?:\/\//i.test(path)) return path; // defensive: already absolute
-    return `${MINIO_PUBLIC_BASE_URL.replace(/\/$/, '')}/${MINIO_BUCKET}/${path.replace(/^\/+/, '')}`;
+    return `/api/sentimentos/thumb?key=${encodeURIComponent(path.replace(/^\/+/, ''))}`;
   }
   return resolveImageUrl(imageUrl);
 }
