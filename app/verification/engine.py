@@ -106,8 +106,16 @@ def _detect_consolidado_cols(ws, adserver: str | None = None) -> dict:
     Lê o header (HEADER_ROW=8) e retorna posições reais das colunas,
     permitindo que cada adserver use seu próprio layout de consolidado.
     Fallback para os valores hardcoded quando uma coluna não é encontrada.
+
+    CATEGORY_MAP funde sinônimos numa chave só (ex.: "Crime" e "Violência" →
+    "violencia") assumindo um template com coluna única por bucket. Quando o
+    template separa esse bucket em mais de uma coluna (ex.: DGBRASIL: Crime e
+    Violência distintas), fundir pela chave semântica sobrescreveria uma
+    coluna com a outra — por isso agrupamos primeiro e só usamos a chave
+    semântica quando há exatamente 1 coluna por grupo; havendo mais de uma,
+    cada coluna vira sua própria chave (slug literal do header).
     """
-    indevidas: dict[str, int] = {}
+    groups: dict[str, list[tuple[int, str]]] = defaultdict(list)
     devolutiva_bi  = COL_DEVOLUTIVA_BI
     url_info       = COL_URL_INFO
     col_views_start:  int | None = None
@@ -127,7 +135,7 @@ def _detect_consolidado_cols(ws, adserver: str | None = None) -> dict:
 
         key = normaliza_categoria(text, adserver=adserver)
         if key:
-            indevidas[key] = c
+            groups[key].append((c, text))
 
         if "devolutiva bi" in tl or ("devolutiva" in tl and "secom" in tl):
             devolutiva_bi = c
@@ -147,6 +155,14 @@ def _detect_consolidado_cols(ws, adserver: str | None = None) -> dict:
             col_cliques = c
         elif tl == "views":
             col_views = c
+
+    indevidas: dict[str, int] = {}
+    for key, cols in groups.items():
+        if len(cols) == 1:
+            indevidas[key] = cols[0][0]
+        else:
+            for c, text in cols:
+                indevidas[_slug_categoria(text)] = c
 
     return {
         "indevidas":       indevidas if indevidas else dict(COL_INDEVIDAS),
@@ -168,6 +184,15 @@ _REMOVE_SUFFIXES = re.compile(
 )
 _REMOVE_PUNCT = re.compile(r"[^\w\s]")
 _EXTRA_SPACES = re.compile(r"\s+")
+
+
+def _slug_categoria(text: str) -> str:
+    """Slug determinístico do texto cru da categoria, sem passar pelo CATEGORY_MAP —
+    usado só quando o consolidado separa em colunas distintas um bucket que o
+    mapa semântico normalmente funde (ver _detect_consolidado_cols)."""
+    nfkd = unicodedata.normalize("NFKD", str(text))
+    ascii_str = nfkd.encode("ascii", "ignore").decode("ascii").lower().strip()
+    return re.sub(r"[^a-z0-9]+", "_", ascii_str).strip("_")
 
 
 def _normalize(name: str) -> str:
@@ -443,7 +468,11 @@ def _compare(
         verif_indev: dict[str, int] = {}
         verif_extras: dict[str, int] = {}
         for raw_cat, count in verif_indev_raw.items():
-            cat_key = normaliza_categoria(raw_cat, adserver=adserver)
+            # Match literal primeiro: se o consolidado já reserva uma coluna própria
+            # pro texto exato dessa categoria (caso de split, ver _detect_consolidado_cols),
+            # usa ela em vez de cair na fusão semântica do CATEGORY_MAP.
+            lit_key = _slug_categoria(raw_cat)
+            cat_key = lit_key if lit_key in consol_indev else normaliza_categoria(raw_cat, adserver=adserver)
             if cat_key:
                 verif_indev[cat_key] = verif_indev.get(cat_key, 0) + count
             else:

@@ -65,11 +65,19 @@ def parse_date(v) -> date | None:
 
 
 def col_index(header: list[str], *names: str) -> int | None:
-    """Índice (0-based) da primeira coluna cujo nome (case-insensitive) está em names."""
-    names_lower = {n.lower() for n in names}
-    for i, h in enumerate(header):
-        if h.lower() in names_lower:
-            return i
+    """Índice (0-based) da coluna cujo nome (case-insensitive) bate com o primeiro
+    candidato de `names` presente no header — a ORDEM de `names` é prioridade.
+    Importa quando o header tem mais de uma coluna candidata ao mesmo tempo (ex.:
+    "Total de impressões" e "Impressões válidas" na mesma planilha SENSE V1) —
+    antes a prioridade era por posição da coluna, não pela ordem dos candidatos,
+    o que fazia colunas de fallback "vencerem" a preferida quando vinham antes
+    no header."""
+    header_lower = [h.lower() for h in header]
+    for name in names:
+        name_lower = name.lower()
+        for i, h in enumerate(header_lower):
+            if h == name_lower:
+                return i
     return None
 
 

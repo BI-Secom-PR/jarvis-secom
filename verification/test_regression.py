@@ -55,7 +55,7 @@ EXPECTED: dict = {
                 "statuses": ["DIVERGENCIA"] * 6 + ["OK"] * 11 + ["PENDENTE"] * 6},
     "SENSE": {"n_veiculos": 8, "statuses": ["DIVERGENCIA"] * 3 + ["OK"] * 5},
     "DGBRASIL": {"n_veiculos": 22,
-                 "statuses": ["DIVERGENCIA"] * 14 + ["OK"] * 7 + ["PENDENTE"] * 1},
+                 "statuses": ["DIVERGENCIA"] * 6 + ["OK"] * 15 + ["PENDENTE"] * 1},
 }
 
 
