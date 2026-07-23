@@ -76,6 +76,9 @@ export async function POST(req: NextRequest) {
   const trendBucket = TREND_BUCKETS[trendGranularity];
   const { sql: where, params } = buildWhere(body);
   const from = `FROM silver_social_comments WHERE ${where}`;
+  // Safety cap for unbounded day-level grouping — only applies when the user
+  // hasn't picked their own date range, otherwise it silently clips it.
+  const trendCap = body.from ? '' : ` AND created_time >= DATE_SUB(CURDATE(), ${trendBucket.interval})`;
   // top-ads lists pin their own sentiment, so they must ignore the user's
   // sentiment filter (otherwise `sentiment='Positivo' AND sentiment='Negativo'`)
   const { sql: whereNoSent, params: paramsNoSent } = buildWhere({ ...body, sentiment: undefined });
@@ -105,7 +108,7 @@ export async function POST(req: NextRequest) {
     ]);
     const [trend, byPlatform, topAds] = await Promise.all([
       pool.query(
-        `SELECT ${trendBucket.expr} period, sentiment, COUNT(*) n ${from} AND created_time >= DATE_SUB(CURDATE(), ${trendBucket.interval}) GROUP BY period, sentiment ORDER BY period`,
+        `SELECT ${trendBucket.expr} period, sentiment, COUNT(*) n ${from}${trendCap} GROUP BY period, sentiment ORDER BY period`,
         params
       ),
       pool.query(`SELECT platform, sentiment, COUNT(*) n ${from} GROUP BY platform, sentiment`, params),
