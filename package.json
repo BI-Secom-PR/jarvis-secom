@@ -33,7 +33,7 @@
     "html-to-image": "^1.11.13",
     "jose": "^6.2.3",
     "mysql2": "^3.19.1",
-    "next": "16.2.6",
+    "next": "16.2.11",
     "ollama": "^0.6.3",
     "postgres": "^3.4.8",
     "react": "19.2.3",
@@ -43,7 +43,14 @@
     "zod": "^4.3.6"
   },
   "overrides": {
-    "protobufjs": "^7.6.3",
+    "protobufjs": "^7.6.5",
+    "brace-expansion": "^1.1.16",
+    "sharp": "^0.35.3",
+    "readdir-glob": {
+      "minimatch": {
+        "brace-expansion": "^2.1.2"
+      }
+    },
     "esbuild": ">=0.28.1",
     "postcss": "~8.5.10",
     "tmp": ">=0.2.6",
