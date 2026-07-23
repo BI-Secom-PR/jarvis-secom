@@ -18,6 +18,11 @@ const SENT_COLORS: Record<string, string> = {
   "Sem classificação": "#5b6474",
 };
 const SENT_ORDER = ["Positivo", "Negativo", "Neutro", "Sem classificação"];
+const TREND_TITLES: Record<"day" | "week" | "month", string> = {
+  day: "Evolução diária por sentimento",
+  week: "Evolução semanal por sentimento",
+  month: "Evolução mensal por sentimento",
+};
 
 type FiltersData = {
   campaigns: string[];
@@ -42,9 +47,10 @@ type CommentRow = {
 };
 
 type CountRow = { sentiment: string | null; n: number };
+type TrendGranularity = "day" | "week" | "month";
 type DataResp = {
   distribution: CountRow[];
-  trend: { ym: string; sentiment: string | null; n: number }[];
+  trend: { period: string; sentiment: string | null; n: number }[];
   byPlatform: { platform: string; sentiment: string | null; n: number }[];
   topNegative: { ad_name: string; n: number }[];
   topPositive: { ad_name: string; n: number }[];
@@ -111,6 +117,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [topMode, setTopMode] = useState<"Negativo" | "Positivo">("Negativo");
+  const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>("month");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFrame, setPreviewFrame] = useState<{ w: number; h: number } | null>(null);
 
@@ -168,7 +175,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
       try {
         const res = await postJson(
           "/api/sentimentos/data",
-          { campaign, ad, platform, sentiment, from, to, aiWhere: aiFilter?.where, page },
+          { campaign, ad, platform, sentiment, from, to, aiWhere: aiFilter?.where, page, trendGranularity },
           { signal: ac.signal }
         );
         const json = await res.json();
@@ -186,7 +193,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
       window.clearTimeout(t);
       ac.abort();
     };
-  }, [campaign, ad, platform, sentiment, from, to, aiFilter, page]);
+  }, [campaign, ad, platform, sentiment, from, to, aiFilter, page, trendGranularity]);
 
   // server already facets the ads list by the other filters
   const adOptions = useMemo(
@@ -272,20 +279,24 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
 
   const trend: ChartData | null = useMemo(() => {
     if (!data?.trend?.length) return null;
-    const yms = [...new Set(data.trend.map((r) => r.ym))].sort();
+    const periods = [...new Set(data.trend.map((r) => r.period))].sort();
     const series = SENTIMENTS.filter((s) => data.trend.some((r) => r.sentiment === s));
+    // "m/aa" for month ("2024-08" → "8/24"), "dd/mm" for week/day ("2024-08-05" → "05/08")
+    const fmtLabel = (p: string) =>
+      trendGranularity === "month"
+        ? `${Number(p.slice(5))}/${p.slice(2, 4)}`
+        : `${p.slice(8, 10)}/${p.slice(5, 7)}`;
     return {
       type: "line",
-      title: "Evolução mensal por sentimento",
-      // "m/aa" fits ChartWidget's 4-char axis labels ("2024-08" → "8/24")
-      labels: yms.map((ym) => `${Number(ym.slice(5))}/${ym.slice(2, 4)}`),
+      title: TREND_TITLES[trendGranularity],
+      labels: periods.map(fmtLabel),
       datasets: series.map((s) => ({
         label: s,
-        data: yms.map((ym) => Number(data.trend.find((r) => r.ym === ym && r.sentiment === s)?.n ?? 0)),
+        data: periods.map((p) => Number(data.trend.find((r) => r.period === p && r.sentiment === s)?.n ?? 0)),
       })),
       colors: series.map((s) => SENT_COLORS[s]),
     };
-  }, [data]);
+  }, [data, trendGranularity]);
 
   // HudBar renders a single dataset (colored per label) — so one honest series:
   // share of negative comments per platform, with totals in the tooltip meta.
@@ -500,7 +511,25 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
           {/* ── Gráficos ── */}
           <section className="grid grid-cols-1 lg:grid-cols-2 auto-rows-fr gap-4">
             {donut && <ChartWidget chart={donut} fill />}
-            {trend && <ChartWidget chart={trend} fill />}
+            {trend && (
+              <div className="flex flex-col gap-2 min-h-0">
+                <div className="flex gap-2 shrink-0">
+                  {(["day", "week", "month"] as const).map((g) => (
+                    <button
+                      key={g}
+                      onClick={() => { setTrendGranularity(g); setPage(0); }}
+                      className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${trendGranularity === g
+                        ? "bg-accent-soft border-accent-border text-accent-text"
+                        : "bg-fill border-separator text-ink-3 hover:text-ink"
+                        }`}
+                    >
+                      {{ day: "Diário", week: "Semanal", month: "Mensal" }[g]}
+                    </button>
+                  ))}
+                </div>
+                <ChartWidget chart={trend} fill />
+              </div>
+            )}
             {byPlatform && <ChartWidget chart={byPlatform} fill />}
             {topAds && (
               <div className="flex flex-col gap-2 min-h-0">

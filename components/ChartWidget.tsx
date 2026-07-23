@@ -295,8 +295,14 @@ function HudLineArea({ chart, gid, theme, setHover, area }: { chart: ChartData; 
       <SvgDefs gid={gid} theme={theme} />
       <GridLines pl={pl} pr={pr} pt={pt} pb={pb} max={max} theme={theme} />
       {Array.from({ length: count }).map((_, i) => {
+        // Thin to ~6 evenly-spaced ticks (always keeping the last) so dense
+        // series (weekly/daily trends) don't render overlapping labels — the
+        // line/area itself still plots every point, only text is skipped.
+        const step = Math.max(1, Math.ceil(count / 6));
+        if (i % step !== 0 && i !== count - 1) return null;
         const x = count === 1 ? pl + cW / 2 : pl + i * (cW / (count - 1));
-        return <text key={i} x={x} y={VIEW_H - pb + 12} textAnchor="middle" fill={theme.dim} fontSize="8.5" fontFamily="monospace">{shortLabel(labelAt(i), 4)}</text>;
+        // max 5 (not 4): "dd/mm" and double-digit-month "m/aa" (e.g. "12/26") both need the 5th char
+        return <text key={i} x={x} y={VIEW_H - pb + 12} textAnchor="middle" fill={theme.dim} fontSize="8.5" fontFamily="monospace">{shortLabel(labelAt(i), 5)}</text>;
       })}
       {[...series].reverse().map((s, reverseIdx) => {
         const si = series.length - 1 - reverseIdx;

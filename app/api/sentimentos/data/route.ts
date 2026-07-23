@@ -8,6 +8,16 @@ export const maxDuration = 60;
 
 const PAGE_SIZE = 50;
 
+const TREND_BUCKETS = {
+  month: { expr: "DATE_FORMAT(created_time, '%Y-%m')", interval: 'INTERVAL 24 MONTH' },
+  week: {
+    expr: "DATE_FORMAT(DATE_SUB(created_time, INTERVAL WEEKDAY(created_time) DAY), '%Y-%m-%d')",
+    interval: 'INTERVAL 26 WEEK',
+  },
+  day: { expr: "DATE_FORMAT(created_time, '%Y-%m-%d')", interval: 'INTERVAL 60 DAY' },
+} as const;
+type TrendGranularity = keyof typeof TREND_BUCKETS;
+
 // Meta ad-creative rows store a signed external-*.fbcdn.net wrapper URL whose
 // `oe=` expiry passes within ~1-2 days; the inner `url=` (the actual
 // facebook.com/ads/image/ link) stays valid much longer, so unwrap it.
@@ -48,7 +58,7 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: SentimentFilters & { page?: number };
+  let body: SentimentFilters & { page?: number; trendGranularity?: string };
   try {
     body = await req.json();
   } catch {
@@ -59,6 +69,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Filtro IA inválido' }, { status: 400 });
 
   const page = Math.max(0, Math.floor(Number(body.page) || 0));
+  const trendGranularity: TrendGranularity =
+    body.trendGranularity && body.trendGranularity in TREND_BUCKETS
+      ? (body.trendGranularity as TrendGranularity)
+      : 'month';
+  const trendBucket = TREND_BUCKETS[trendGranularity];
   const { sql: where, params } = buildWhere(body);
   const from = `FROM silver_social_comments WHERE ${where}`;
   // top-ads lists pin their own sentiment, so they must ignore the user's
@@ -90,7 +105,7 @@ export async function POST(req: NextRequest) {
     ]);
     const [trend, byPlatform, topAds] = await Promise.all([
       pool.query(
-        `SELECT DATE_FORMAT(created_time, '%Y-%m') ym, sentiment, COUNT(*) n ${from} AND created_time >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH) GROUP BY ym, sentiment ORDER BY ym`,
+        `SELECT ${trendBucket.expr} period, sentiment, COUNT(*) n ${from} AND created_time >= DATE_SUB(CURDATE(), ${trendBucket.interval}) GROUP BY period, sentiment ORDER BY period`,
         params
       ),
       pool.query(`SELECT platform, sentiment, COUNT(*) n ${from} GROUP BY platform, sentiment`, params),
