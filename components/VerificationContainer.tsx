@@ -250,6 +250,7 @@ const ADSERVERS: { id: string; label: string; disabled?: boolean }[] = [
   { id: "sense", label: "SENSE" },
   { id: "brz", label: "BRZ", disabled: true },
   { id: "dgbrasil", label: "DGBRASIL" },
+  { id: "teratech", label: "TERATECH" },
 ];
 
 function formatElapsed(s: number): string {

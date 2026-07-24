@@ -10,7 +10,7 @@ import { Ollama } from 'ollama';
 
 export const maxDuration = 300;
 
-const VALID_ADSERVERS = new Set(['00px', 'adforce', 'admotion', 'ahead', 'metrike', 'brz', 'sense', 'dgbrasil']);
+const VALID_ADSERVERS = new Set(['00px', 'adforce', 'admotion', 'ahead', 'metrike', 'brz', 'sense', 'dgbrasil', 'teratech']);
 const DATE_RE = /^\d{2}\/\d{2}\/\d{4}$/;
 
 function validateAdserver(adserver: string): string | null {

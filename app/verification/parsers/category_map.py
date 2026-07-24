@@ -2,7 +2,7 @@
 Mapeamento de categorias de indevidas → chaves internas SECOM.
 
 Cada adserver usa nomenclatura própria para categorias. Este módulo fornece:
-  - Mapas por adserver (SENSE_CATEGORY_MAP, METRIKE_CATEGORY_MAP, ADFORCE_CATEGORY_MAP)
+  - Mapas por adserver (SENSE_, METRIKE_, ADFORCE_, TERATECH_CATEGORY_MAP)
   - CATEGORY_MAP global como fallback para adservers sem mapa dedicado
   - normaliza_categoria(texto, adserver=None) — resolução com prioridade adserver-específico
 
@@ -76,10 +76,39 @@ ADFORCE_CATEGORY_MAP: dict[str, str] = {
     "safeframe":                        "safeframe",
 }
 
+TERATECH_CATEGORY_MAP: dict[str, str] = {
+    # O consolidado TERATECH agrega o que o verification separa (confirmado
+    # batendo os totais dos 12 veículos CPM da AON 20260009 - Junho):
+    #   "Policial"          = Acidente + Crime + Violencia
+    #   "Conteúdo Sensível" = Sexo e Sexualidade + Pornografia
+    # Quando o consolidado usa o template 29-col, que dá coluna própria a cada
+    # uma dessas, o match literal do engine (_slug_categoria) vence antes desta
+    # fusão — por isso o mesmo mapa serve aos dois layouts.
+    "acidente":          "violencia",
+    "crime":             "violencia",
+    "violência":         "violencia",
+    "violencia":         "violencia",
+    "policial":          "violencia",
+    "sexo e sexualidade": "conteudo_sensivel",
+    "pornografia":       "conteudo_sensivel",
+    "conteúdo sensível": "conteudo_sensivel",
+    "conteudo sensivel": "conteudo_sensivel",
+    "safeframe":         "safeframe",
+    "aplicativo móvel":  "app_movel",
+    "aplicativo movel":  "app_movel",
+    "teste banner":      "teste_tag",
+    "teste de tag":      "teste_tag",
+    "não classificado":  "nao_classificado",
+    "nao classificado":  "nao_classificado",
+    "fora da praça":     "fora_da_praca",
+    "fora da praca":     "fora_da_praca",
+}
+
 ADSERVER_MAPS: dict[str, dict[str, str]] = {
-    "sense":   SENSE_CATEGORY_MAP,
-    "metrike": METRIKE_CATEGORY_MAP,
-    "adforce": ADFORCE_CATEGORY_MAP,
+    "sense":    SENSE_CATEGORY_MAP,
+    "teratech": TERATECH_CATEGORY_MAP,
+    "metrike":  METRIKE_CATEGORY_MAP,
+    "adforce":  ADFORCE_CATEGORY_MAP,
 }
 
 # ── Fallback global (00px, admotion, ahead, brz e adservers sem mapa próprio) ─

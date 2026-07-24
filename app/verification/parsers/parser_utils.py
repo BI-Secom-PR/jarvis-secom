@@ -81,6 +81,83 @@ def col_index(header: list[str], *names: str) -> int | None:
     return None
 
 
+def parse_comprovante_cm360(ws, formato: str) -> dict | None:
+    """
+    Extrai o total de UM veículo de uma planilha de comprovante CM360/DFA
+    (usado por DGBRASIL — um veículo por arquivo — e TERATECH — um por aba).
+
+    Layout: metadados nas linhas 1-6, header na linha 8, dados a partir da 9.
+    As linhas de total têm "Data" = "-"; há uma por Package e, no fim, o total
+    geral do veículo com "Package" = "-" (bate com "Impressoes/Unidades
+    Entregues" do cabeçalho na linha 5) e o veículo escrito como "<Nome> Total".
+    Pegar o primeiro "Data" = "-" pegaria só o primeiro package — ex.: TERATECH
+    Claro Ads tem 3 packages (1.767.981 no 1º vs 4.836.462 no total); DGBRASIL
+    Sou + Favela tem 5. Sem nenhuma linha "Package" = "-" cai na primeira linha
+    de total (aba de package único).
+
+    Duas variantes de coluna: display/CPM (14 cols) e vídeo/CPV (19 cols, com
+    Video Plays/Quartis/Completions). "Views" no consolidado = Video Completions.
+
+    Retorna None quando a planilha não tem o layout de comprovante.
+    """
+    header = [str(v).strip() if v is not None else "" for v in
+              next(ws.iter_rows(min_row=8, max_row=8, values_only=True), [])]
+    if not header:
+        return None
+
+    i_veiculo     = col_index(header, "Veiculo", "Veículo")
+    i_data        = col_index(header, "Data")
+    i_package     = col_index(header, "Package")
+    i_contratado  = col_index(header, "Contratado")
+    i_impressoes  = col_index(header, "Impressoes", "Impressões")
+    i_cliques     = col_index(header, "Cliques")
+    i_viewable    = col_index(header, "Active View: Viewable Impressions")
+    i_viewability = col_index(header, "Active View: % Viewable Impressions")
+    i_completions = col_index(header, "Video Completions")
+
+    if i_veiculo is None or i_impressoes is None or i_data is None:
+        return None
+
+    is_cpv = i_completions is not None
+
+    totais = [
+        row for row in ws.iter_rows(min_row=9, values_only=True)
+        if not all(v is None for v in row)
+        and i_data < len(row) and str(row[i_data]).strip() == "-"
+        and row[i_veiculo] and str(row[i_veiculo]).strip()
+    ]
+    geral = None
+    if i_package is not None:
+        geral = next(
+            (r for r in totais
+             if i_package < len(r) and str(r[i_package]).strip() == "-"),
+            None,
+        )
+    row = geral or (totais[0] if totais else None)
+    if row is None:
+        return None
+
+    veiculo = str(row[i_veiculo]).strip()
+    if veiculo.lower().endswith(" total"):
+        veiculo = veiculo[:-6].strip()
+
+    va = to_float(row[i_viewability]) if i_viewability is not None else None
+
+    return {
+        "veiculo":           veiculo,
+        "tipo_compra":       "CPV" if is_cpv else "CPM",
+        "contratado":        to_int(row[i_contratado]) or None if i_contratado is not None else None,
+        "entregue":          to_int(row[i_impressoes]),
+        "views":             to_int(row[i_completions]) if is_cpv else None,
+        "cliques":           to_int(row[i_cliques]) or None if i_cliques is not None else None,
+        "viewables":         to_int(row[i_viewable]) or None if i_viewable is not None else None,
+        "viewability":       round(va * 100, 2) if va is not None and va <= 1.0 else va,
+        "indevidas":         {},
+        "url_sample":        [],
+        "formato_detectado": formato,
+    }
+
+
 def cli_date(s: str | None) -> date | None:
     if not s:
         return None

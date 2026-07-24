@@ -40,9 +40,17 @@ CASES = {
         # Consolidado CPM (19 veículos display); glob de comp/verif inclui também
         # os 3 veículos de vídeo (Claro/Tim/Vivo Ads), que ficam em "sem_consolidado"
         # aqui pois pertencem ao consolidado CPV separado — smoke manual, não baseline.
-        "consolidado": "DBbrasil/Junho/Consolidado/Consolidado Junho - CPM.xlsx",
-        "comp_glob": "DBbrasil/Junho/Comprovante de Veiculação/*.xlsx",
-        "verif_glob": "DBbrasil/Junho/Verification/*.xlsx",
+        "consolidado": "DGbrasil/Junho/Consolidado/Consolidado Junho - CPM.xlsx",
+        "comp_glob": "DGbrasil/Junho/Comprovante de Veiculação/*.xlsx",
+        "verif_glob": "DGbrasil/Junho/Verification/*.xlsx",
+    },
+    "TERATECH": {
+        # Lado CPV (3 veículos): a aba ativa desse consolidado já é CONSOLIDADO -
+        # CPV. O lado CPM (12 veículos) é smoke manual — o engine lê só a aba
+        # ativa, então roda-se uma vez por objetivo.
+        "consolidado": "TERATECH/Verification Consolidado TERATECH - AON 20260009 - Junho.xlsx",
+        "comp_glob": "TERATECH/comprovantes/*CPV*.xlsx",
+        "verif_glob": "TERATECH/verifications/CPV/*.xlsx",
     },
 }
 
@@ -56,6 +64,7 @@ EXPECTED: dict = {
     "SENSE": {"n_veiculos": 8, "statuses": ["DIVERGENCIA"] * 3 + ["OK"] * 5},
     "DGBRASIL": {"n_veiculos": 22,
                  "statuses": ["DIVERGENCIA"] * 6 + ["OK"] * 15 + ["PENDENTE"] * 1},
+    "TERATECH": {"n_veiculos": 3, "statuses": ["DIVERGENCIA"] * 3},
 }
 
 
@@ -107,7 +116,7 @@ def main() -> None:
         for f in failures:
             print(f"  - {f}")
         sys.exit(1)
-    print("\nOK — engine bate com o baseline nos 3 adservers.")
+    print(f"\nOK — engine bate com o baseline nos {len(CASES)} adservers.")
 
 
 if __name__ == "__main__":

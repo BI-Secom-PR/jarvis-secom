@@ -1,17 +1,23 @@
 """
-Parser DGBRASIL — comprovante de entrega + verification de URLs.
+Parser TERATECH — comprovante de entrega + verification de URLs.
+
+Mesmo export CM360/DFA do DGBRASIL; único delta é a granularidade dos arquivos:
 
 Comprovante:
-  Um arquivo por veículo, layout CM360 lido por `parse_comprovante_cm360` em
-  parser_utils.py (o TERATECH usa o mesmo layout, um veículo por aba).
-  "Views" no consolidado corresponde a Video Completions (confirmado batendo
-  Views/Impressões com a coluna VTR).
+  Um arquivo por objetivo (CPM/CPV), **um veículo por aba** (o DGBRASIL usa um
+  arquivo por veículo — é o único delta). Cada aba é lida por
+  `parse_comprovante_cm360` em parser_utils.py, que documenta o layout e a
+  regra do total geral por Package. is_cpv é detectado por aba, não pelo arquivo.
 
 Verification:
+  Um arquivo por veículo (verifications/CPM/, verifications/CPV/).
   Header na linha 2 (linha 1 é um banner de texto livre inconsistente — não
   usar para totais). Duas schemas: 9 cols "Adserver/.../Impressoes" (display)
   e 6 cols minúsculas "agencia/.../impressions" (vídeo: Claro/Tim/Vivo Ads).
   Sem coluna de Data/Estado — filtros de data/praça viram no-op (igual SENSE).
+
+Consolidado: um arquivo com as abas "CONSOLIDADO - CPM" e "CONSOLIDADO - CPV".
+O engine lê só a aba ativa — rode uma vez por objetivo.
 """
 
 import json
@@ -33,17 +39,21 @@ def parse_comprovante(
     data_ini: date | None = None,
     data_fim: date | None = None,
 ) -> list[dict]:
-    """Parseia comprovante DGBRASIL — um veículo por arquivo, layout CM360."""
+    """Parseia comprovante TERATECH — uma aba por veículo, layout CM360."""
     path = Path(filepath)
     if not path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
 
     wb = load_workbook_fast(str(path))
-    result = parse_comprovante_cm360(wb.active, "dgbrasil_comprovante")
+    results = [
+        r for r in (
+            parse_comprovante_cm360(ws, "teratech_comprovante")
+            for ws in wb.worksheets
+        )
+        if r is not None
+    ]
     wb.close()
-    if result is None:
-        raise ValueError(f"Layout de comprovante não reconhecido: {path.name}")
-    return [result]
+    return results
 
 
 # ── parse_verif ──────────────────────────────────────────────────────────────
@@ -54,7 +64,7 @@ def parse_verif(
     data_fim: date | None = None,
     praca: str | None = None,
 ) -> list[dict]:
-    """Parseia verification DGBRASIL (header linha 2, schema 9-col ou 6-col)."""
+    """Parseia verification TERATECH (header linha 2, schema 9-col ou 6-col)."""
     path = Path(filepath)
     if not path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
@@ -127,7 +137,7 @@ def parse_verif(
             "viewability":       None,
             "indevidas":         dict(veiculos_indevidas[veiculo]),
             "url_sample":        url_pool if not results else [],
-            "formato_detectado": "dgbrasil_verif",
+            "formato_detectado": "teratech_verif",
         })
 
     return results
@@ -137,7 +147,7 @@ def parse_verif(
 if __name__ == "__main__":
     import argparse
 
-    ap = argparse.ArgumentParser(description="Parser DGBRASIL")
+    ap = argparse.ArgumentParser(description="Parser TERATECH")
     ap.add_argument("modo", choices=["comp", "verif"])
     ap.add_argument("arquivo")
     ap.add_argument("--ini", default=None, metavar="DD/MM/YYYY")
