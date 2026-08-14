@@ -69,3 +69,7 @@ GOLD_LAYER_DATA_DICTIONARY.md
 Framework Performance Analysis v4.md
 # knowledge-graph artifacts (graphify uninstalled 2026-06-12)
 graphify-out/
+
+# Service account keys — never commit
+gen-lang-client-*.json
+*-service-account*.json

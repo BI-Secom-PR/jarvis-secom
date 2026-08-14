@@ -74,16 +74,11 @@ def _patch_openpyxl_colors():
         pass
 
 
-def _download_url(url: str, dest: str, token: str | None = None) -> None:
-    """Download a file from a URL (e.g. Vercel Blob) to a local path.
-    If token is provided, sends it as a Bearer Authorization header."""
-    if token:
-        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-        with urllib.request.urlopen(req) as resp, open(dest, "wb") as f:
-            shutil.copyfileobj(resp, f)
-    else:
-        with urllib.request.urlopen(url) as resp, open(dest, "wb") as f:
-            shutil.copyfileobj(resp, f)
+def _download_url(url: str, dest: str) -> None:
+    """Download a file from a signed Supabase Storage URL to a local path.
+    Signed URLs carry their own token, so no Authorization header is needed."""
+    with urllib.request.urlopen(url) as resp, open(dest, "wb") as f:
+        shutil.copyfileobj(resp, f)
 
 
 def _run_engine(body: dict) -> dict:
@@ -92,47 +87,37 @@ def _run_engine(body: dict) -> dict:
     engine = importlib.import_module("engine")
     verificar = engine.verificar
 
-    blob_token = body.get("blob_token")
     tmpdir = tempfile.mkdtemp(prefix="secom-verif-")
+
+    def _materialize(item):
+        """Write one input file into tmpdir and return its path.
+
+        Two shapes arrive here, keyed on which one the caller used:
+          {"url": signed URL, "name": original filename}  → storage branch
+          {"name": ..., "b64": ...}                       → on-prem base64 branch
+        The name is always explicit: engine.py and the TERATECH parser key off
+        the original filename, and it can't be recovered from a storage path.
+        """
+        p = os.path.join(tmpdir, item["name"])
+        if "b64" in item:
+            with open(p, "wb") as f:
+                f.write(base64.b64decode(item["b64"]))
+        else:
+            _download_url(item["url"], p)
+        return p
+
     try:
-        # Save consolidado — supports both blob URL and legacy base64
+        # Save consolidado — signed URL or legacy base64
         consol_name = body.get("consolidado_name", "consolidado.xlsx")
         consol_path = os.path.join(tmpdir, consol_name)
         if "consolidado_url" in body:
-            _download_url(body["consolidado_url"], consol_path, blob_token)
+            _download_url(body["consolidado_url"], consol_path)
         else:
             with open(consol_path, "wb") as f:
                 f.write(base64.b64decode(body["consolidado_b64"]))
 
-        # Save comprovantes — supports blob URLs (comp_urls) or legacy base64 (comp_files)
-        comp_paths = []
-        if "comp_urls" in body:
-            for url in body["comp_urls"]:
-                name = url.split("?")[0].rsplit("/", 1)[-1]
-                p = os.path.join(tmpdir, name)
-                _download_url(url, p, blob_token)
-                comp_paths.append(p)
-        else:
-            for item in body.get("comp_files", []):
-                p = os.path.join(tmpdir, item["name"])
-                with open(p, "wb") as f:
-                    f.write(base64.b64decode(item["b64"]))
-                comp_paths.append(p)
-
-        # Save verification files — supports blob URLs (verif_urls) or legacy base64 (verif_files)
-        verif_paths = []
-        if "verif_urls" in body:
-            for url in body["verif_urls"]:
-                name = url.split("?")[0].rsplit("/", 1)[-1]
-                p = os.path.join(tmpdir, name)
-                _download_url(url, p, blob_token)
-                verif_paths.append(p)
-        else:
-            for item in body.get("verif_files", []):
-                p = os.path.join(tmpdir, item["name"])
-                with open(p, "wb") as f:
-                    f.write(base64.b64decode(item["b64"]))
-                verif_paths.append(p)
+        comp_paths = [_materialize(i) for i in body.get("comp_files", [])]
+        verif_paths = [_materialize(i) for i in body.get("verif_files", [])]
 
         adserver = body["adserver"]
         data_ini = _parse_date(body.get("ini"))

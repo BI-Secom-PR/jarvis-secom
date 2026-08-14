@@ -20,8 +20,10 @@ function buildCsp(nonce: string): string {
     "style-src 'self' 'unsafe-inline'",
     // *.fbcdn.net: creative thumbnails on /sentimentos (silver_social_comments.image_url)
     // www.facebook.com: unwrapped ad-image links (see resolveImageUrl in app/api/sentimentos/data/route.ts) redirect through here before landing on fbcdn
-    "img-src 'self' data: https://*.public.blob.vercel-storage.com https://*.fbcdn.net https://www.facebook.com https://*.tiktokcdn.com",
-    "connect-src 'self' https://vercel.com https://*.public.blob.vercel-storage.com https://*.blob.vercel-storage.com",
+    "img-src 'self' data: https://*.fbcdn.net https://www.facebook.com https://*.tiktokcdn.com",
+    // *.supabase.co: browser PUTs verification uploads straight to Supabase
+    // Storage via signed URL, bypassing Vercel's 4.5MB request body limit
+    "connect-src 'self' https://vercel.com https://*.supabase.co",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

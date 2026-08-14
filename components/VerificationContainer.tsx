@@ -1,7 +1,6 @@
 "use client";
 
 import { Fragment, useState, useEffect } from "react";
-import { upload } from "@vercel/blob/client";
 import Link from "next/link";
 import HudBackground from "./HudBackground";
 import HudCorners from "./HudCorners";
@@ -399,37 +398,48 @@ export default function VerificationContainer() {
     };
 
     try {
-      if (process.env.NEXT_PUBLIC_USE_BLOB_UPLOAD) {
-        // Upload files to Vercel Blob via server-side API route
+      if (process.env.NEXT_PUBLIC_USE_DIRECT_UPLOAD) {
+        // Upload straight to Supabase Storage — bytes bypass the Vercel function
         const allFiles = [consolidado[0], ...comprovantes, ...verifs];
         setUploadProgress({ done: 0, total: allFiles.length });
 
-        const uploadedUrls: string[] = [];
-        const blobUpload = async (file: File) => {
-          const blob = await upload(file.name, file, {
-            access: "private",
-            handleUploadUrl: "/api/verification/blob-upload",
+        const uploadedPaths: string[] = [];
+        const storageUpload = async (file: File) => {
+          const signRes = await fetch("/api/verification/upload-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: file.name }),
           });
-          uploadedUrls.push(blob.url);
+          if (!signRes.ok) throw new Error(`Falha ao preparar upload de ${file.name}`);
+          const { uploadUrl, path } = (await signRes.json()) as { uploadUrl: string; path: string };
+
+          const put = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": file.type || "application/octet-stream" },
+            body: file,
+          });
+          if (!put.ok) throw new Error(`Falha ao enviar ${file.name} (HTTP ${put.status})`);
+
+          uploadedPaths.push(path);
           setUploadProgress((p) => p && { ...p, done: p.done + 1 });
-          return blob.url;
+          return { path, name: file.name };
         };
 
-        let consolidadoUrl: string;
-        const compUrls: string[] = [];
-        const verifUrls: string[] = [];
+        let consolidadoFile: { path: string; name: string };
+        const compFiles: { path: string; name: string }[] = [];
+        const verifFiles: { path: string; name: string }[] = [];
         try {
-          consolidadoUrl = await blobUpload(consolidado[0]);
-          for (const f of comprovantes) compUrls.push(await blobUpload(f));
-          for (const f of verifs) verifUrls.push(await blobUpload(f));
+          consolidadoFile = await storageUpload(consolidado[0]);
+          for (const f of comprovantes) compFiles.push(await storageUpload(f));
+          for (const f of verifs) verifFiles.push(await storageUpload(f));
         } catch (err) {
-          // Batch failed mid-way — delete the blobs already uploaded, or they
-          // leak (server-side cleanup only starts once /run receives the URLs).
-          if (uploadedUrls.length) {
-            void fetch("/api/verification/blob-upload", {
+          // Batch failed mid-way — delete what already landed, or it leaks
+          // (server-side cleanup only starts once /run receives the paths).
+          if (uploadedPaths.length) {
+            void fetch("/api/verification/upload-url", {
               method: "DELETE",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ urls: uploadedUrls }),
+              body: JSON.stringify({ paths: uploadedPaths }),
             }).catch(() => {});
           }
           throw err;
@@ -443,10 +453,9 @@ export default function VerificationContainer() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             adserver,
-            consolidado_url: consolidadoUrl,
-            consolidado_name: consolidado[0].name,
-            comp_urls: compUrls,
-            verif_urls: verifUrls,
+            consolidado: consolidadoFile,
+            comp_files: compFiles,
+            verif_files: verifFiles,
             ...(ini ? { ini } : {}),
             ...(fim ? { fim } : {}),
             url_sample_pct: urlSamplePct,

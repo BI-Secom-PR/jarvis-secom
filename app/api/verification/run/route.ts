@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { del } from '@vercel/blob';
+import { createSignedDownloadUrl, removeFiles } from '@/lib/storage';
 import { Ollama } from 'ollama';
 
 export const maxDuration = 300;
@@ -205,33 +205,33 @@ export async function POST(req: NextRequest) {
 
   const isJson = req.headers.get('content-type')?.includes('application/json');
 
-  // ── Branch: Vercel Blob URLs (JSON) ───────────────────────────────────────
+  // ── Branch: Supabase Storage paths (JSON) ─────────────────────────────────
   if (isJson) {
-    type BlobBody = {
+    type StoredFile = { path: string; name: string };
+    type StorageBody = {
       adserver: string;
-      consolidado_url: string;
-      consolidado_name: string;
-      comp_urls: string[];
-      verif_urls?: string[];
+      consolidado: StoredFile;
+      comp_files: StoredFile[];
+      verif_files?: StoredFile[];
       ini?: string;
       fim?: string;
       url_sample_pct?: number;
       view_rules?: string;
       praca?: string;
     };
-    const body = (await req.json()) as BlobBody;
+    const body = (await req.json()) as StorageBody;
 
-    const { adserver, consolidado_url, consolidado_name, comp_urls, verif_urls = [] } = body;
-    const allBlobUrls = [consolidado_url, ...(comp_urls ?? []), ...verif_urls].filter(Boolean);
-    // Blobs are already uploaded by the client at this point — delete them on
-    // validation failure too, or they leak into the (free-tier) Blob store.
+    const { adserver, consolidado, comp_files, verif_files = [] } = body;
+    const allPaths = [consolidado?.path, ...(comp_files ?? []).map((f) => f.path), ...verif_files.map((f) => f.path)].filter(Boolean);
+    // Files are already uploaded by the client at this point — delete them on
+    // validation failure too, or they leak into the bucket.
     const reject = async (msg: string) => {
-      await del(allBlobUrls).catch(() => {});
+      await removeFiles(allPaths);
       return NextResponse.json({ error: msg }, { status: 400 });
     };
-    if (!adserver)          return reject('Adserver não informado.');
-    if (!consolidado_url)   return reject('Arquivo consolidado não enviado.');
-    if (!comp_urls?.length) return reject('Nenhum comprovante enviado.');
+    if (!adserver)           return reject('Adserver não informado.');
+    if (!consolidado?.path)  return reject('Arquivo consolidado não enviado.');
+    if (!comp_files?.length) return reject('Nenhum comprovante enviado.');
     const adserverErr = validateAdserver(adserver);
     if (adserverErr) return reject(adserverErr);
     if (body.ini) { const e = validateDate('ini', body.ini); if (e) return reject(e); }
@@ -245,18 +245,20 @@ export async function POST(req: NextRequest) {
         ? { 'x-internal-key': process.env.INTERNAL_API_KEY }
         : { cookie: req.headers.get('cookie') ?? '' }),
     };
+    // Resolve signed download URLs here so the Python side stays storage-agnostic:
+    // these need no auth header, so `_download_url(url, dest)` works unchanged.
+    const signed = async (f: StoredFile) => ({ url: await createSignedDownloadUrl(f.path), name: f.name });
     const pyBody: Record<string, unknown> = {
-      consolidado_url,
-      consolidado_name,
-      comp_urls,
-      verif_urls,
+      consolidado_url: await createSignedDownloadUrl(consolidado.path),
+      consolidado_name: consolidado.name,
+      comp_files: await Promise.all(comp_files.map(signed)),
+      verif_files: await Promise.all(verif_files.map(signed)),
       adserver,
       url_sample_pct: body.url_sample_pct ?? 10,
       ...(body.ini ? { ini: body.ini } : {}),
       ...(body.fim ? { fim: body.fim } : {}),
       ...(body.view_rules ? { view_rules: body.view_rules } : {}),
       ...(body.praca ? { praca: body.praca } : {}),
-      ...(process.env.BLOB_READ_WRITE_TOKEN ? { blob_token: process.env.BLOB_READ_WRITE_TOKEN } : {}),
     };
 
     return sseResponse(async (send) => {
@@ -290,7 +292,7 @@ export async function POST(req: NextRequest) {
           throw new Error(`Python engine returned non-JSON (HTTP ${pyResp.status}): ${pyRespText.slice(0, 500)}`);
         }
       } finally {
-        await del(allBlobUrls).catch(() => {});
+        await removeFiles(allPaths);
       }
       send({ type: 'engine_done' });
       const result = await buildEngineResponse(engineResult, send);
@@ -326,7 +328,7 @@ export async function POST(req: NextRequest) {
     send({ type: 'engine_start' });
 
     if (process.env.VERCEL_URL) {
-      // On Vercel via FormData (fallback — shouldn't happen when blob upload is active)
+      // On Vercel via FormData (fallback — shouldn't happen when direct upload is active)
       const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
       const toB64 = async (f: File) => Buffer.from(await f.arrayBuffer()).toString('base64');
       const pyBody = {
@@ -340,8 +342,7 @@ export async function POST(req: NextRequest) {
         ...(fim ? { fim } : {}),
         ...(viewRulesRaw ? { view_rules: viewRulesRaw } : {}),
         ...(pracaRaw ? { praca: pracaRaw } : {}),
-        ...(process.env.BLOB_READ_WRITE_TOKEN ? { blob_token: process.env.BLOB_READ_WRITE_TOKEN } : {}),
-      };
+        };
       const pyHeaders: Record<string, string> = {
         'Content-Type': 'application/json',
         ...(process.env.INTERNAL_API_KEY
