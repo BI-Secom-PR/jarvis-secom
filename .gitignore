@@ -73,3 +73,6 @@ graphify-out/
 # Service account keys — never commit
 gen-lang-client-*.json
 *-service-account*.json
+
+.mcp.json
+ai-ui.html
