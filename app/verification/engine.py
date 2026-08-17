@@ -215,11 +215,14 @@ def _normalize(name: str) -> str:
 
 # ── Leitura do consolidado ──────────────────────────────────────────────────────
 def _cell_value(ws, row: int, col: int):
-    """Lê valor de célula ignorando fórmulas (retorna None se fórmula sem valor)."""
+    """Lê valor de célula resolvendo fórmulas pelo último resultado cacheado pelo
+    Excel (ws._valores_cache, workbook irmão aberto com data_only=True — ver
+    verificar()). Sem cache, fórmula → None."""
     cell = ws.cell(row=row, column=col)
     val = cell.value
     if isinstance(val, str) and val.startswith("="):
-        return None
+        ws_vals = getattr(ws, "_valores_cache", None)
+        return ws_vals.cell(row=row, column=col).value if ws_vals is not None else None
     return val
 
 
@@ -442,7 +445,12 @@ def _compare(
         comp_va   = comp_result.get("viewability")
         consol_va = consol_row.get("viewability")
         if comp_va is not None:
-            if consol_va is not None and round(comp_va, 2) != round(consol_va, 2):
+            # VA% é razão viewables/impressões — quando os dois lados têm viewables,
+            # esse par já foi comparado acima e o DIV de VA% só repete o ruído
+            # (comprovantes arredondam o "VA (IAB)" e às vezes usam outra base).
+            # Fica como checagem própria só quando falta o numerador de um dos lados.
+            va_redundante = bool(comp_result.get("viewables") and consol_row.get("viewables"))
+            if consol_va is not None and not va_redundante and abs(comp_va - consol_va) > 0.5:
                 linhas.append(
                     f"DIV viewability: comprovante {comp_va:.2f}% / "
                     f"consolidado {consol_va:.2f}%"
@@ -771,6 +779,12 @@ def verificar(
     # ── Ler consolidado ───────────────────────────────────────────────────────
     wb = openpyxl.load_workbook(consolidado_path)
     ws = wb.active
+    # Segundo workbook só com os resultados cacheados: o principal precisa manter as
+    # fórmulas (é ele que é salvo), mas colunas como VA% do 00px são fórmula pura.
+    try:
+        ws._valores_cache = openpyxl.load_workbook(consolidado_path, data_only=True).active
+    except Exception as e:
+        print(f"[consolidado] sem cache de fórmulas: {e}", file=sys.stderr)
     try:
         consol_rows, col_devolutiva_bi = _read_consolidado(ws, adserver=adserver)
 

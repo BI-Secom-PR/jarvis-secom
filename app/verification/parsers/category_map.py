@@ -145,7 +145,12 @@ CATEGORY_MAP: dict[str, str] = {
     "lingua estrangeira":               "lingua_estrangeira",
     "língua estrangeira":               "lingua_estrangeira",
     "idioma estrangeiro ou traduzido":  "lingua_estrangeira",
+    "idioma estrangeiro":               "lingua_estrangeira",
+    "indioma estrangeiro":              "lingua_estrangeira",  # typo do consolidado 00px
     "foreign language":                 "lingua_estrangeira",
+    # Segurança Pública (coluna própria no consolidado 00px)
+    "segurança pública":                "seguranca_publica",
+    "seguranca publica":                "seguranca_publica",
     # Pornografia (col 18)
     "pornografia":                      "pornografia",
     "pornography":                      "pornografia",
@@ -181,6 +186,7 @@ INDEVIDAS_ZERO: dict[str, int] = {
     "acidente":           0,
     "violencia":          0,
     "lingua_estrangeira": 0,
+    "seguranca_publica":  0,
     "pornografia":        0,
     "safeframe":          0,
     "app_movel":          0,
