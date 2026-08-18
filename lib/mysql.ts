@@ -5,28 +5,28 @@ import type { ConnectionOptions as TlsConnectionOptions } from 'node:tls';
 // not present in any public trust store. We pin it so the TLS connection is actually
 // authenticated (rejectUnauthorized:true) instead of just encrypted — closes MITM
 // credential capture. Public by design, safe to commit.
-// NOTE: OCI regenerates this CA (e.g. maintenance/restart — last seen 2026-07-02);
+// NOTE: OCI regenerates this CA (e.g. maintenance/restart — last seen 2026-07-30);
 // symptom is "certificate signature failure" in chat. Re-pin with:
 //   echo | openssl s_client -starttls mysql -connect $MYSQL_HOST:3306 -showcerts
-// SHA256 fingerprint: 69:D0:ED:76:8E:BB:97:39:14:01:B2:BA:76:3E:82:92:4A:58:47:97:99:38:18:9A:0B:06:9D:03:6B:BA:0C:A2
+// SHA256 fingerprint: B4:07:00:6D:E1:B0:66:80:44:1D:FC:69:C0:E8:F8:44:A5:08:85:61:85:8B:24:AE:DF:59:D8:FD:7C:87:BA:7B
 const OCI_MYSQL_CA = `-----BEGIN CERTIFICATE-----
-MIIDGTCCAgGgAwIBAgIURetR9lydHH7HuQb1JI5jcd0B2bEwDQYJKoZIhvcNAQEL
-BQAwHDEaMBgGA1UEAwwRTXlTUUxfRW5kcG9pbnRfQ0EwHhcNMjYwNzAyMDUwNjE5
-WhcNMjkwNzAxMDUwNjE5WjAcMRowGAYDVQQDDBFNeVNRTF9FbmRwb2ludF9DQTCC
-ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMTJ7oEz5yOxWVxyxc27iZPS
-rveGSdmzItHGL3V8K4FTdtVJ9g+xhUzEPqkuToGvm4puQcb+n/DfMQoYl0NfX4se
-pID7g4etjmC6uiP52thxKuPN6gn+HNEsHyc0WyO7N/6pXmw/iPCw0p7Jrkwqd57u
-bNVr5iYonyumndEYdgF1Qp4781Z6ulv5rFlX2d9MSpyxS3sDpANjYbtbvIQuU4YE
-HCi1GhVkDjcJ1Rk/MHsZkBEzMcfwiE61RomKVwGEt6SxNT61odzTwOA1Wc/GIf4d
-1jucM2RZ4kVBCmzsBGQE5Mo92K2/FiPd1itL7bziJXtZXNVGRmm7aiFtzOk5KiMC
-AwEAAaNTMFEwHQYDVR0OBBYEFM9HfHyhdjuOEmPeY9yMnzfhnJQSMB8GA1UdIwQY
-MBaAFM9HfHyhdjuOEmPeY9yMnzfhnJQSMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZI
-hvcNAQELBQADggEBABwEDyrA8Zrg9yzXLDLQGCmCjzmZoFLs9KjKJJXfeZHaqBE4
-vEZZ78z99dmjLQRI8Y5fhWPN4aYpwdVO2LAodCtc3dVJMgbS9F9fOssSIuM9KZ3j
-dMAk4/TWmrDs4NgpkXnEwjTL5X4WfYmZItN/AcchPfshTRkI0y2m1jYs41j6YuxL
-xtQB1/w4thWOQgdV4nt0kOFCHg74MxEdIIDYbWEDXhW+ddTUsxOjQ85KgbEEx19n
-Yhnz/YJfAW8M2I9C7qqiW0tbT+DDj9KRuB8v7qq4d85f1p0wxI6SLWH5X8lUuzt0
-RK3zVZ5mjoaJ/SbfBxJE+vxpivaqhuINltt/Nqo=
+MIIDGTCCAgGgAwIBAgIUHWkdj7Ru8BNRRGTLFmCViY7Nw3QwDQYJKoZIhvcNAQEL
+BQAwHDEaMBgGA1UEAwwRTXlTUUxfRW5kcG9pbnRfQ0EwHhcNMjYwNzMwMDQ1ODQx
+WhcNMjkwNzI5MDQ1ODQxWjAcMRowGAYDVQQDDBFNeVNRTF9FbmRwb2ludF9DQTCC
+ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAKyCX5hLYeCWjfinqVqdBmLZ
+AC86DQTR19FhIfuNSakiPrwDP97ohu40wi8P0DYQQm4igUQC253NVyDx+iQB2OVS
+X+vPeTvXUhdmzKiD9jtJ5MKCTjSVKWCyxUNmW/MxxSvVEgjYUtY/qPFMLQQVt/T+
+9ganEkqlHPsDGAAusIIxelyKle5p3dwcUJKiMRtgT3Osp2tsbPidyQZxbJFa3NgC
+12UBBJIVO+kHwvnPpIzIOgoYcCeZdcAHO4DWVXjaND7Fl3562HLef/WOi3sTjtWV
+XxGPrO61O/+uq1PuXvNUlImVJTaPhDyQX5pobsbITojqznh/m/Yb9F6Be3xIZ2sC
+AwEAAaNTMFEwHQYDVR0OBBYEFLbcFjYtrjJbvq6fG9OFauNc21AHMB8GA1UdIwQY
+MBaAFLbcFjYtrjJbvq6fG9OFauNc21AHMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZI
+hvcNAQELBQADggEBAEmR/H9Pi2gZ+EELTQWlTbkLMZh33kym/KvPJ+p4lLPL5Ht4
+Om8zH0jN1QLvF/U725gGJK2eHOIV09qkofRG7ZIWAZZhAX72Kuv5ImzcROPoQlvy
++wRvxFQuZx4TW6iH46ft1PDHER6KpfovGmsAv1Fduh2JPAMV2a8wJGs5KrQscXer
+Ht5yMEh02vaSZd3xJ/h4ZgTdcEaEJ+D3SjZ1t6Iv2gtJ0gjXpQoGzYy9hHUpFLlU
+twBzUumQ4PngfJf4bjZefaAqvLjHhd3uqkqIETlHXksrobhrbb9rEDhr2U5ZnIuW
+xjjysIN+5fQzEQQ3QaIXWKZgXs8submFihsqLCk=
 -----END CERTIFICATE-----`;
 
 let pool: mysql.Pool | null = null;
