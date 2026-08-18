@@ -40,14 +40,47 @@ type VerificationResult = {
   file_base64: string | null;
   file_name: string;
   url_check_anomalies: UrlAnomalyItem[];
+  url_check_failed: number;
 };
 
-async function checkUrlCategory(item: UrlSampleItem, categoriasDisponiveis: string[]): Promise<UrlAnomalyItem | null> {
-  try {
-    const response = await ollamaClient.chat({
-      model: 'gemma4:31b-cloud',
-      options: { num_predict: 350 },
-      messages: [{ role: 'user', content: `Você é um classificador especialista em Brand Safety e auditoria de mídia programática para a SECOM (Secretaria de Comunicação Social do Governo Federal do Brasil). 
+// Ollama cloud rejects more than a handful of concurrent chats ("too many
+// concurrent requests"), and the ~1.2k-token persona prompt was being resent
+// once per URL. Both are fixed by grouping URLs into one call and capping
+// in-flight calls; measured ceiling is ~4 concurrent before requests start
+// failing or queueing.
+const URLS_PER_CALL = 10;
+const URL_CHECK_CONCURRENCY = 4;
+
+type UrlCheckOutcome = { anomalies: UrlAnomalyItem[]; failed: number };
+
+async function chatWithRetry(content: string, numPredict: number, tries = 3): Promise<string> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const response = await ollamaClient.chat({
+        model: 'gemma4:31b-cloud',
+        options: { num_predict: numPredict },
+        messages: [{ role: 'user', content }],
+      });
+      return response.message.content.trim();
+    } catch (err) {
+      const busy = String(err).includes('too many concurrent requests');
+      if (!busy || attempt >= tries - 1) throw err;
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
+  }
+}
+
+/**
+ * Audits a chunk of URLs in a single model call.
+ *
+ * Anything that stops a URL from actually being judged — transport error, an
+ * unparseable reply, a missing entry in the array — is counted in `failed`
+ * rather than dropped. A silently swallowed failure reads as "URL is fine",
+ * which is the one answer this check must never invent.
+ */
+async function checkUrlChunk(items: UrlSampleItem[], categoriasDisponiveis: string[]): Promise<UrlCheckOutcome> {
+  const list = items.map((it, i) => `${i + 1}. URL: ${it.url}\n   Categoria atribuída: ${it.categoria}`).join('\n');
+  const content = `Você é um classificador especialista em Brand Safety e auditoria de mídia programática para a SECOM (Secretaria de Comunicação Social do Governo Federal do Brasil). 
 
 Sua missão é auditar a classificação de conteúdo feita por um adserver. Dado uma URL, o título/conteúdo da página e a categoria atribuída pelo adserver, avalie se a classificação está CORRETA ou INCORRETA.
 
@@ -109,39 +142,43 @@ ${categoriasDisponiveis.length > 0 ? `
 Categorias usadas neste arquivo de verificação (prefira sugerir uma destas, ou uma categoria indevida do SECOM acima):
 ${categoriasDisponiveis.map((c) => `- ${c}`).join('\n')}
 ` : ''}
-URL: ${item.url}
-Categoria atribuída: ${item.categoria}` }],
-    });
+### AVALIE TODAS AS URLS ABAIXO
+Responda APENAS com um array JSON, um objeto por URL, na mesma ordem, com "i" igual ao número da URL. Sem texto fora do array.
+[{"i":1,"status":"CORRETA","categoria_sugerida":"...","justificativa_brand_safety":"..."}]
 
-    const trimmed = response.message.content.trim();
-    console.log(`[url-check] model raw (first 120): ${trimmed.slice(0, 120).replace(/\n/g, '↵')}`);
-    let status: string | null = null;
-    let categoriaSugerida: string | null = null;
-    let reason: string | null = null;
+${list}`;
 
-    try {
-      const raw = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
-      const json = JSON.parse(raw) as { status?: string; categoria_sugerida?: string; justificativa_brand_safety?: string };
-      status = (json.status ?? '').trim().toUpperCase();
-      categoriaSugerida = json.categoria_sugerida?.trim() || null;
-      reason = json.justificativa_brand_safety?.trim() || null;
-    } catch {
-      // fallback: plain-text "INCORRETA: cat | reason"
-      const match = trimmed.match(/^INCORRETA[:\s]*(.*)$/i) ?? trimmed.match(/^N[ÃA]O[:\s]*(.*)$/i);
-      if (match) {
-        status = 'INCORRETA';
-        const tail = match[1].trim();
-        const pipeIdx = tail.indexOf('|');
-        categoriaSugerida = pipeIdx >= 0 ? tail.slice(0, pipeIdx).trim() || null : null;
-        reason = (pipeIdx >= 0 ? tail.slice(pipeIdx + 1).trim() : tail) || 'Classificação suspeita';
-      }
-    }
-
-    if (status !== 'INCORRETA') return null;
-    return { url: item.url, categoria: item.categoria, categoria_sugerida: categoriaSugerida, veiculo: item.veiculo, reason: reason ?? 'Classificação suspeita', impressoes: item.impressoes, pct: 0 };
-  } catch {
-    return null;
+  let parsed: { i?: number; status?: string; categoria_sugerida?: string; justificativa_brand_safety?: string }[];
+  try {
+    const raw = (await chatWithRetry(content, 220 * items.length))
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/, '');
+    const arr: unknown = JSON.parse(raw.slice(raw.indexOf('['), raw.lastIndexOf(']') + 1));
+    if (!Array.isArray(arr)) throw new Error('not an array');
+    parsed = arr as typeof parsed;
+  } catch (err) {
+    console.error(`[url-check] chunk of ${items.length} failed: ${String(err).slice(0, 200)}`);
+    return { anomalies: [], failed: items.length };
   }
+
+  const anomalies: UrlAnomalyItem[] = [];
+  let failed = 0;
+  items.forEach((item, idx) => {
+    const entry = parsed.find((e) => e.i === idx + 1) ?? parsed[idx];
+    const status = (entry?.status ?? '').trim().toUpperCase();
+    if (!entry || (status !== 'CORRETA' && status !== 'INCORRETA')) { failed++; return; }
+    if (status === 'CORRETA') return;
+    anomalies.push({
+      url: item.url,
+      categoria: item.categoria,
+      categoria_sugerida: entry.categoria_sugerida?.trim() || null,
+      veiculo: item.veiculo,
+      reason: entry.justificativa_brand_safety?.trim() || 'Classificação suspeita',
+      impressoes: item.impressoes,
+      pct: 0,
+    });
+  });
+  return { anomalies, failed };
 }
 
 const ENGINE_PATH = path.join(process.cwd(), 'app', 'verification', 'engine.py');
@@ -440,26 +477,29 @@ async function buildEngineResponse(
 
   // ── AI URL check ──────────────────────────────────────────────────────────
   let urlCheckAnomalies: UrlAnomalyItem[] = [];
+  let urlCheckFailed = 0;
   const urlSample: UrlSampleItem[] = (engineResult.url_sample as UrlSampleItem[]) ?? [];
   const urlCategorias: string[] = (engineResult.url_categorias as string[]) ?? [];
   console.log(`[url-check] url_sample=${urlSample.length} OLLAMA_BASE_URL=${process.env.OLLAMA_BASE_URL ?? '(not set)'}`);
   if (urlSample.length > 0 && process.env.OLLAMA_BASE_URL) {
-    const BATCH = 20;
     send({ type: 'url_check_start', total: urlSample.length });
+    const chunks: UrlSampleItem[][] = [];
+    for (let i = 0; i < urlSample.length; i += URLS_PER_CALL) chunks.push(urlSample.slice(i, i + URLS_PER_CALL));
+
     let done = 0;
-    for (let i = 0; i < urlSample.length; i += BATCH) {
-      const batch = urlSample.slice(i, i + BATCH);
-      const settled = await Promise.allSettled(batch.map((item) => checkUrlCategory(item, urlCategorias)));
-      done += batch.length;
-      send({ type: 'url_check_progress', done, total: urlSample.length });
-      urlCheckAnomalies.push(
-        ...settled
-          .filter((r): r is PromiseFulfilledResult<UrlAnomalyItem> =>
-            r.status === 'fulfilled' && r.value !== null
-          )
-          .map((r) => r.value as UrlAnomalyItem)
-      );
-    }
+    let next = 0;
+    const worker = async () => {
+      while (next < chunks.length) {
+        const chunk = chunks[next++];
+        const { anomalies, failed } = await checkUrlChunk(chunk, urlCategorias);
+        urlCheckAnomalies.push(...anomalies);
+        urlCheckFailed += failed;
+        done += chunk.length;
+        send({ type: 'url_check_progress', done, total: urlSample.length });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(URL_CHECK_CONCURRENCY, chunks.length) }, worker));
+    if (urlCheckFailed > 0) console.warn(`[url-check] ${urlCheckFailed}/${urlSample.length} URLs não verificadas`);
   }
 
   // ── Calcular pct de impressões por veículo ────────────────────────────────
@@ -542,5 +582,6 @@ async function buildEngineResponse(
     file_base64:         fileBase64,
     file_name:           outputName,
     url_check_anomalies: urlCheckAnomalies,
+    url_check_failed: urlCheckFailed,
   };
 }

@@ -35,6 +35,7 @@ type VerificationResult = {
   file_base64: string | null;
   file_name: string;
   url_check_anomalies: UrlAnomaly[];
+  url_check_failed?: number;
 };
 
 type ViewRule = {
@@ -1048,6 +1049,19 @@ export default function VerificationContainer() {
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {/* URLs que a IA não conseguiu auditar — nunca silenciar: sem isso
+                  uma falha de rede passa por "URL aprovada". */}
+              {(result.url_check_failed ?? 0) > 0 && (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+                  <span className="text-xs text-amber-500 font-semibold">
+                    {result.url_check_failed} URL(s) não puderam ser verificadas pela IA
+                  </span>
+                  <p className="text-xs text-ink-3 mt-1">
+                    Não foram aprovadas nem reprovadas — a checagem falhou. Rode de novo para auditá-las.
+                  </p>
                 </div>
               )}
 
