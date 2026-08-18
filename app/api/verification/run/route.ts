@@ -146,6 +146,18 @@ Categoria atribuída: ${item.categoria}` }],
 
 const ENGINE_PATH = path.join(process.cwd(), 'app', 'verification', 'engine.py');
 
+// proxy.ts gates /api/py/: it validates x-internal-key only when its own env
+// has INTERNAL_API_KEY, else it falls back to the session-cookie check. The
+// middleware runs on the edge (env inlined at build) while this route reads env
+// at runtime, so the two can disagree — send both credentials, never one.
+function pyHeaders(cookie: string): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    ...(process.env.INTERNAL_API_KEY ? { 'x-internal-key': process.env.INTERNAL_API_KEY } : {}),
+    cookie,
+  };
+}
+
 function runEngine(args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn('python3', [ENGINE_PATH, ...args], {
@@ -237,14 +249,7 @@ export async function POST(req: NextRequest) {
     if (body.ini) { const e = validateDate('ini', body.ini); if (e) return reject(e); }
     if (body.fim) { const e = validateDate('fim', body.fim); if (e) return reject(e); }
     const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
-    // proxy.ts gates /api/py/: shared secret when configured, else the
-    // forwarded session cookie satisfies the token-presence check.
-    const pyHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(process.env.INTERNAL_API_KEY
-        ? { 'x-internal-key': process.env.INTERNAL_API_KEY }
-        : { cookie: req.headers.get('cookie') ?? '' }),
-    };
+    const headers = pyHeaders(req.headers.get('cookie') ?? '');
     // Resolve signed download URLs here so the Python side stays storage-agnostic:
     // these need no auth header, so `_download_url(url, dest)` works unchanged.
     const signed = async (f: StoredFile) => ({ url: await createSignedDownloadUrl(f.path), name: f.name });
@@ -269,7 +274,7 @@ export async function POST(req: NextRequest) {
         try {
           pyResp = await fetch(pyUrl, {
             method: 'POST',
-            headers: pyHeaders,
+            headers,
             body: JSON.stringify(pyBody),
           });
         } catch (fetchErr) {
@@ -295,7 +300,7 @@ export async function POST(req: NextRequest) {
         await removeFiles(allPaths);
       }
       send({ type: 'engine_done' });
-      const result = await buildEngineResponse(engineResult, send);
+      const result = await buildEngineResponse(engineResult, send, req.headers.get('cookie') ?? '');
       send({ type: 'done', result });
     });
   }
@@ -343,17 +348,12 @@ export async function POST(req: NextRequest) {
         ...(viewRulesRaw ? { view_rules: viewRulesRaw } : {}),
         ...(pracaRaw ? { praca: pracaRaw } : {}),
         };
-      const pyHeaders: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...(process.env.INTERNAL_API_KEY
-          ? { 'x-internal-key': process.env.INTERNAL_API_KEY }
-          : { cookie: req.headers.get('cookie') ?? '' }),
-      };
+      const headers = pyHeaders(req.headers.get('cookie') ?? '');
       let pyResp: Response;
       try {
         pyResp = await fetch(pyUrl, {
           method: 'POST',
-          headers: pyHeaders,
+          headers,
           body: JSON.stringify(pyBody),
         });
       } catch (fetchErr) {
@@ -422,7 +422,7 @@ export async function POST(req: NextRequest) {
     }
 
     send({ type: 'engine_done' });
-    const result = await buildEngineResponse(engineResult, send);
+    const result = await buildEngineResponse(engineResult, send, req.headers.get('cookie') ?? '');
     send({ type: 'done', result });
   });
 }
@@ -430,6 +430,7 @@ export async function POST(req: NextRequest) {
 async function buildEngineResponse(
   engineResult: Record<string, unknown>,
   send: Send,
+  cookie: string,
 ): Promise<VerificationResult> {
   let fileBase64: string | null = (engineResult.output_b64 as string | null) ?? null;
   const outputPath: string = (engineResult.output as string) ?? '';
@@ -500,7 +501,7 @@ async function buildEngineResponse(
         const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
         const pyResp = await fetch(pyUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: pyHeaders(cookie),
           body: JSON.stringify({
             output_b64:          fileBase64,
             output_name:         outputName,
