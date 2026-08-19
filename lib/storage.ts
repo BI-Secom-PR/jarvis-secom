@@ -88,10 +88,11 @@ export async function removeFiles(paths: string[]): Promise<void> {
 /**
  * Create the private bucket if it doesn't exist yet (idempotent, setup-time).
  *
- * ponytail: 50MB/file is the Supabase free-tier ceiling, and comprovantes are
- * expected to exceed it eventually. Upgrade path when they do: paid plan raises
- * the global limit, and files past ~6MB should move to resumable/TUS uploads
- * (`/upload/resumable`) instead of the single PUT used here.
+ * ponytail: 50MB/object is the Supabase free-tier ceiling and real files pass
+ * it (a DGBRASIL verif is 62MB), so the client slices into 40MB parts and
+ * api/py/verification.py concatenates them — one object per part. Upgrade path
+ * if part counts get unwieldy: a paid plan raises the cap, and uploads past
+ * ~6MB could move to resumable/TUS (`/upload/resumable`) instead of single PUT.
  */
 export async function ensureBucket(fileSizeLimitBytes = 52_428_800): Promise<'created' | 'exists'> {
   const resp = await fetch(`${storageUrl()}/bucket`, {

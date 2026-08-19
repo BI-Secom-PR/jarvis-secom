@@ -6,6 +6,11 @@ import HudBackground from "./HudBackground";
 import HudCorners from "./HudCorners";
 import ThemeToggle from "./ThemeToggle";
 
+// Supabase Storage rejects objects over 50MB on the free plan. 40MB leaves
+// headroom under that cap while keeping part counts low (a 62MB verif → 2).
+const UPLOAD_CHUNK = 40 * 1024 * 1024;
+const partCount = (f: File) => Math.max(1, Math.ceil(f.size / UPLOAD_CHUNK));
+
 type VehicleResult = {
   veiculo: string;
   status: "OK" | "DIVERGENCIA" | "PENDENTE";
@@ -243,12 +248,12 @@ const ESTADOS_BRASIL = [
 
 const ADSERVERS: { id: string; label: string; disabled?: boolean }[] = [
   { id: "00px", label: "00px" },
+  { id: "00px25", label: "00PX25" },
   { id: "adforce", label: "ADFORCE" },
   { id: "admotion", label: "ADMOTION" },
   { id: "ahead", label: "AHEAD" },
   { id: "metrike", label: "METRIKE" },
   { id: "sense", label: "SENSE" },
-  { id: "brz", label: "BRZ", disabled: true },
   { id: "dgbrasil", label: "DGBRASIL" },
   { id: "teratech", label: "TERATECH" },
 ];
@@ -402,33 +407,43 @@ export default function VerificationContainer() {
       if (process.env.NEXT_PUBLIC_USE_DIRECT_UPLOAD) {
         // Upload straight to Supabase Storage — bytes bypass the Vercel function
         const allFiles = [consolidado[0], ...comprovantes, ...verifs];
-        setUploadProgress({ done: 0, total: allFiles.length });
+        setUploadProgress({ done: 0, total: allFiles.reduce((n, f) => n + partCount(f), 0) });
 
         const uploadedPaths: string[] = [];
+        // One object per part: Supabase's free tier caps a single object at
+        // 50MB and real verifs pass it (a DGBRASIL sheet is 62MB / 900k rows).
+        // Parts are concatenated back byte-for-byte in api/py/verification.py.
         const storageUpload = async (file: File) => {
-          const signRes = await fetch("/api/verification/upload-url", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: file.name }),
-          });
-          if (!signRes.ok) throw new Error(`Falha ao preparar upload de ${file.name}`);
-          const { uploadUrl, path } = (await signRes.json()) as { uploadUrl: string; path: string };
+          const paths: string[] = [];
+          for (let i = 0; i < partCount(file); i++) {
+            const part = file.slice(i * UPLOAD_CHUNK, (i + 1) * UPLOAD_CHUNK);
+            const signRes = await fetch("/api/verification/upload-url", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: file.name }),
+            });
+            if (!signRes.ok) throw new Error(`Falha ao preparar upload de ${file.name}`);
+            const { uploadUrl, path } = (await signRes.json()) as { uploadUrl: string; path: string };
 
-          const put = await fetch(uploadUrl, {
-            method: "PUT",
-            headers: { "Content-Type": file.type || "application/octet-stream" },
-            body: file,
-          });
-          if (!put.ok) throw new Error(`Falha ao enviar ${file.name} (HTTP ${put.status})`);
+            const put = await fetch(uploadUrl, {
+              method: "PUT",
+              headers: { "Content-Type": file.type || "application/octet-stream" },
+              body: part,
+            });
+            if (!put.ok) throw new Error(`Falha ao enviar ${file.name} (HTTP ${put.status})`);
 
-          uploadedPaths.push(path);
-          setUploadProgress((p) => p && { ...p, done: p.done + 1 });
-          return { path, name: file.name };
+            // Pushed to both lists: `paths` keeps part order for reassembly,
+            // `uploadedPaths` is the flat cleanup list for an aborted batch.
+            paths.push(path);
+            uploadedPaths.push(path);
+            setUploadProgress((p) => p && { ...p, done: p.done + 1 });
+          }
+          return { paths, name: file.name };
         };
 
-        let consolidadoFile: { path: string; name: string };
-        const compFiles: { path: string; name: string }[] = [];
-        const verifFiles: { path: string; name: string }[] = [];
+        let consolidadoFile: { paths: string[]; name: string };
+        const compFiles: { paths: string[]; name: string }[] = [];
+        const verifFiles: { paths: string[]; name: string }[] = [];
         try {
           consolidadoFile = await storageUpload(consolidado[0]);
           for (const f of comprovantes) compFiles.push(await storageUpload(f));

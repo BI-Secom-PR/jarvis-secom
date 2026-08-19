@@ -1,12 +1,14 @@
 """
 Vercel Python serverless function for the verification engine.
 
-Receives POST with JSON body:
+Receives POST with JSON body — files arrive either as base64 (on-prem branch)
+or as ordered lists of signed Storage URLs (one object per part, since the free
+Supabase plan caps a single object at 50MB):
   {
-    "consolidado_b64": "<base64>",
+    "consolidado_b64": "<base64>",     # or "consolidado_urls": ["<url>", ...]
     "consolidado_name": "file.xlsx",
     "comp_files": [{"name": "comp.xlsx", "b64": "<base64>"}, ...],
-    "verif_files": [{"name": "verif.xlsx", "b64": "<base64>"}, ...],
+    "verif_files": [{"name": "verif.xlsx", "urls": ["<url>", ...]}, ...],
     "adserver": "adforce",
     "ini": "01/01/2026",   # optional DD/MM/YYYY
     "fim": "31/01/2026",   # optional DD/MM/YYYY
@@ -74,11 +76,19 @@ def _patch_openpyxl_colors():
         pass
 
 
-def _download_url(url: str, dest: str) -> None:
-    """Download a file from a signed Supabase Storage URL to a local path.
-    Signed URLs carry their own token, so no Authorization header is needed."""
-    with urllib.request.urlopen(url) as resp, open(dest, "wb") as f:
-        shutil.copyfileobj(resp, f)
+def _download_urls(urls: list[str], dest: str) -> None:
+    """Download signed Supabase Storage URLs and concatenate them into one file.
+
+    Signed URLs carry their own token, so no Authorization header is needed.
+    A single logical file arrives as an ordered list of parts because the free
+    Supabase plan caps one object at 50MB and real verification sheets pass it
+    (a DGBRASIL verif is 62MB). Concatenating the raw bytes in order rebuilds
+    the xlsx exactly — the split is by byte offset, not by format.
+    """
+    with open(dest, "wb") as f:
+        for url in urls:
+            with urllib.request.urlopen(url) as resp:
+                shutil.copyfileobj(resp, f)
 
 
 def _run_engine(body: dict) -> dict:
@@ -93,7 +103,7 @@ def _run_engine(body: dict) -> dict:
         """Write one input file into tmpdir and return its path.
 
         Two shapes arrive here, keyed on which one the caller used:
-          {"url": signed URL, "name": original filename}  → storage branch
+          {"urls": [signed URL, ...], "name": original filename} → storage branch
           {"name": ..., "b64": ...}                       → on-prem base64 branch
         The name is always explicit: engine.py and the TERATECH parser key off
         the original filename, and it can't be recovered from a storage path.
@@ -103,15 +113,15 @@ def _run_engine(body: dict) -> dict:
             with open(p, "wb") as f:
                 f.write(base64.b64decode(item["b64"]))
         else:
-            _download_url(item["url"], p)
+            _download_urls(item["urls"], p)
         return p
 
     try:
         # Save consolidado — signed URL or legacy base64
         consol_name = body.get("consolidado_name", "consolidado.xlsx")
         consol_path = os.path.join(tmpdir, consol_name)
-        if "consolidado_url" in body:
-            _download_url(body["consolidado_url"], consol_path)
+        if "consolidado_urls" in body:
+            _download_urls(body["consolidado_urls"], consol_path)
         else:
             with open(consol_path, "wb") as f:
                 f.write(base64.b64decode(body["consolidado_b64"]))

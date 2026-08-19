@@ -256,7 +256,9 @@ export async function POST(req: NextRequest) {
 
   // ── Branch: Supabase Storage paths (JSON) ─────────────────────────────────
   if (isJson) {
-    type StoredFile = { path: string; name: string };
+    // One file arrives as an ordered list of object paths: the browser slices
+    // past Supabase's 50MB/object free-tier cap and Python concatenates them.
+    type StoredFile = { paths: string[]; name: string };
     type StorageBody = {
       adserver: string;
       consolidado: StoredFile;
@@ -271,7 +273,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as StorageBody;
 
     const { adserver, consolidado, comp_files, verif_files = [] } = body;
-    const allPaths = [consolidado?.path, ...(comp_files ?? []).map((f) => f.path), ...verif_files.map((f) => f.path)].filter(Boolean);
+    const allPaths = [consolidado, ...(comp_files ?? []), ...verif_files].flatMap((f) => f?.paths ?? []);
     // Files are already uploaded by the client at this point — delete them on
     // validation failure too, or they leak into the bucket.
     const reject = async (msg: string) => {
@@ -279,7 +281,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: msg }, { status: 400 });
     };
     if (!adserver)           return reject('Adserver não informado.');
-    if (!consolidado?.path)  return reject('Arquivo consolidado não enviado.');
+    if (!consolidado?.paths?.length) return reject('Arquivo consolidado não enviado.');
     if (!comp_files?.length) return reject('Nenhum comprovante enviado.');
     const adserverErr = validateAdserver(adserver);
     if (adserverErr) return reject(adserverErr);
@@ -288,10 +290,10 @@ export async function POST(req: NextRequest) {
     const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
     const headers = pyHeaders(req.headers.get('cookie') ?? '');
     // Resolve signed download URLs here so the Python side stays storage-agnostic:
-    // these need no auth header, so `_download_url(url, dest)` works unchanged.
-    const signed = async (f: StoredFile) => ({ url: await createSignedDownloadUrl(f.path), name: f.name });
+    // these need no auth header, so `_download_urls(urls, dest)` works unchanged.
+    const signed = async (f: StoredFile) => ({ urls: await Promise.all(f.paths.map((p) => createSignedDownloadUrl(p))), name: f.name });
     const pyBody: Record<string, unknown> = {
-      consolidado_url: await createSignedDownloadUrl(consolidado.path),
+      consolidado_urls: await Promise.all(consolidado.paths.map((p) => createSignedDownloadUrl(p))),
       consolidado_name: consolidado.name,
       comp_files: await Promise.all(comp_files.map(signed)),
       verif_files: await Promise.all(verif_files.map(signed)),
