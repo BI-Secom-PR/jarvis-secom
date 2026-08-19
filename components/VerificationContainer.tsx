@@ -30,6 +30,8 @@ type UrlAnomaly = {
   pct?: number;
 };
 
+type UrlCheckedRow = UrlAnomaly & { status: "CORRETA" | "INCORRETA" };
+
 type VerificationResult = {
   veiculos: VehicleResult[];
   sem_comprovante: string[];
@@ -40,6 +42,7 @@ type VerificationResult = {
   file_base64: string | null;
   file_name: string;
   url_check_anomalies: UrlAnomaly[];
+  url_check_rows?: UrlCheckedRow[];
   url_check_failed?: number;
 };
 
@@ -524,6 +527,26 @@ export default function VerificationContainer() {
     URL.revokeObjectURL(url);
   }
 
+  async function handleDownloadUrls() {
+    const rows = result?.url_check_rows;
+    if (!rows?.length) return;
+    const resp = await fetch("/api/verification/urls-xlsx", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows, name: result?.file_name?.replace(/\.xlsx$/i, "") }),
+    });
+    if (!resp.ok) {
+      setError("Não foi possível gerar o Excel de URLs auditadas.");
+      return;
+    }
+    const url = URL.createObjectURL(await resp.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${result?.file_name?.replace(/\.xlsx$/i, "") ?? "verificacao"} - URLs auditadas.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function handleReset() {
     setAdserver(null);
     setConsolidado([]);
@@ -964,6 +987,14 @@ export default function VerificationContainer() {
                       className="text-xs px-4 py-2.5 sm:py-2 rounded-lg border border-separator text-ink-2 hover:text-ink hover:border-separator-strong transition-colors"
                     >
                       Baixar consolidado verificado
+                    </button>
+                  )}
+                  {(result.url_check_rows?.length ?? 0) > 0 && (
+                    <button
+                      onClick={handleDownloadUrls}
+                      className="text-xs px-4 py-2.5 sm:py-2 rounded-lg border border-separator text-ink-2 hover:text-ink hover:border-separator-strong transition-colors"
+                    >
+                      Baixar URLs auditadas ({result.url_check_rows!.length})
                     </button>
                   )}
                   <button

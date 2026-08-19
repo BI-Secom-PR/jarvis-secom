@@ -7,6 +7,7 @@ import path from 'path';
 import os from 'os';
 import { createSignedDownloadUrl, removeFiles } from '@/lib/storage';
 import { Ollama } from 'ollama';
+import { isHomeRoot } from '@/lib/verification';
 
 export const maxDuration = 300;
 
@@ -29,6 +30,7 @@ const ollamaClient = new Ollama({
 
 type UrlSampleItem  = { url: string; categoria: string; veiculo: string; impressoes: number };
 type UrlAnomalyItem = { url: string; categoria: string; categoria_sugerida: string | null; veiculo: string; reason: string; impressoes: number; pct: number };
+type UrlCheckedRow  = UrlAnomalyItem & { status: 'CORRETA' | 'INCORRETA' };
 type Send = (ev: object) => void;
 type VerificationResult = {
   veiculos: unknown;
@@ -40,6 +42,7 @@ type VerificationResult = {
   file_base64: string | null;
   file_name: string;
   url_check_anomalies: UrlAnomalyItem[];
+  url_check_rows: UrlCheckedRow[];
   url_check_failed: number;
 };
 
@@ -51,7 +54,7 @@ type VerificationResult = {
 const URLS_PER_CALL = 10;
 const URL_CHECK_CONCURRENCY = 4;
 
-type UrlCheckOutcome = { anomalies: UrlAnomalyItem[]; failed: number };
+type UrlCheckOutcome = { rows: UrlCheckedRow[]; failed: number };
 
 async function chatWithRetry(content: string, numPredict: number, tries = 3): Promise<string> {
   for (let attempt = 0; ; attempt++) {
@@ -90,6 +93,11 @@ Sua missão é auditar a classificação de conteúdo feita por um adserver. Dad
    - O adserver frequentemente classifica URLs reais incorretamente como "safeframe", "aplicativo móvel" ou "teste de tag" devido a falhas de rastreamento.
    - Você DEVE analisar o conteúdo real da URL. Se a URL apontar para uma notícia, blog ou portal de conteúdo, e o adserver a classificou como "safeframe" (ou similar), isso é uma classificação INCORRETA (Erro de categorização técnica). Indique a categoria real do conteúdo.
    - Só considere CORRETA se a URL for genuinamente apenas um frame técnico isolado, sem conteúdo editorial visível.
+
+1b. CATEGORIA "HOME" (página inicial):
+   - "Home" é uma categoria VÁLIDA e DISTINTA: é a página raiz do site (sem caminho interno), ex.: https://www.uol.com.br/, https://g1.globo.com/.
+   - Home NÃO é Notícias/Editorial. Nunca sugira uma categoria de conteúdo (Notícias, Política, Esportes…) para uma URL raiz classificada como "Home" — isso é CORRETA.
+   - Se a URL aponta para uma página interna (matéria, seção, com caminho após o domínio) mas foi classificada como "Home", isso é INCORRETA — sugira a categoria real do conteúdo.
 
 2. CONTEXTO DOMINANTE VS. PALAVRAS-CHAVE: Não classifique uma página como "indevida" apenas pela presença de palavras-chave isoladas. Analise o CONTEXTO DOMINANTE. 
    - Matérias jornalísticas, artigos de opinião política, análises históricas, avanços tecnológicos, geopolítica ou notícias de segurança pública NÃO devem ser classificados automaticamente como "Violência" ou "Crimes", a menos que haja exposição gráfica, apologia ou sensacionalismo extremo.
@@ -158,27 +166,27 @@ ${list}`;
     parsed = arr as typeof parsed;
   } catch (err) {
     console.error(`[url-check] chunk of ${items.length} failed: ${String(err).slice(0, 200)}`);
-    return { anomalies: [], failed: items.length };
+    return { rows: [], failed: items.length };
   }
 
-  const anomalies: UrlAnomalyItem[] = [];
+  const rows: UrlCheckedRow[] = [];
   let failed = 0;
   items.forEach((item, idx) => {
     const entry = parsed.find((e) => e.i === idx + 1) ?? parsed[idx];
     const status = (entry?.status ?? '').trim().toUpperCase();
     if (!entry || (status !== 'CORRETA' && status !== 'INCORRETA')) { failed++; return; }
-    if (status === 'CORRETA') return;
-    anomalies.push({
+    rows.push({
       url: item.url,
       categoria: item.categoria,
       categoria_sugerida: entry.categoria_sugerida?.trim() || null,
       veiculo: item.veiculo,
-      reason: entry.justificativa_brand_safety?.trim() || 'Classificação suspeita',
+      reason: entry.justificativa_brand_safety?.trim() || (status === 'CORRETA' ? '' : 'Classificação suspeita'),
       impressoes: item.impressoes,
       pct: 0,
+      status,
     });
   });
-  return { anomalies, failed };
+  return { rows, failed };
 }
 
 const ENGINE_PATH = path.join(process.cwd(), 'app', 'verification', 'engine.py');
@@ -478,34 +486,48 @@ async function buildEngineResponse(
     : outputPath ? path.basename(outputPath) : 'verificado.xlsx';
 
   // ── AI URL check ──────────────────────────────────────────────────────────
-  let urlCheckAnomalies: UrlAnomalyItem[] = [];
+  let urlCheckRows: UrlCheckedRow[] = [];
   let urlCheckFailed = 0;
   const urlSample: UrlSampleItem[] = (engineResult.url_sample as UrlSampleItem[]) ?? [];
   const urlCategorias: string[] = (engineResult.url_categorias as string[]) ?? [];
-  console.log(`[url-check] url_sample=${urlSample.length} OLLAMA_BASE_URL=${process.env.OLLAMA_BASE_URL ?? '(not set)'}`);
-  if (urlSample.length > 0 && process.env.OLLAMA_BASE_URL) {
-    send({ type: 'url_check_start', total: urlSample.length });
+
+  // URL raiz classificada como "Home" está correta por definição — resolver
+  // aqui evita a chamada à IA (que sugeria "Notícias" ao ler o portal).
+  const homeRows: UrlCheckedRow[] = [];
+  const toCheck: UrlSampleItem[] = [];
+  for (const item of urlSample) {
+    if (isHomeRoot(item.url, item.categoria)) {
+      homeRows.push({ ...item, categoria_sugerida: null, reason: 'Home = raiz do site (regra determinística, sem IA)', pct: 0, status: 'CORRETA' });
+    } else {
+      toCheck.push(item);
+    }
+  }
+  urlCheckRows.push(...homeRows);
+  console.log(`[url-check] url_sample=${urlSample.length} home_root=${homeRows.length} para_ia=${toCheck.length} OLLAMA_BASE_URL=${process.env.OLLAMA_BASE_URL ?? '(not set)'}`);
+
+  if (toCheck.length > 0 && process.env.OLLAMA_BASE_URL) {
+    send({ type: 'url_check_start', total: toCheck.length });
     const chunks: UrlSampleItem[][] = [];
-    for (let i = 0; i < urlSample.length; i += URLS_PER_CALL) chunks.push(urlSample.slice(i, i + URLS_PER_CALL));
+    for (let i = 0; i < toCheck.length; i += URLS_PER_CALL) chunks.push(toCheck.slice(i, i + URLS_PER_CALL));
 
     let done = 0;
     let next = 0;
     const worker = async () => {
       while (next < chunks.length) {
         const chunk = chunks[next++];
-        const { anomalies, failed } = await checkUrlChunk(chunk, urlCategorias);
-        urlCheckAnomalies.push(...anomalies);
+        const { rows, failed } = await checkUrlChunk(chunk, urlCategorias);
+        urlCheckRows.push(...rows);
         urlCheckFailed += failed;
         done += chunk.length;
-        send({ type: 'url_check_progress', done, total: urlSample.length });
+        send({ type: 'url_check_progress', done, total: toCheck.length });
       }
     };
     await Promise.all(Array.from({ length: Math.min(URL_CHECK_CONCURRENCY, chunks.length) }, worker));
-    if (urlCheckFailed > 0) console.warn(`[url-check] ${urlCheckFailed}/${urlSample.length} URLs não verificadas`);
+    if (urlCheckFailed > 0) console.warn(`[url-check] ${urlCheckFailed}/${toCheck.length} URLs não verificadas`);
   }
 
   // ── Calcular pct de impressões por veículo ────────────────────────────────
-  if (urlCheckAnomalies.length > 0) {
+  if (urlCheckRows.length > 0) {
     const entregueByMatch = new Map<string, number>();
     for (const v of (engineResult.veiculos ?? []) as { veiculo: string; match: string | null; entregue_consol: number }[]) {
       if (v.entregue_consol) {
@@ -513,11 +535,13 @@ async function buildEngineResponse(
         entregueByMatch.set(v.veiculo, v.entregue_consol);
       }
     }
-    urlCheckAnomalies = urlCheckAnomalies.map((a) => {
+    urlCheckRows = urlCheckRows.map((a) => {
       const total = entregueByMatch.get(a.veiculo) ?? 0;
       return { ...a, pct: total > 0 ? Math.round((a.impressoes / total) * 10000) / 100 : 0 };
     });
   }
+
+  const urlCheckAnomalies: UrlAnomalyItem[] = urlCheckRows.filter((r) => r.status === 'INCORRETA');
 
   // ── Escrever URL info (col 30) no arquivo verificado ─────────────────────
   if (urlCheckAnomalies.length > 0) {
@@ -584,6 +608,7 @@ async function buildEngineResponse(
     file_base64:         fileBase64,
     file_name:           outputName,
     url_check_anomalies: urlCheckAnomalies,
+    url_check_rows:      urlCheckRows,
     url_check_failed: urlCheckFailed,
   };
 }

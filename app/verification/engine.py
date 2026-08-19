@@ -661,9 +661,25 @@ def verificar(
     verif_raw: list[dict] = []
     url_pool: list[dict] = []
 
+    def _periodo_txt() -> str:
+        if not (data_ini or data_fim):
+            return ""
+        ini_s = data_ini.strftime("%d/%m/%Y") if data_ini else "—"
+        fim_s = data_fim.strftime("%d/%m/%Y") if data_fim else "—"
+        return f" no período {ini_s}–{fim_s}"
+
     for vp in verif_paths:
         try:
             results = parse_verif(vp, data_ini=data_ini, data_fim=data_fim, praca=praca)
+            # Só avisa quando há filtro: sem filtro, comprovante/verification
+            # vazio é caso legítimo (veículo que não entregou). Com filtro, o
+            # arquivo some em silêncio e cada veículo vira "nao localizado" —
+            # sintoma típico do ano errado no seletor de período.
+            if not results and (data_ini or data_fim or praca):
+                parse_errors.append({
+                    "arquivo": Path(vp).name,
+                    "erro": f"nenhum veículo encontrado{_periodo_txt()} — confira o filtro de datas/praça",
+                })
             veiculos_encontrados = [r["veiculo"] for r in results]
             print(
                 f"[verif] {Path(vp).name}: {len(results)} veículos"
@@ -683,7 +699,13 @@ def verificar(
 
     for cp in comp_paths:
         try:
-            comp_raw.extend(parse_comp(cp, data_ini=data_ini, data_fim=data_fim))
+            comp_results = parse_comp(cp, data_ini=data_ini, data_fim=data_fim)
+            if not comp_results and (data_ini or data_fim):
+                parse_errors.append({
+                    "arquivo": Path(cp).name,
+                    "erro": f"nenhum veículo encontrado{_periodo_txt()} — confira o filtro de datas",
+                })
+            comp_raw.extend(comp_results)
         except Exception as e:
             parse_errors.append({"arquivo": Path(cp).name, "erro": str(e)})
 
