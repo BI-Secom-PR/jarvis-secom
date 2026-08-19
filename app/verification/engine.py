@@ -48,11 +48,14 @@ from category_map import normaliza_categoria  # noqa: E402
 # ── Registro de parsers por adserver ───────────────────────────────────────────
 PARSER_MAP: dict[str, str] = {
     "00px":     "parser_00px",
+    # Layout 2025 (sem colunas Data/Estado, header "Impressões"/"Views" em vez de
+    # "Impressões Válidas"/"Views Válidas") já cai nas alternativas de col_index do
+    # parser_00px — a entrada separada existe só para clareza operacional no dropdown.
+    "00px25":   "parser_00px",
     "adforce":  "parser_adforce",
     "admotion": "parser_admotion",
     "ahead":    "parser_ahead",
     "metrike":  "parser_metrike",
-    "brz":      "parser_brz",
     "sense":    "parser_sense",
     "dgbrasil": "parser_dgbrasil",
     "teratech": "parser_teratech",

@@ -111,7 +111,7 @@ ADSERVER_MAPS: dict[str, dict[str, str]] = {
     "adforce":  ADFORCE_CATEGORY_MAP,
 }
 
-# ── Fallback global (00px, admotion, ahead, brz e adservers sem mapa próprio) ─
+# ── Fallback global (00px, 00px25, admotion, ahead e adservers sem mapa próprio) ─
 CATEGORY_MAP: dict[str, str] = {
     # Conteúdo Sensível (col 14)
     "conteúdo sensível":                "conteudo_sensivel",

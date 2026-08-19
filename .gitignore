@@ -46,6 +46,8 @@ __MACOSX/
 
 # verification/: real client campaign data (xlsx/pdf deliverables, ~1GB) — keep out of
 # git history; code, docs, and blank templates in this directory ARE tracked
+/verification/00PX/
+/verification/OOPX25/
 /verification/ADFORCE/
 /verification/METRIKE/
 /verification/SENSE/

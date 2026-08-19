@@ -44,6 +44,14 @@ CASES = {
         "comp_glob": "DGbrasil/Junho/Comprovante de Veiculação/*.xlsx",
         "verif_glob": "DGbrasil/Junho/Verification/*.xlsx",
     },
+    "00PX25": {
+        # Lado CPM (7 veículos). Claro Rewards é CPV-only e cai em "sem_consolidado"
+        # aqui — o consolidado CPV é arquivo separado, smoke manual, não baseline.
+        # Verification tem uma subpasta por veículo, com N Parts cada.
+        "consolidado": "OOPX25/CONSOLIDADOS/Consolidado _ SECOM _ Justiça Tarifária _ Luz do Povo _ CPM.xlsx",
+        "comp_glob":   "OOPX25/COMPROVANTES/*CPM*.xlsx",
+        "verif_glob":  "OOPX25/VERIFICATIONS/*/Verification*.xlsx",
+    },
     "TERATECH": {
         # Lado CPV (3 veículos): a aba ativa desse consolidado já é CONSOLIDADO -
         # CPV. O lado CPM (12 veículos) é smoke manual — o engine lê só a aba
@@ -65,6 +73,7 @@ EXPECTED: dict = {
     "DGBRASIL": {"n_veiculos": 22,
                  "statuses": ["DIVERGENCIA"] * 6 + ["OK"] * 15 + ["PENDENTE"] * 1},
     "TERATECH": {"n_veiculos": 3, "statuses": ["DIVERGENCIA"] * 3},
+    "00PX25": {"n_veiculos": 7, "statuses": ["DIVERGENCIA"] * 2 + ["OK"] * 5},
 }
 
 
