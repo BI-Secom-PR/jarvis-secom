@@ -356,7 +356,7 @@ export default function HudBackground({
       {/* Orb glow behind the sphere (color driven by the loop) */}
       <div
         ref={orbRef}
-        className="absolute left-1/2 top-1/2 aspect-square w-[min(78vw,960px)] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        className="absolute left-1/2 top-1/2 aspect-square w-[min(78vw,860px)] -translate-x-1/2 -translate-y-1/2 rounded-full"
         style={{ filter: "blur(18px)", opacity: 0.9 }}
       />
       {/* Neural sphere */}
