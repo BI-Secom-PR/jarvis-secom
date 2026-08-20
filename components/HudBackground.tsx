@@ -356,14 +356,14 @@ export default function HudBackground({
       {/* Orb glow behind the sphere (color driven by the loop) */}
       <div
         ref={orbRef}
-        className="absolute left-1/2 top-1/2 aspect-square w-[min(78vw,860px)] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        className="absolute left-1/2 top-1/2 aspect-square w-[min(78vw,960px)] -translate-x-1/2 -translate-y-[calc(50%+7vh)] rounded-full"
         style={{ filter: "blur(18px)", opacity: 0.9 }}
       />
       {/* Neural sphere */}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 block h-full w-full"
-        style={{ filter: "saturate(1.15) contrast(1.06)" }}
+        style={{ filter: "saturate(1.15) contrast(1.06)", transform: "translateY(-7vh)" }}
       />
       {/* Perspective grid floor */}
       <div
