@@ -20,7 +20,12 @@ function buildCsp(nonce: string): string {
     "style-src 'self' 'unsafe-inline'",
     // *.fbcdn.net: creative thumbnails on /sentimentos (silver_social_comments.image_url)
     // www.facebook.com: unwrapped ad-image links (see resolveImageUrl in app/api/sentimentos/data/route.ts) redirect through here before landing on fbcdn
-    "img-src 'self' data: https://*.fbcdn.net https://www.facebook.com https://*.tiktokcdn.com",
+    // *.ngrok-free.dev: the durable MinIO store (bucket social-ad-creatives) published
+    // from the n8n host. Since 2026-07-23 nearly every image_url points here rather than
+    // at fbcdn — without this only the ~1% still on a Meta/TikTok CDN would render, which
+    // is exactly why /sentimentos showed mostly blank thumbnails. LAN URLs cannot be used
+    // instead: this app is served from Vercel and 172.25.12.207 is unroutable there.
+    "img-src 'self' data: https://*.ngrok-free.dev https://*.fbcdn.net https://www.facebook.com https://*.tiktokcdn.com",
     // *.supabase.co: browser PUTs verification uploads straight to Supabase
     // Storage via signed URL, bypassing Vercel's 4.5MB request body limit
     "connect-src 'self' https://vercel.com https://*.supabase.co",
