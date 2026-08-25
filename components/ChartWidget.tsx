@@ -1,6 +1,10 @@
 "use client";
 
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+
+// useLayoutEffect avisa no servidor; o posicionamento do tooltip só acontece
+// depois de um hover, que é sempre no cliente.
+const useBeforePaint = typeof window === "undefined" ? useEffect : useLayoutEffect;
 import { ChartData, ScatterPoint } from "@/types/chat";
 import { getChartPalette } from "@/lib/exports/chart-palette";
 import { useIsDark } from "@/lib/useIsDark";
@@ -174,13 +178,34 @@ function GridLines({ pl, pr, pt, pb, max, theme, yTicks = true, xTicks = false }
 }
 
 function HudTooltip({ hover, theme }: { hover: HoverState | null; theme: HudTheme }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+  // O card tem overflow:hidden, então um tooltip que passa da borda é cortado.
+  // Mede a caixa de verdade — a largura depende do conteúdo de `meta`, que pode
+  // trazer nome de campanha — e vira para o outro lado do cursor quando não cabe.
+  useBeforePaint(() => {
+    const el = ref.current;
+    if (!hover || !el) return;
+    const host = el.offsetParent as HTMLElement | null;
+    const hostW = host?.clientWidth ?? 0;
+    const hostH = host?.clientHeight ?? 0;
+    const { width, height } = el.getBoundingClientRect();
+    let left = hover.x + 12;
+    if (left + width > hostW) left = hover.x - 12 - width;      // vira para a esquerda
+    left = Math.min(Math.max(left, 0), Math.max(hostW - width, 0));
+    const top = Math.min(Math.max(hover.y - 58, 0), Math.max(hostH - height, 0));
+    setPos((prev) => (prev && prev.left === left && prev.top === top ? prev : { left, top }));
+  }, [hover]);
+
   if (!hover) return null;
   return (
     <div
+      ref={ref}
       style={{
         position: "absolute",
-        left: `min(${hover.x + 12}px, calc(100% - 190px))`,
-        top: Math.max(hover.y - 58, 0),
+        left: pos?.left ?? hover.x + 12,
+        top: pos?.top ?? Math.max(hover.y - 58, 0),
         zIndex: 50,
         pointerEvents: "none",
         background: theme.isDark ? "#030d15" : "#ffffff",
@@ -188,6 +213,7 @@ function HudTooltip({ hover, theme }: { hover: HoverState | null; theme: HudThem
         borderRadius: 3,
         boxShadow: theme.isDark ? "0 0 0 1px rgba(34,211,238,.06),0 8px 32px rgba(0,0,0,.72)" : "0 4px 24px rgba(0,0,0,.12)",
         minWidth: 170,
+        maxWidth: 260,
         padding: "10px 12px",
         fontFamily: "monospace",
       }}
@@ -196,7 +222,7 @@ function HudTooltip({ hover, theme }: { hover: HoverState | null; theme: HudThem
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
         {hover.rows.map((row) => (
           <div key={`${row.label}-${row.value}`} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: row.color ?? theme.accent, boxShadow: theme.isDark ? `0 0 6px ${row.color ?? theme.accent}88` : "none" }} />
+            <span style={{ width: 6, height: 6, borderRadius: "50%", flex: "none", background: row.color ?? theme.accent, boxShadow: theme.isDark ? `0 0 6px ${row.color ?? theme.accent}88` : "none" }} />
             <span style={{ color: theme.dim }}>{row.label}</span>
             <span style={{ marginLeft: "auto", paddingLeft: 12, color: theme.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{typeof row.value === "number" ? formatFull(row.value) : row.value}</span>
           </div>
@@ -205,11 +231,11 @@ function HudTooltip({ hover, theme }: { hover: HoverState | null; theme: HudThem
       {hover.meta && Object.keys(hover.meta).length > 0 && (
         <>
           <hr style={{ border: "none", borderTop: `1px solid ${theme.axis}`, margin: "8px 0" }} />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "3px 12px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 12px" }}>
             {Object.entries(hover.meta).map(([k, v]) => (
               <React.Fragment key={k}>
-                <span style={{ color: theme.dim, fontSize: 10 }}>{k}</span>
-                <span style={{ color: theme.text, fontSize: 10, textAlign: "right" }}>{typeof v === "number" ? formatFull(v) : String(v)}</span>
+                <span style={{ color: theme.dim, fontSize: 10, whiteSpace: "nowrap" }}>{k}</span>
+                <span style={{ color: theme.text, fontSize: 10, textAlign: "right", overflowWrap: "anywhere" }}>{typeof v === "number" ? formatFull(v) : String(v)}</span>
               </React.Fragment>
             ))}
           </div>
