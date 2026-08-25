@@ -63,6 +63,17 @@ function SentimentIcon() {
   );
 }
 
+function DashboardIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+      <rect x="3" y="3" width="7" height="9" rx="1.5" stroke="var(--hud-cyan)" strokeWidth="1.4" />
+      <rect x="12" y="3" width="7" height="5" rx="1.5" stroke="var(--hud-cyan)" strokeWidth="1.4" />
+      <rect x="3" y="14" width="7" height="5" rx="1.5" stroke="var(--hud-cyan)" strokeWidth="1.4" />
+      <path d="M12.5 18.5l2.5-3 2 2 2-3.5" stroke="var(--hud-cyan)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export default async function Home() {
   const user = await requireAuth();
 
@@ -88,14 +99,22 @@ export default async function Home() {
       </div>
 
       {/* HUD panels — corners on desktop, stacked centered on mobile */}
-      <div className="absolute inset-x-0 bottom-[max(4.5rem,env(safe-area-inset-bottom))] z-10 flex flex-col items-center gap-3 px-5 md:flex-row md:items-end md:justify-between md:px-[6vw]">
+      <div className="absolute inset-x-0 bottom-[max(4.5rem,env(safe-area-inset-bottom))] z-10 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 [scrollbar-width:none] sm:grid sm:snap-none sm:grid-cols-2 sm:items-end sm:overflow-visible md:px-[6vw] xl:grid-cols-4">
         <HudPanel
           href="/chat"
           icon={<ChatIcon />}
           title="Chat"
           subtitle="Consulte dados de campanhas e faça perguntas em linguagem natural"
           accent="cyan"
-          className="w-full max-w-sm md:w-[320px]"
+          className="w-[78vw] shrink-0 snap-center sm:w-full sm:max-w-sm sm:justify-self-center xl:max-w-none"
+        />
+        <HudPanel
+          href="/dashboard"
+          icon={<DashboardIcon />}
+          title="Dashboard"
+          subtitle="Investimento, entrega e performance por campanha, idade, gênero e região"
+          accent="cyan"
+          className="w-[78vw] shrink-0 snap-center sm:w-full sm:max-w-sm sm:justify-self-center xl:max-w-none"
         />
         <HudPanel
           href="/sentimentos"
@@ -103,7 +122,7 @@ export default async function Home() {
           title="Sentimentos"
           subtitle="Analise o sentimento dos comentários dos anúncios e corrija classificações"
           accent="violet"
-          className="w-full max-w-sm md:w-[320px]"
+          className="w-[78vw] shrink-0 snap-center sm:w-full sm:max-w-sm sm:justify-self-center xl:max-w-none"
         />
         <HudPanel
           href="/verification"
@@ -111,7 +130,7 @@ export default async function Home() {
           title="Verification"
           subtitle="Acesse e analise relatórios de verificação de mídia"
           accent="gold"
-          className="w-full max-w-sm md:w-[320px]"
+          className="w-[78vw] shrink-0 snap-center sm:w-full sm:max-w-sm sm:justify-self-center xl:max-w-none"
         />
       </div>
 

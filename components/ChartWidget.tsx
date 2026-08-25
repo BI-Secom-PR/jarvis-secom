@@ -248,31 +248,60 @@ function HudCorners({ theme }: { theme: HudTheme }) {
 
 function HudBar({ chart, gid, theme, setHover }: { chart: ChartData; gid: string; theme: HudTheme; setHover: (hover: HoverState | null) => void }) {
   const labels = chart.labels ?? [];
-  const values = asNumbers(chart.datasets[0]?.data);
+  // One dataset → one bar per label (the chat's shape, unchanged).
+  // Two or more → grouped bars, one per dataset, coloured by SERIES not by
+  // rank, so a filter that drops a category never repaints the survivors.
+  const grouped = chart.datasets.length > 1;
+  const series = chart.datasets.map((ds) => ({ label: ds.label, values: asNumbers(ds.data), meta: ds.meta }));
   const pl = 50, pr = 8, pt = 20, pb = 26;
   const cW = VIEW_W - pl - pr;
   const cH = VIEW_H - pt - pb;
-  const max = Math.max(...values, 1);
+  const max = Math.max(...series.flatMap((s) => s.values), 1);
   const gap = cW / Math.max(labels.length, 1);
-  const bW = Math.min(32, gap * 0.56);
-  const meta = chart.datasets[0]?.meta;
+  // 2px of surface between neighbouring bars keeps the groups legible
+  const bW = grouped
+    ? Math.max(2, (gap * 0.72 - 2 * (series.length - 1)) / series.length)
+    : Math.min(32, gap * 0.56);
+  const groupW = grouped ? bW * series.length + 2 * (series.length - 1) : bW;
 
   return (
     <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block h-auto w-full" role="img" aria-label={chart.title ?? "Gráfico de barras"}>
       <SvgDefs gid={gid} theme={theme} />
       <GridLines pl={pl} pr={pr} pt={pt} pb={pb} max={max} theme={theme} />
       {labels.map((label, i) => {
-        const value = values[i] ?? 0;
-        const color = theme.palette[i % theme.palette.length];
-        const h = max ? (value / max) * cH : 0;
-        const x = pl + i * gap + (gap - bW) / 2;
-        const y = pt + cH - h;
+        const gx = pl + i * gap + (gap - groupW) / 2;
         return (
-          <g key={`${label}-${i}`} onMouseEnter={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: String(label), rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color }], meta: meta?.[i] })} onMouseMove={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: String(label), rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color }], meta: meta?.[i] })} onMouseLeave={() => setHover(null)}>
-            <rect x={x} y={y} width={bW} height={h} rx="1" fill={`url(#${gid}-bar-${i % theme.palette.length})`} filter={theme.isDark ? `url(#${gid}-soft-glow)` : undefined} />
-            <line x1={x} y1={y + 0.7} x2={x + bW} y2={y + 0.7} stroke={color} strokeWidth="2" opacity={theme.isDark ? 0.88 : 0.65} />
-            {value > 0 && <text x={x + bW / 2} y={y - 4} textAnchor="middle" fill={theme.isDark ? color : theme.text} fontSize="9" fontWeight="700" fontFamily="monospace">{formatCompact(value)}</text>}
-            <text x={x + bW / 2} y={VIEW_H - pb + 12} textAnchor="middle" fill={theme.dim} fontSize="8.5" fontFamily="monospace" letterSpacing=".04em">{shortLabel(String(label), 4)}</text>
+          <g key={`${label}-${i}`}>
+            {series.map((s, si) => {
+              const value = s.values[i] ?? 0;
+              const ci = grouped ? si : i;
+              const color = theme.palette[ci % theme.palette.length];
+              const h = max ? (value / max) * cH : 0;
+              const x = gx + si * (bW + 2);
+              const y = pt + cH - h;
+              const hover = (e: React.MouseEvent) => setHover({
+                x: e.nativeEvent.offsetX,
+                y: e.nativeEvent.offsetY,
+                title: String(label),
+                rows: grouped
+                  ? series.map((s2, k) => ({
+                      label: s2.label,
+                      value: s2.values[i] ?? 0,
+                      color: theme.palette[k % theme.palette.length],
+                    }))
+                  : [{ label: s.label ?? "Valor", value, color }],
+                meta: s.meta?.[i],
+              });
+              return (
+                <g key={si} onMouseEnter={hover} onMouseMove={hover} onMouseLeave={() => setHover(null)}>
+                  <rect x={x} y={y} width={bW} height={h} rx="1" fill={`url(#${gid}-bar-${ci % theme.palette.length})`} filter={theme.isDark ? `url(#${gid}-soft-glow)` : undefined} />
+                  <line x1={x} y1={y + 0.7} x2={x + bW} y2={y + 0.7} stroke={color} strokeWidth="2" opacity={theme.isDark ? 0.88 : 0.65} />
+                  {/* a value on every grouped bar is unreadable — the tooltip carries them */}
+                  {!grouped && value > 0 && <text x={x + bW / 2} y={y - 4} textAnchor="middle" fill={theme.isDark ? color : theme.text} fontSize="9" fontWeight="700" fontFamily="monospace">{formatCompact(value)}</text>}
+                </g>
+              );
+            })}
+            <text x={gx + groupW / 2} y={VIEW_H - pb + 12} textAnchor="middle" fill={theme.dim} fontSize="8.5" fontFamily="monospace" letterSpacing=".04em">{shortLabel(String(label), grouped ? 5 : 4)}</text>
           </g>
         );
       })}
