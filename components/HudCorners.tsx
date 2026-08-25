@@ -6,6 +6,7 @@ const ACCENT_COLORS = {
   cyan: "color-mix(in srgb, var(--hud-cyan) 55%, transparent)",
   gold: "color-mix(in srgb, var(--hud-gold) 55%, transparent)",
   violet: "color-mix(in srgb, var(--hud-violet) 55%, transparent)",
+  red: "color-mix(in srgb, var(--hud-red) 55%, transparent)",
 } as const;
 
 export default function HudCorners({

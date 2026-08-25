@@ -66,10 +66,10 @@ function SentimentIcon() {
 function DashboardIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-      <rect x="3" y="3" width="7" height="9" rx="1.5" stroke="var(--hud-cyan)" strokeWidth="1.4" />
-      <rect x="12" y="3" width="7" height="5" rx="1.5" stroke="var(--hud-cyan)" strokeWidth="1.4" />
-      <rect x="3" y="14" width="7" height="5" rx="1.5" stroke="var(--hud-cyan)" strokeWidth="1.4" />
-      <path d="M12.5 18.5l2.5-3 2 2 2-3.5" stroke="var(--hud-cyan)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="3" y="3" width="7" height="9" rx="1.5" stroke="var(--hud-red)" strokeWidth="1.4" />
+      <rect x="12" y="3" width="7" height="5" rx="1.5" stroke="var(--hud-red)" strokeWidth="1.4" />
+      <rect x="3" y="14" width="7" height="5" rx="1.5" stroke="var(--hud-red)" strokeWidth="1.4" />
+      <path d="M12.5 18.5l2.5-3 2 2 2-3.5" stroke="var(--hud-red)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -113,7 +113,7 @@ export default async function Home() {
           icon={<DashboardIcon />}
           title="Dashboard"
           subtitle="Investimento, entrega e performance por campanha, idade, gênero e região"
-          accent="cyan"
+          accent="red"
           className="w-[78vw] shrink-0 snap-center sm:w-full sm:max-w-sm sm:justify-self-center xl:max-w-none"
         />
         <HudPanel
