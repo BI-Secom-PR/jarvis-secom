@@ -89,7 +89,10 @@ export default function HudPanel({
     violet: "hud-panel-violet",
     red: "hud-panel-red",
   } as const;
-  const panelClass = `group relative block rounded-[10px] px-11 py-4 hud-panel ${VARIANT[accent]} transition-[box-shadow,transform] duration-300 ${className}`;
+  // flex-col + mt-auto no CTA: numa grade, os cards esticam para a altura da
+  // linha e o "Acessar" fica na mesma base, mesmo com subtítulos de tamanhos
+  // diferentes (o de Verification tem uma linha a menos que os outros).
+  const panelClass = `group relative flex flex-col rounded-[10px] px-11 py-4 hud-panel ${VARIANT[accent]} transition-[box-shadow,transform] duration-300 ${className}`;
 
   if (href) {
     return (
@@ -98,7 +101,7 @@ export default function HudPanel({
         className={`${panelClass} hover:-translate-y-0.5 active:scale-[0.99]`}
       >
         {body}
-        <span className="mt-3 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-ink-4 transition-colors group-hover:text-ink-2 font-hud">
+        <span className="mt-auto pt-3 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-ink-4 transition-colors group-hover:text-ink-2 font-hud">
           Acessar
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path

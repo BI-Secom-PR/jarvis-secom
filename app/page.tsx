@@ -99,7 +99,7 @@ export default async function Home() {
       </div>
 
       {/* HUD panels — corners on desktop, stacked centered on mobile */}
-      <div className="absolute inset-x-0 bottom-[max(4.5rem,env(safe-area-inset-bottom))] z-10 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 [scrollbar-width:none] sm:grid sm:snap-none sm:grid-cols-2 sm:items-end sm:overflow-visible md:px-[6vw] xl:grid-cols-4">
+      <div className="absolute inset-x-0 bottom-[max(4.5rem,env(safe-area-inset-bottom))] z-10 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 [scrollbar-width:none] sm:grid sm:snap-none sm:grid-cols-2 sm:overflow-visible md:px-[6vw] xl:grid-cols-4">
         <HudPanel
           href="/chat"
           icon={<ChatIcon />}
