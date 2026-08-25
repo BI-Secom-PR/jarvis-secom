@@ -80,7 +80,7 @@
     .tab {
       padding: 0 16px;
       border-radius: 9px;
-      font-size: 11px;
+      font-size: 12px;
       letter-spacing: 0.14em;
       border: 1px solid var(--separator);
       background: transparent;
@@ -107,14 +107,14 @@
   </style>
 </helmet>
 
-<div class="void" style="position: relative; width: 390px; min-height: 1780px; overflow: hidden">
+<div class="void" style="position: relative; width: 390px; min-height: 1900px; overflow: hidden">
 
   <!-- Sem barra de status falsa: no aparelho a real é desenhada por cima -->
   <header style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--separator)">
     <div style="display: flex; align-items: center; gap: 8px">
-      <a href="#" class="hud" style="font-size: 10px; letter-spacing: 0.2em; color: var(--ink-3)">Início</a>
+      <a href="#" class="hud tap" style="font-size: 12px; letter-spacing: 0.2em; color: var(--ink-3); padding-right: 4px">Início</a>
       <span style="color: var(--ink-4); font-size: 12px">›</span>
-      <span class="hud" style="font-size: 10px; letter-spacing: 0.16em; color: var(--ink); text-shadow: 0 0 10px rgba(39, 224, 255, 0.3)">Dashboard</span>
+      <span class="hud" style="font-size: 12px; letter-spacing: 0.16em; color: var(--ink); text-shadow: 0 0 10px rgba(39, 224, 255, 0.3)">Dashboard</span>
     </div>
     <span style="font-size: 15px; line-height: 1; color: var(--hud-cyan); text-shadow: 0 0 12px var(--hud-cyan)">◇</span>
   </header>
@@ -128,7 +128,7 @@
 
   <!-- Filtros viram resumo + botão; o painel completo abre em sheet -->
   <div style="display: flex; gap: 8px; padding: 0 16px 14px; overflow-x: auto; align-items: center">
-    <span class="chip tap num">01/07 – 19/08</span>
+    <span class="chip tap num">26/07 – 19/08</span>
     <span class="chip tap">Todas as campanhas</span>
     <span class="chip tap" style="border-color: var(--accent-border); color: var(--accent-text); background: var(--accent-soft)">Filtros ▾</span>
   </div>
@@ -138,10 +138,21 @@
     <!-- KPIs 2 × 3 -->
     <section style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
       <div class="panel" style="border-radius: 12px; padding: 12px 14px">
-        <div class="hud" style="font-size: 9px; letter-spacing: 0.2em; color: var(--ink-3)">Investimento</div>
-        <div class="num" style="margin-top: 3px; font-size: 18px; font-weight: 700; letter-spacing: -0.3px">R$ 1.841.857</div>
+        <div class="hud" style="font-size: 12px; letter-spacing: 0.2em; color: var(--ink-3)">Investimento</div>
+        <div class="num" style="margin-top: 3px; font-size: 18px; font-weight: 700; letter-spacing: -0.3px">R$ 1.214.166</div>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px">
-          <span class="num" style="font-size: 11px; font-weight: 600; color: var(--success)">▲ +18,4%</span>
+          <span class="num" style="font-size: 12px; font-weight: 600; color: var(--success)">▲ +18,4%</span>
+          <svg width="60" height="20" viewBox="0 0 60 20" fill="none" aria-hidden="true">
+            <path d="M2.0 17.2L4.7 13.8L7.3 9.1L10.0 7.5L12.7 7.7L15.3 3.0L18.0 6.2L20.7 4.3L23.3 7.2L26.0 7.7L28.7 8.3L31.3 9.3L34.0 8.5L36.7 8.3L39.3 8.8L42.0 8.5L44.7 9.1L47.3 9.6L50.0 11.9L52.7 17.5L55.3 17.7L58.0 18.0L58.0 20L2.0 20Z" fill="var(--s1)" opacity="0.13" />
+            <path d="M2.0 17.2L4.7 13.8L7.3 9.1L10.0 7.5L12.7 7.7L15.3 3.0L18.0 6.2L20.7 4.3L23.3 7.2L26.0 7.7L28.7 8.3L31.3 9.3L34.0 8.5L36.7 8.3L39.3 8.8L42.0 8.5L44.7 9.1L47.3 9.6L50.0 11.9L52.7 17.5L55.3 17.7L58.0 18.0" stroke="var(--s1)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+      </div>
+      <div class="panel" style="border-radius: 12px; padding: 12px 14px">
+        <div class="hud" style="font-size: 12px; letter-spacing: 0.2em; color: var(--ink-3)">Impressões</div>
+        <div class="num" style="margin-top: 3px; font-size: 18px; font-weight: 700; letter-spacing: -0.3px">303.047.604</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px">
+          <span class="num" style="font-size: 12px; font-weight: 600; color: var(--success)">▲ +12,1%</span>
           <svg width="60" height="20" viewBox="0 0 60 20" fill="none" aria-hidden="true">
             <path d="M2.0 18.0L4.7 15.9L7.3 11.8L10.0 10.6L12.7 10.6L15.3 3.0L18.0 8.3L20.7 5.0L23.3 8.6L26.0 8.6L28.7 9.1L31.3 10.3L34.0 9.1L36.7 9.1L39.3 9.3L42.0 9.1L44.7 9.3L47.3 9.6L50.0 11.3L52.7 17.5L55.3 17.5L58.0 17.5L58.0 20L2.0 20Z" fill="var(--s1)" opacity="0.13" />
             <path d="M2.0 18.0L4.7 15.9L7.3 11.8L10.0 10.6L12.7 10.6L15.3 3.0L18.0 8.3L20.7 5.0L23.3 8.6L26.0 8.6L28.7 9.1L31.3 10.3L34.0 9.1L36.7 9.1L39.3 9.3L42.0 9.1L44.7 9.3L47.3 9.6L50.0 11.3L52.7 17.5L55.3 17.5L58.0 17.5" stroke="var(--s1)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
@@ -149,21 +160,10 @@
         </div>
       </div>
       <div class="panel" style="border-radius: 12px; padding: 12px 14px">
-        <div class="hud" style="font-size: 9px; letter-spacing: 0.2em; color: var(--ink-3)">Impressões</div>
-        <div class="num" style="margin-top: 3px; font-size: 18px; font-weight: 700; letter-spacing: -0.3px">393.117.231</div>
+        <div class="hud" style="font-size: 12px; letter-spacing: 0.2em; color: var(--ink-3)">Alcance</div>
+        <div class="num" style="margin-top: 3px; font-size: 18px; font-weight: 700; letter-spacing: -0.3px">136.371.422</div>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px">
-          <span class="num" style="font-size: 11px; font-weight: 600; color: var(--success)">▲ +12,1%</span>
-          <svg width="60" height="20" viewBox="0 0 60 20" fill="none" aria-hidden="true">
-            <path d="M2.0 18.0L4.7 15.9L7.3 11.8L10.0 10.6L12.7 10.6L15.3 3.0L18.0 8.3L20.7 5.0L23.3 8.6L26.0 8.6L28.7 9.1L31.3 10.3L34.0 9.1L36.7 9.1L39.3 9.3L42.0 9.1L44.7 9.3L47.3 9.6L50.0 11.3L52.7 17.5L55.3 17.5L58.0 17.5L58.0 20L2.0 20Z" fill="var(--s1)" opacity="0.13" />
-            <path d="M2.0 18.0L4.7 15.9L7.3 11.8L10.0 10.6L12.7 10.6L15.3 3.0L18.0 8.3L20.7 5.0L23.3 8.6L26.0 8.6L28.7 9.1L31.3 10.3L34.0 9.1L36.7 9.1L39.3 9.3L42.0 9.1L44.7 9.3L47.3 9.6L50.0 11.3L52.7 17.5L55.3 17.5L58.0 17.5" stroke="var(--s1)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </div>
-      </div>
-      <div class="panel" style="border-radius: 12px; padding: 12px 14px">
-        <div class="hud" style="font-size: 9px; letter-spacing: 0.2em; color: var(--ink-3)">Alcance</div>
-        <div class="num" style="margin-top: 3px; font-size: 18px; font-weight: 700; letter-spacing: -0.3px">176.902.754</div>
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px">
-          <span class="num" style="font-size: 11px; font-weight: 600; color: var(--success)">▲ +9,7%</span>
+          <span class="num" style="font-size: 12px; font-weight: 600; color: var(--success)">▲ +9,7%</span>
           <svg width="60" height="20" viewBox="0 0 60 20" fill="none" aria-hidden="true">
             <path d="M2.0 18.0L4.7 17.8L7.3 13.1L10.0 10.8L12.7 11.6L15.3 12.0L18.0 4.5L20.7 6.4L23.3 3.0L26.0 9.3L28.7 11.6L31.3 12.6L34.0 12.3L36.7 10.1L39.3 11.6L42.0 11.2L44.7 10.8L47.3 11.6L50.0 17.6L52.7 17.6L55.3 17.6L58.0 17.6L58.0 20L2.0 20Z" fill="var(--s1)" opacity="0.13" />
             <path d="M2.0 18.0L4.7 17.8L7.3 13.1L10.0 10.8L12.7 11.6L15.3 12.0L18.0 4.5L20.7 6.4L23.3 3.0L26.0 9.3L28.7 11.6L31.3 12.6L34.0 12.3L36.7 10.1L39.3 11.6L42.0 11.2L44.7 10.8L47.3 11.6L50.0 17.6L52.7 17.6L55.3 17.6L58.0 17.6" stroke="var(--s1)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
@@ -171,10 +171,21 @@
         </div>
       </div>
       <div class="panel" style="border-radius: 12px; padding: 12px 14px">
-        <div class="hud" style="font-size: 9px; letter-spacing: 0.2em; color: var(--ink-3)">Cliques</div>
-        <div class="num" style="margin-top: 3px; font-size: 18px; font-weight: 700; letter-spacing: -0.3px">808.529</div>
+        <div class="hud" style="font-size: 12px; letter-spacing: 0.2em; color: var(--ink-3)">Cliques</div>
+        <div class="num" style="margin-top: 3px; font-size: 18px; font-weight: 700; letter-spacing: -0.3px">531.760</div>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px">
-          <span class="num" style="font-size: 11px; font-weight: 600; color: var(--danger)">▼ -4,2%</span>
+          <span class="num" style="font-size: 12px; font-weight: 600; color: var(--danger)">▼ -4,2%</span>
+          <svg width="60" height="20" viewBox="0 0 60 20" fill="none" aria-hidden="true">
+            <path d="M2.0 18.0L4.7 15.8L7.3 10.3L10.0 7.8L12.7 8.4L15.3 3.0L18.0 5.4L20.7 3.6L23.3 6.0L26.0 6.6L28.7 7.2L31.3 8.4L34.0 6.6L36.7 6.0L39.3 7.2L42.0 6.6L44.7 7.2L47.3 7.8L50.0 10.9L52.7 17.5L55.3 17.8L58.0 18.0L58.0 20L2.0 20Z" fill="var(--s1)" opacity="0.13" />
+            <path d="M2.0 18.0L4.7 15.8L7.3 10.3L10.0 7.8L12.7 8.4L15.3 3.0L18.0 5.4L20.7 3.6L23.3 6.0L26.0 6.6L28.7 7.2L31.3 8.4L34.0 6.6L36.7 6.0L39.3 7.2L42.0 6.6L44.7 7.2L47.3 7.8L50.0 10.9L52.7 17.5L55.3 17.8L58.0 18.0" stroke="var(--s1)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+      </div>
+      <div class="panel" style="border-radius: 12px; padding: 12px 14px">
+        <div class="hud" style="font-size: 12px; letter-spacing: 0.2em; color: var(--ink-3)">Visualizações</div>
+        <div class="num" style="margin-top: 3px; font-size: 18px; font-weight: 700; letter-spacing: -0.3px">35.011.496</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px">
+          <span class="num" style="font-size: 12px; font-weight: 600; color: var(--success)">▲ +31,8%</span>
           <svg width="60" height="20" viewBox="0 0 60 20" fill="none" aria-hidden="true">
             <path d="M2.0 18.0L4.7 16.9L7.3 13.0L10.0 9.7L12.7 8.6L15.3 7.4L18.0 7.4L20.7 8.6L23.3 10.8L26.0 10.8L28.7 11.3L31.3 4.1L34.0 3.0L36.7 3.0L39.3 3.6L42.0 4.7L44.7 5.2L47.3 6.3L50.0 7.4L52.7 10.8L55.3 10.8L58.0 11.3L58.0 20L2.0 20Z" fill="var(--s1)" opacity="0.13" />
             <path d="M2.0 18.0L4.7 16.9L7.3 13.0L10.0 9.7L12.7 8.6L15.3 7.4L18.0 7.4L20.7 8.6L23.3 10.8L26.0 10.8L28.7 11.3L31.3 4.1L34.0 3.0L36.7 3.0L39.3 3.6L42.0 4.7L44.7 5.2L47.3 6.3L50.0 7.4L52.7 10.8L55.3 10.8L58.0 11.3" stroke="var(--s1)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
@@ -182,21 +193,10 @@
         </div>
       </div>
       <div class="panel" style="border-radius: 12px; padding: 12px 14px">
-        <div class="hud" style="font-size: 9px; letter-spacing: 0.2em; color: var(--ink-3)">Visualizações</div>
-        <div class="num" style="margin-top: 3px; font-size: 18px; font-weight: 700; letter-spacing: -0.3px">37.591.266</div>
+        <div class="hud" style="font-size: 12px; letter-spacing: 0.2em; color: var(--ink-3)">Engajamento</div>
+        <div class="num" style="margin-top: 3px; font-size: 18px; font-weight: 700; letter-spacing: -0.3px">901.296</div>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px">
-          <span class="num" style="font-size: 11px; font-weight: 600; color: var(--success)">▲ +31,8%</span>
-          <svg width="60" height="20" viewBox="0 0 60 20" fill="none" aria-hidden="true">
-            <path d="M2.0 18.0L4.7 16.9L7.3 13.0L10.0 9.7L12.7 8.6L15.3 7.4L18.0 7.4L20.7 8.6L23.3 10.8L26.0 10.8L28.7 11.3L31.3 4.1L34.0 3.0L36.7 3.0L39.3 3.6L42.0 4.7L44.7 5.2L47.3 6.3L50.0 7.4L52.7 10.8L55.3 10.8L58.0 11.3L58.0 20L2.0 20Z" fill="var(--s1)" opacity="0.13" />
-            <path d="M2.0 18.0L4.7 16.9L7.3 13.0L10.0 9.7L12.7 8.6L15.3 7.4L18.0 7.4L20.7 8.6L23.3 10.8L26.0 10.8L28.7 11.3L31.3 4.1L34.0 3.0L36.7 3.0L39.3 3.6L42.0 4.7L44.7 5.2L47.3 6.3L50.0 7.4L52.7 10.8L55.3 10.8L58.0 11.3" stroke="var(--s1)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </div>
-      </div>
-      <div class="panel" style="border-radius: 12px; padding: 12px 14px">
-        <div class="hud" style="font-size: 9px; letter-spacing: 0.2em; color: var(--ink-3)">Engajamento</div>
-        <div class="num" style="margin-top: 3px; font-size: 18px; font-weight: 700; letter-spacing: -0.3px">1.028.217</div>
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px">
-          <span class="num" style="font-size: 11px; font-weight: 600; color: var(--danger)">▼ -2,6%</span>
+          <span class="num" style="font-size: 12px; font-weight: 600; color: var(--danger)">▼ -2,6%</span>
           <svg width="60" height="20" viewBox="0 0 60 20" fill="none" aria-hidden="true">
             <path d="M2.0 15.9L4.7 14.3L7.3 11.1L10.0 10.6L12.7 11.9L15.3 3.0L18.0 9.9L20.7 8.3L23.3 9.0L26.0 9.5L28.7 9.9L31.3 10.6L34.0 10.3L36.7 8.6L39.3 9.0L42.0 9.5L44.7 9.9L47.3 10.3L50.0 17.5L52.7 17.8L55.3 17.8L58.0 18.0L58.0 20L2.0 20Z" fill="var(--s1)" opacity="0.13" />
             <path d="M2.0 15.9L4.7 14.3L7.3 11.1L10.0 10.6L12.7 11.9L15.3 3.0L18.0 9.9L20.7 8.3L23.3 9.0L26.0 9.5L28.7 9.9L31.3 10.6L34.0 10.3L36.7 8.6L39.3 9.0L42.0 9.5L44.7 9.9L47.3 10.3L50.0 17.5L52.7 17.8L55.3 17.8L58.0 18.0" stroke="var(--s1)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
@@ -208,41 +208,40 @@
     <!-- Razões: 7 em grade de 2, não em faixa espremida -->
     <section class="panel" style="border-radius: 12px; display: grid; grid-template-columns: 1fr 1fr">
       <div style="padding: 11px 14px; border-bottom: 1px solid var(--separator); border-right: 1px solid var(--separator)">
-        <div class="hud" style="font-size: 9px; letter-spacing: 0.18em; color: var(--ink-3)">CPM</div>
-        <div class="num" style="margin-top: 2px; font-size: 15px; font-weight: 600">R$ 4,69</div>
+        <div class="hud" style="font-size: 12px; letter-spacing: 0.18em; color: var(--ink-3)">CPM</div>
+        <div class="num" style="margin-top: 2px; font-size: 15px; font-weight: 600">R$ 4,01</div>
       </div>
       <div style="padding: 11px 14px; border-bottom: 1px solid var(--separator)">
-        <div class="hud" style="font-size: 9px; letter-spacing: 0.18em; color: var(--ink-3)">CPC</div>
+        <div class="hud" style="font-size: 12px; letter-spacing: 0.18em; color: var(--ink-3)">CPC</div>
         <div class="num" style="margin-top: 2px; font-size: 15px; font-weight: 600">R$ 2,28</div>
       </div>
       <div style="padding: 11px 14px; border-bottom: 1px solid var(--separator); border-right: 1px solid var(--separator)">
-        <div class="hud" style="font-size: 9px; letter-spacing: 0.18em; color: var(--ink-3)">CTR</div>
-        <div class="num" style="margin-top: 2px; font-size: 15px; font-weight: 600">0,21%</div>
+        <div class="hud" style="font-size: 12px; letter-spacing: 0.18em; color: var(--ink-3)">CTR</div>
+        <div class="num" style="margin-top: 2px; font-size: 15px; font-weight: 600">0,18%</div>
       </div>
       <div style="padding: 11px 14px; border-bottom: 1px solid var(--separator)">
-        <div class="hud" style="font-size: 9px; letter-spacing: 0.18em; color: var(--ink-3)">CPV</div>
-        <div class="num" style="margin-top: 2px; font-size: 15px; font-weight: 600">R$ 0,05</div>
+        <div class="hud" style="font-size: 12px; letter-spacing: 0.18em; color: var(--ink-3)">CPV</div>
+        <div class="num" style="margin-top: 2px; font-size: 15px; font-weight: 600">R$ 0,03</div>
       </div>
       <div style="padding: 11px 14px; border-bottom: 1px solid var(--separator); border-right: 1px solid var(--separator)">
-        <div class="hud" style="font-size: 9px; letter-spacing: 0.18em; color: var(--ink-3)">VTR</div>
-        <div class="num" style="margin-top: 2px; font-size: 15px; font-weight: 600">9,56%</div>
+        <div class="hud" style="font-size: 12px; letter-spacing: 0.18em; color: var(--ink-3)">VTR</div>
+        <div class="num" style="margin-top: 2px; font-size: 15px; font-weight: 600">11,55%</div>
       </div>
       <div style="padding: 11px 14px; border-bottom: 1px solid var(--separator)">
-        <div class="hud" style="font-size: 9px; letter-spacing: 0.18em; color: var(--ink-3)">CPE</div>
-        <div class="num" style="margin-top: 2px; font-size: 15px; font-weight: 600">R$ 1,79</div>
+        <div class="hud" style="font-size: 12px; letter-spacing: 0.18em; color: var(--ink-3)">CPE</div>
+        <div class="num" style="margin-top: 2px; font-size: 15px; font-weight: 600">R$ 1,35</div>
       </div>
-      <div style="padding: 11px 14px; border-right: 1px solid var(--separator)">
-        <div class="hud" style="font-size: 9px; letter-spacing: 0.18em; color: var(--ink-3)">Tx. Eng.</div>
-        <div class="num" style="margin-top: 2px; font-size: 15px; font-weight: 600">0,26%</div>
+      <div style="padding: 11px 14px; grid-column: span 2">
+        <div class="hud" style="font-size: 12px; letter-spacing: 0.18em; color: var(--ink-3)">Tx. Eng.</div>
+        <div class="num" style="margin-top: 2px; font-size: 15px; font-weight: 600">0,30%</div>
       </div>
-      <div></div>
     </section>
 
     <!-- Evolução -->
     <section class="panel" style="border-radius: 14px; padding: 16px 14px">
       <span class="cnr cnr-tl cnr-cy"></span><span class="cnr cnr-tr cnr-cy"></span>
       <span class="cnr cnr-bl cnr-cy"></span><span class="cnr cnr-br cnr-cy"></span>
-      <div class="hud" style="font-size: 10px; letter-spacing: 0.22em; color: var(--ink); display: flex; align-items: center; gap: 7px; text-shadow: 0 0 12px rgba(39, 224, 255, 0.35)">
+      <div class="hud" style="font-size: 12px; letter-spacing: 0.22em; color: var(--ink); display: flex; align-items: center; gap: 7px; text-shadow: 0 0 12px rgba(39, 224, 255, 0.35)">
         <span style="color: var(--hud-cyan)">◇</span> Evolução
       </div>
       <div style="display: flex; gap: 8px; margin: 12px 0 8px; overflow-x: auto">
@@ -255,7 +254,7 @@
         <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2)"><span style="width: 9px; height: 9px; border-radius: 3px; background: var(--s2)"></span>Impressões</span>
         <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2)"><span style="width: 9px; height: 9px; border-radius: 3px; background: var(--s3)"></span>Visualizações</span>
       </div>
-      <svg width="330" height="180" viewBox="0 0 342 180" fill="none" role="img">
+      <svg width="326" height="172" viewBox="0 0 342 180" fill="none" role="img">
         <title>Alcance, impressões e visualizações por dia</title>
         <line x1="28" y1="150" x2="336" y2="150" stroke="var(--chart-grid)" stroke-width="1" />
         <line x1="28" y1="116" x2="336" y2="116" stroke="var(--chart-grid)" stroke-width="1" />
@@ -283,20 +282,20 @@
     <section class="panel panel-gold" style="border-radius: 14px; padding: 16px 14px">
       <span class="cnr cnr-tl cnr-gd"></span><span class="cnr cnr-tr cnr-gd"></span>
       <span class="cnr cnr-bl cnr-gd"></span><span class="cnr cnr-br cnr-gd"></span>
-      <div class="hud" style="font-size: 10px; letter-spacing: 0.22em; color: var(--ink); display: flex; align-items: center; gap: 7px; text-shadow: 0 0 12px rgba(255, 181, 61, 0.35)">
+      <div class="hud" style="font-size: 12px; letter-spacing: 0.22em; color: var(--ink); display: flex; align-items: center; gap: 7px; text-shadow: 0 0 12px rgba(255, 181, 61, 0.35)">
         <span style="color: var(--hud-gold)">⚛</span> Leitura do Jarvis
       </div>
       <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 14px">
         <div style="display: flex; gap: 9px">
           <span style="color: var(--hud-gold); font-size: 11px; line-height: 1.6">▸</span>
-          <p style="margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink-2)">TikTok concentra 41% das impressões do período com CPM de R$ 1,45 — o menor entre as sete plataformas.</p>
+          <p style="margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink-2)">TikTok concentra 42% das impressões do período com CPM de R$ 1,45 — o menor entre as sete plataformas.</p>
         </div>
         <div style="display: flex; gap: 9px">
           <span style="color: var(--hud-gold); font-size: 11px; line-height: 1.6">▸</span>
           <p style="margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink-2)">A queda a partir de 13/08 é fim de veiculação, não perda de performance: alcance e impressões caem juntos e o CTR se mantém em 0,18%.</p>
         </div>
       </div>
-      <a href="#" class="tap hud" style="margin-top: 14px; font-size: 11px; letter-spacing: 0.16em; color: var(--hud-gold); gap: 8px">
+      <a href="#" class="tap hud" style="margin-top: 14px; font-size: 12px; letter-spacing: 0.16em; color: var(--hud-gold); gap: 8px">
         Perguntar ao Jarvis
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6h7M6.5 3l3 3-3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" /></svg>
       </a>
@@ -305,7 +304,7 @@
     <!-- Performance: no telefone a tabela vira lista de cartões -->
     <section style="display: flex; flex-direction: column; gap: 10px">
       <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 2px">
-        <div class="hud" style="font-size: 10px; letter-spacing: 0.22em; color: var(--ink); display: flex; align-items: center; gap: 7px">
+        <div class="hud" style="font-size: 12px; letter-spacing: 0.22em; color: var(--ink); display: flex; align-items: center; gap: 7px">
           <span style="color: var(--hud-cyan)">◇</span> Performance
         </div>
         <span style="font-size: 12px; color: var(--ink-3)">39 campanhas</span>
@@ -318,9 +317,9 @@
         </div>
         <p style="margin: 6px 0 10px; font-size: 13px; line-height: 1.45; color: var(--ink)">2026 | CAMPANHA NACIONAL DE PREVENÇÃO AOS DANOS DAS APOSTAS ONLINE | PI 141339</p>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px">
-          <div><div style="font-size: 11px; color: var(--ink-3)">Investimento</div><div class="num" style="font-size: 13px; font-weight: 600">R$ 102.615</div></div>
-          <div><div style="font-size: 11px; color: var(--ink-3)">Impressões</div><div class="num" style="font-size: 13px; font-weight: 600">70,8 mi</div></div>
-          <div><div style="font-size: 11px; color: var(--ink-3)">CPM</div><div class="num" style="font-size: 13px; font-weight: 600">R$ 1,45</div></div>
+          <div><div style="font-size: 12px; color: var(--ink-3)">Investimento</div><div class="num" style="font-size: 13px; font-weight: 600">R$ 102.615</div></div>
+          <div><div style="font-size: 12px; color: var(--ink-3)">Impressões</div><div class="num" style="font-size: 13px; font-weight: 600">70,8 mi</div></div>
+          <div><div style="font-size: 12px; color: var(--ink-3)">CPM</div><div class="num" style="font-size: 13px; font-weight: 600">R$ 1,45</div></div>
         </div>
       </div>
 
@@ -331,22 +330,22 @@
         </div>
         <p style="margin: 6px 0 10px; font-size: 13px; line-height: 1.45; color: var(--ink)">Secom_Bets_CPV_Agosto_ PI 330787</p>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px">
-          <div><div style="font-size: 11px; color: var(--ink-3)">Investimento</div><div class="num" style="font-size: 13px; font-weight: 600">R$ 268.430</div></div>
-          <div><div style="font-size: 11px; color: var(--ink-3)">Impressões</div><div class="num" style="font-size: 13px; font-weight: 600">39,7 mi</div></div>
-          <div><div style="font-size: 11px; color: var(--ink-3)">CPM</div><div class="num" style="font-size: 13px; font-weight: 600">R$ 6,75</div></div>
+          <div><div style="font-size: 12px; color: var(--ink-3)">Investimento</div><div class="num" style="font-size: 13px; font-weight: 600">R$ 268.430</div></div>
+          <div><div style="font-size: 12px; color: var(--ink-3)">Impressões</div><div class="num" style="font-size: 13px; font-weight: 600">39,7 mi</div></div>
+          <div><div style="font-size: 12px; color: var(--ink-3)">CPM</div><div class="num" style="font-size: 13px; font-weight: 600">R$ 6,75</div></div>
         </div>
       </div>
 
       <div class="panel" style="border-radius: 12px; padding: 13px 14px">
         <div style="display: flex; align-items: center; gap: 7px">
           <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--hud-cyan); box-shadow: 0 0 8px var(--hud-cyan)"></span>
-          <span style="font-size: 12px; color: var(--ink-3)">linkedin</span>
+          <span style="font-size: 12px; color: var(--ink-3)">tiktok</span>
         </div>
-        <p style="margin: 6px 0 10px; font-size: 13px; line-height: 1.45; color: var(--ink)">SECOM_CAMPANHA DE PREVENÇÃO AOS DANOS DAS APOSTAS ONLINE</p>
+        <p style="margin: 6px 0 10px; font-size: 13px; line-height: 1.45; color: var(--ink)">2026 | CAMPANHA DE PREVENÇÃO AOS DANOS DAS APOSTAS ONLINE | PI 141335</p>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px">
-          <div><div style="font-size: 11px; color: var(--ink-3)">Investimento</div><div class="num" style="font-size: 13px; font-weight: 600">R$ 77.785</div></div>
-          <div><div style="font-size: 11px; color: var(--ink-3)">Impressões</div><div class="num" style="font-size: 13px; font-weight: 600">3,6 mi</div></div>
-          <div><div style="font-size: 11px; color: var(--ink-3)">CPM</div><div class="num" style="font-size: 13px; font-weight: 600">R$ 21,66</div></div>
+          <div><div style="font-size: 12px; color: var(--ink-3)">Investimento</div><div class="num" style="font-size: 13px; font-weight: 600">R$ 64.457</div></div>
+          <div><div style="font-size: 12px; color: var(--ink-3)">Impressões</div><div class="num" style="font-size: 13px; font-weight: 600">37,0 mi</div></div>
+          <div><div style="font-size: 12px; color: var(--ink-3)">CPM</div><div class="num" style="font-size: 13px; font-weight: 600">R$ 1,74</div></div>
         </div>
       </div>
 

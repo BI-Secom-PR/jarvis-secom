@@ -1,7 +1,22 @@
 {
   "artboards": [
-    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1440, "h": 1740, "title": "Dashboard — desktop", "is_interactive": true },
-    { "file": "Mobile.dc.html", "x": 1560, "y": 0, "w": 390, "h": 1780, "title": "Dashboard — telefone" }
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1900,
+      "title": "Dashboard — desktop",
+      "is_interactive": true
+    },
+    {
+      "file": "Mobile.dc.html",
+      "x": 1560,
+      "y": 0,
+      "w": 390,
+      "h": 1900,
+      "title": "Dashboard — telefone"
+    }
   ],
   "annotations": [
     {
@@ -9,8 +24,11 @@
       "x": 0,
       "y": -150,
       "w": 640,
-      "text": "Clique nas abas, nos pills de métrica e no toggle da tabela — tudo troca de verdade.\nNúmeros são amostras lidas dos screenshots do Oracle (26/07–19/08/2026)."
+      "text": "Passe o cursor: a série temporal tem crosshair com os quatro valores do dia, e scatter, barras, donut e mapa têm tooltip por marca.\nClique nas abas, nos pills de métrica e no toggle da tabela — tudo troca de verdade.\nNúmeros são amostras do recorte 26/07–19/08/2026 dos screenshots do Oracle."
     }
   ],
-  "launch": { "view": "focused", "file": "Main.dc.html" }
+  "launch": {
+    "view": "focused",
+    "file": "Main.dc.html"
+  }
 }
