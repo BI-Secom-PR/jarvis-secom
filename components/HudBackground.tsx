@@ -166,7 +166,9 @@ export default function HudBackground({
       canvas!.style.width = `${w}px`;
       canvas!.style.height = `${h}px`;
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-      sphereRadius = Math.min(w, h) * (w < 760 ? 0.5 : 0.47);
+      // No telefone o menu virou um carrossel de uma linha e sobrou altura:
+      // a esfera cresce para ocupar o vão entre o wordmark e os cards.
+      sphereRadius = Math.min(w, h) * (w < 760 ? 0.75 : 0.47);
       // 0.34 vinha de quando o menu empilhava os cards e comia o terço de baixo;
       // com o carrossel de uma linha a esfera fica centrada como no desktop.
       sphereCenterY = w < 760 ? 0.48 : 0.51;
