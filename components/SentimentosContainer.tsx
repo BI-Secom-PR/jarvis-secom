@@ -6,6 +6,7 @@ import HudBackground from "./HudBackground";
 import HudCorners from "./HudCorners";
 import ThemeToggle from "./ThemeToggle";
 import ChartWidget from "./ChartWidget";
+import SearchableSelect from "./SearchableSelect";
 import { postJson } from "@/lib/fetchUtils";
 import { SENTIMENTS } from "@/lib/sentimentos";
 import type { ChartData } from "@/types/chat";
@@ -375,7 +376,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
       <div className="relative z-10 flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto px-4 py-6 md:px-6 space-y-5">
           {/* ── Filtros ── */}
-          <section className="relative hud-panel hud-panel-violet rounded-[16px] px-4 py-5 md:px-6">
+          <section className="relative z-20 hud-panel hud-panel-violet rounded-[16px] px-4 py-5 md:px-6">
             <HudCorners accent="violet" size={16} inset={8} />
             <div className="space-y-6">
               <div
@@ -385,26 +386,20 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
                 <span style={{ color: "var(--hud-violet)" }}>◇</span> Filtros
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 items-center">
-                <select
+                <SearchableSelect
                   className={selectClass}
                   value={campaign}
-                  onChange={(e) => { setCampaign(e.target.value); setAd(""); setPage(0); }}
-                >
-                  <option value="">Todas as campanhas</option>
-                  {filtersData?.campaigns.map((c) => (
-                    <option key={c} value={c}>{truncate(c, 70)}</option>
-                  ))}
-                </select>
-                <select
+                  options={filtersData?.campaigns ?? []}
+                  emptyLabel="Todas as campanhas"
+                  onChange={(v) => { setCampaign(v); setAd(""); setPage(0); }}
+                />
+                <SearchableSelect
                   className={selectClass}
                   value={ad}
-                  onChange={(e) => { setAd(e.target.value); setPage(0); }}
-                >
-                  <option value="">Todos os anúncios</option>
-                  {adOptions.map((a) => (
-                    <option key={a} value={a}>{truncate(a, 70)}</option>
-                  ))}
-                </select>
+                  options={adOptions}
+                  emptyLabel="Todos os anúncios"
+                  onChange={(v) => { setAd(v); setPage(0); }}
+                />
                 <select
                   className={selectClass}
                   value={platform}
