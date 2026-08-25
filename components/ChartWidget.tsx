@@ -490,6 +490,9 @@ function HudScatter({ chart, gid, theme, setHover }: { chart: ChartData; gid: st
 function BrazilChoropleth({ chart, gid, theme, setHover }: { chart: ChartData; gid: string; theme: HudTheme; setHover: (hover: HoverState | null) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [paths, setPaths] = useState<{ uf: string; d: string; cx: number; cy: number }[]>([]);
+  // viewBox recortado no bounding box do mapa — o Brasil é quase quadrado e
+  // afogava num viewBox 2:1 fixo. A legenda vai por cima, no canto oceânico.
+  const [box, setBox] = useState({ x: 0, y: 0, w: VIEW_W, h: VIEW_W });
   const labels = chart.labels ?? [];
   const values = asNumbers(chart.datasets[0]?.data);
   const valueMap: Record<string, number> = {};
@@ -507,8 +510,10 @@ function BrazilChoropleth({ chart, gid, theme, setHover }: { chart: ChartData; g
       fetch("/brazil-states.geojson").then((r) => r.json()),
       import("d3-geo"),
     ]).then(([geo, d3]) => {
-      const projection = d3.geoMercator().fitSize([VIEW_W, VIEW_H], geo);
+      const projection = d3.geoMercator().fitSize([VIEW_W, VIEW_W], geo);
       const pathGen = d3.geoPath(projection);
+      const [[x0, y0], [x1, y1]] = pathGen.bounds(geo as Parameters<typeof pathGen.bounds>[0]);
+      setBox({ x: x0 - 3, y: y0 - 3, w: x1 - x0 + 6, h: y1 - y0 + 6 });
       const result = (geo.features as GeoFeature[]).map((f) => {
         const centroid = pathGen.centroid(f as Parameters<typeof pathGen>[0]);
         return {
@@ -528,7 +533,7 @@ function BrazilChoropleth({ chart, gid, theme, setHover }: { chart: ChartData; g
 
   return (
     <div ref={containerRef}>
-      <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block h-auto w-full" role="img" aria-label={chart.title ?? "Mapa do Brasil"}>
+      <svg viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`} preserveAspectRatio="xMidYMid meet" className="mx-auto block h-auto w-full max-h-[340px]" role="img" aria-label={chart.title ?? "Mapa do Brasil"}>
         <SvgDefs gid={gid} theme={theme} />
         {paths.map(({ uf, d, cx, cy }) => {
           const value = valueMap[uf.toUpperCase()] ?? 0;
@@ -538,13 +543,13 @@ function BrazilChoropleth({ chart, gid, theme, setHover }: { chart: ChartData; g
           return (
             <g key={uf} onMouseEnter={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: uf, rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color: theme.accent }], meta: metaMap[uf.toUpperCase()] })} onMouseMove={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: uf, rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color: theme.accent }], meta: metaMap[uf.toUpperCase()] })} onMouseLeave={() => setHover(null)}>
               <path d={d} fill={theme.accent} fillOpacity={fillOpacity} stroke={theme.accent} strokeOpacity={strokeOpacity} strokeWidth={theme.isDark && ratio > 0.6 ? 0.9 : 0.6} filter={theme.isDark && ratio > 0.5 ? `url(#${gid}-soft-glow)` : undefined} />
-              {value > 0 && ratio > 0.32 && Number.isFinite(cx) && Number.isFinite(cy) && <text x={cx} y={cy + 3} textAnchor="middle" fill={theme.accent} fillOpacity={0.45 + ratio * 0.5} fontSize="8" fontFamily="monospace" fontWeight="700">{uf}</text>}
+              {value > 0 && ratio > 0.32 && Number.isFinite(cx) && Number.isFinite(cy) && <text x={cx} y={cy + 4} textAnchor="middle" fill={theme.accent} fillOpacity={0.45 + ratio * 0.5} fontSize="11" fontFamily="monospace" fontWeight="700">{uf}</text>}
             </g>
           );
         })}
-        <rect x={VIEW_W - 62} y={VIEW_H - 14} width="58" height="5" fill={`url(#${gid}-geo-legend)`} rx="2" />
-        <text x={VIEW_W - 62} y={VIEW_H - 17} fill={theme.dim} fontSize="7.5" fontFamily="monospace">BAIXO</text>
-        <text x={VIEW_W - 4} y={VIEW_H - 17} textAnchor="end" fill={theme.dim} fontSize="7.5" fontFamily="monospace">ALTO</text>
+        <rect x={box.x + box.w - 76} y={box.y + box.h - 8} width="72" height="5" fill={`url(#${gid}-geo-legend)`} rx="2" />
+        <text x={box.x + box.w - 76} y={box.y + box.h - 11} fill={theme.dim} fontSize="9" fontFamily="monospace">BAIXO</text>
+        <text x={box.x + box.w - 4} y={box.y + box.h - 11} textAnchor="end" fill={theme.dim} fontSize="9" fontFamily="monospace">ALTO</text>
       </svg>
     </div>
   );

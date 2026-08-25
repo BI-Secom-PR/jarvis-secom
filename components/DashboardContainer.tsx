@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import ChartWidget from "./ChartWidget";
 import HudBackground from "./HudBackground";
@@ -305,22 +305,27 @@ export default function DashboardContainer() {
     const out: string[] = [];
     const rows = data?.campanhas ?? [];
     if (tab === "campanhas" && totals && rows.length) {
-      const byPlat = new Map<string, { imp: number; cost: number }>();
-      for (const r of rows) {
-        const a = byPlat.get(r.platform) ?? { imp: 0, cost: 0 };
-        byPlat.set(r.platform, { imp: a.imp + r.impressions, cost: a.cost + r.cost });
+      // A leitura acompanha o pill de métrica ativo, não impressões fixas.
+      const totalMetric = metricValue(totals, metric);
+      const best = [...rows].sort((a, b) => metricValue(b, metric) - metricValue(a, metric))[0];
+      if (best && totalMetric) {
+        // Share só faz sentido em métrica somável — CTR é taxa, compara-se com a média.
+        const comparacao = METRICS[metric].kind === "pct"
+          ? `contra ${fmtMetric(totalMetric, metric)} de média do recorte`
+          : `${pct(div(metricValue(best, metric), totalMetric) * 100, 0)} do recorte`;
+        out.push(`${best.nome.slice(0, 60)} (${platformLabel(best.platform)}) lidera em ${METRICS[metric].label.toLowerCase()}: ${fmtMetric(metricValue(best, metric), metric)}, ${comparacao}.`);
       }
-      const top = [...byPlat.entries()].sort((a, b) => b[1].imp - a[1].imp)[0];
-      if (top && totals.impressions) {
-        out.push(`${platformLabel(top[0])} concentra ${pct(div(top[1].imp, totals.impressions) * 100, 0)} das impressões do recorte, com CPM de ${brl(div(top[1].cost, top[1].imp) * 1000)}.`);
+      // Custo unitário da métrica ativa (CPM quando ela é impressão/alcance, CPC em cliques, etc.).
+      const porMil = metric === "impressoes" || metric === "alcance" || metric === "investimento";
+      const unit = (r: Row) => div(r.cost, metricValue(r, metric)) * (porMil ? 1000 : 1);
+      const nomeUnit = porMil ? "CPM" : `custo por ${METRICS[metric].label.toLowerCase().replace(/ões$/, "ão").replace(/s$/, "")}`;
+      const relevantes = rows.filter((r) => r.impressions > 10_000 && metricValue(r, metric) > 0 && r.cost > 0);
+      const cheapest = [...relevantes].sort((a, b) => unit(a) - unit(b))[0];
+      const dearest = [...relevantes].sort((a, b) => unit(b) - unit(a))[0];
+      if (METRICS[metric].kind !== "pct" && cheapest && dearest && cheapest !== dearest) {
+        out.push(`O ${nomeUnit} vai de ${brl(unit(cheapest))} (${platformLabel(cheapest.platform)}) a ${brl(unit(dearest))} (${platformLabel(dearest.platform)}) entre as campanhas com mais de 10 mil impressões.`);
       }
-      const withImp = rows.filter((r) => r.impressions > 10_000);
-      const cheapest = [...withImp].sort((a, b) => div(a.cost, a.impressions) - div(b.cost, b.impressions))[0];
-      const dearest = [...withImp].sort((a, b) => div(b.cost, b.impressions) - div(a.cost, a.impressions))[0];
-      if (cheapest && dearest && cheapest !== dearest) {
-        out.push(`O CPM vai de ${brl(div(cheapest.cost, cheapest.impressions) * 1000)} (${platformLabel(cheapest.platform)}) a ${brl(div(dearest.cost, dearest.impressions) * 1000)} (${platformLabel(dearest.platform)}) entre as campanhas com mais de 10 mil impressões.`);
-      }
-      if (totals.reach && totals.impressions) {
+      if (porMil && totals.reach && totals.impressions) {
         out.push(`Frequência média de ${nf(div(totals.impressions, totals.reach), 2)} — cada pessoa alcançada viu o anúncio esse número de vezes.`);
       }
       if (totals.impressions && !totals.engagement) {
@@ -352,6 +357,90 @@ export default function DashboardContainer() {
     }
     return out.slice(0, 4);
   }, [tab, totals, data?.campanhas, data?.demografia, regiaoRows, metric]);
+
+  // ── Leitura por IA: payload = só o que já está na tela, ordenado pela métrica ativa ──
+  const insightsInput = useMemo(() => {
+    const r0 = (v: number) => Math.round(v);
+    const topBy = (rows: Row[]) =>
+      [...rows]
+        .sort((a, b) => metricValue(b, metric) - metricValue(a, metric))
+        .slice(0, 10)
+        .map((r) => ({
+          nome: r.nome.slice(0, 70),
+          plataforma: platformLabel(r.platform),
+          [METRICS[metric].label]: r0(metricValue(r, metric)),
+          investimento: r0(r.cost),
+          impressoes: r0(r.impressions),
+          cliques: r0(r.clicks),
+          visualizacoes: r0(r.videoViews),
+          engajamento: r0(r.engagement),
+        }));
+
+    if (tab === "campanhas") {
+      if (!totals || !(data?.campanhas ?? []).length) return null;
+      return {
+        totais: { ...totals, cost: r0(totals.cost) },
+        periodoAnterior: data?.previous ?? null,
+        campanhas: topBy(data?.campanhas ?? []),
+        anuncios: topBy(data?.anuncios ?? []),
+        serie: (data?.daily ?? []).map((d) => ({ data: d.date, valor: r0(metricValue(d, metric)) })),
+      };
+    }
+    if (tab === "demografia") {
+      const rows = data?.demografia ?? [];
+      if (!rows.length) return null;
+      return {
+        demografia: rows.map((r) => ({
+          faixa: r.faixa, genero: GENDER_LABEL[r.gender] ?? r.gender,
+          valor: r0(metricValue(r, metric)), investimento: r0(r.cost), impressoes: r0(r.impressions),
+        })),
+      };
+    }
+    if (!regiaoRows.length) return null;
+    // Custo/impressões por UF entram junto, senão o modelo não tem como calcular CPM/CPC/CTR.
+    const porUf = new Map((data?.regioes ?? []).map((r) => [r.uf ?? "", r]));
+    return {
+      regioes: regiaoRows.map((r) => {
+        const t = porUf.get(r.uf);
+        return {
+          uf: r.uf, estado: r.estado, valor: r0(r.value),
+          investimento: r0(t?.cost ?? 0), impressoes: r0(t?.impressions ?? 0),
+          cliques: r0(t?.clicks ?? 0), engajamento: r0(t?.engagement ?? 0),
+        };
+      }),
+    };
+  }, [tab, metric, totals, data?.campanhas, data?.anuncios, data?.daily, data?.previous, data?.demografia, data?.regioes, regiaoRows]);
+
+  const [aiInsights, setAiInsights] = useState<string[] | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const aiCache = useRef(new Map<string, string[]>());
+
+  useEffect(() => {
+    if (!insightsInput) { setAiInsights(null); setAiLoading(false); return; }
+    const payload = { tab, metric, periodo: { from, to }, filtros: { campaign, platform, ad, objective }, resumo: insightsInput };
+    const key = JSON.stringify(payload);
+    const cached = aiCache.current.get(key);
+    if (cached) { setAiInsights(cached); setAiLoading(false); return; }
+
+    const ctrl = new AbortController();
+    setAiLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await postJson("/api/dashboard/insights", payload, { signal: ctrl.signal });
+        const json = (await res.json()) as { insights?: string[] };
+        if (ctrl.signal.aborted) return;
+        if (!res.ok || !json.insights?.length) throw new Error("sem insights");
+        aiCache.current.set(key, json.insights);
+        setAiInsights(json.insights);
+      } catch {
+        if (!ctrl.signal.aborted) setAiInsights(null); // cai nas observações determinísticas
+      } finally {
+        if (!ctrl.signal.aborted) setAiLoading(false);
+      }
+    }, 400);
+    return () => { clearTimeout(t); ctrl.abort(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(insightsInput), tab, metric, from, to, campaign, platform, ad, objective]);
 
   // ── Estilos herdados do SentimentosContainer ──
   const selectClass =
@@ -500,7 +589,7 @@ export default function DashboardContainer() {
 
               <section className="grid grid-cols-1 lg:grid-cols-2 auto-rows-fr gap-4">
                 {scatterChart && <ChartWidget chart={scatterChart} fill />}
-                <Observacoes items={observacoes} />
+                <Observacoes items={aiInsights ?? observacoes} loading={aiLoading} ia={!!aiInsights} />
               </section>
 
               <section className={`${panel} overflow-hidden`}>
@@ -602,7 +691,7 @@ export default function DashboardContainer() {
                 {genderChart && <ChartWidget chart={genderChart} fill />}
               </section>
               {!ageChart && !loading && <Empty />}
-              <Observacoes items={observacoes} />
+              <Observacoes items={aiInsights ?? observacoes} loading={aiLoading} ia={!!aiInsights} />
               <p className="text-[11px] text-ink-3">
                 As faixas são normalizadas: Kwai reporta 25 a 36 / 37 a 50 / 50+ e o TikTok 55 a 100, então os
                 limites 34/44/55 são aproximados nessas plataformas. Só Meta, Google, TikTok e Kwai reportam idade e gênero.
@@ -664,7 +753,7 @@ export default function DashboardContainer() {
                   </div>
                 </div>
               </section>
-              <Observacoes items={observacoes} />
+              <Observacoes items={aiInsights ?? observacoes} loading={aiLoading} ia={!!aiInsights} />
               <p className="text-[11px] text-ink-3">
                 Só Meta, Google, TikTok, Kwai e Amazon reportam região. Alcance e visualizações costumam vir zerados
                 nesse grão — prefira impressões, cliques ou CTR aqui.
@@ -685,23 +774,34 @@ function Empty() {
   return <div className="hud-panel rounded-[16px] px-6 py-10 text-center text-ink-3 text-[13px]">Nenhum resultado para os filtros atuais.</div>;
 }
 
-/** Leituras derivadas dos próprios números — nada aqui chama o modelo. */
-function Observacoes({ items }: { items: string[] }) {
-  if (!items.length) return null;
+/** Leitura gerada pela IA sobre a métrica ativa; cai nas frases determinísticas se ela falhar. */
+function Observacoes({ items, loading, ia }: { items: string[]; loading?: boolean; ia?: boolean }) {
+  if (!items.length && !loading) return null;
   return (
     <div className="relative hud-panel hud-panel-gold rounded-[16px] px-4 py-5 md:px-6">
       <HudCorners accent="gold" size={16} inset={8} />
       <div className="font-hud text-[11px] uppercase tracking-[0.24em] text-ink flex items-center gap-2"
            style={{ textShadow: "0 0 12px color-mix(in srgb, var(--hud-gold) 35%, transparent)" }}>
         <span style={{ color: "var(--hud-gold)" }}>⚛</span> Leitura dos números
+        {ia && !loading && (
+          <span className="tracking-[0.18em] text-[9px] text-ink-3" style={{ textShadow: "none" }}>por IA</span>
+        )}
       </div>
       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3.5">
-        {items.map((t) => (
-          <div key={t} className="flex gap-2.5">
-            <span className="text-[11px] leading-[1.6] shrink-0" style={{ color: "var(--hud-gold)" }}>▸</span>
-            <p className="text-[13px] leading-[1.6] text-ink-2">{t}</p>
-          </div>
-        ))}
+        {loading
+          ? [0, 1, 2].map((i) => (
+              <div key={i} className="flex gap-2.5">
+                <span className="text-[11px] leading-[1.6] shrink-0 opacity-40" style={{ color: "var(--hud-gold)" }}>▸</span>
+                <span className="block h-[13px] flex-1 animate-pulse rounded"
+                      style={{ background: "var(--hud-gold-soft)", opacity: 0.35 }} />
+              </div>
+            ))
+          : items.map((t) => (
+              <div key={t} className="flex gap-2.5">
+                <span className="text-[11px] leading-[1.6] shrink-0" style={{ color: "var(--hud-gold)" }}>▸</span>
+                <p className="text-[13px] leading-[1.6] text-ink-2">{t}</p>
+              </div>
+            ))}
       </div>
       <Link href="/chat"
             className="mt-5 inline-flex items-center gap-2 font-hud text-[11px] uppercase tracking-[0.18em] transition-opacity hover:opacity-80"

@@ -140,3 +140,7 @@ export const GRAIN_SQL: Record<Granularity, string> = {
   semana: 'DATE(DATE_SUB(date, INTERVAL WEEKDAY(date) DAY))',
   mes: 'DATE(DATE_FORMAT(date, "%Y-%m-01"))',
 };
+
+/** Linhas sem entrega nenhuma (plataforma reportou a campanha, mas zerada)
+    poluem as tabelas — o dashboard só mostra quem teve algum valor. */
+export const HAS_DELIVERY = `cost > 0 OR impressions > 0 OR video_views > 0`;

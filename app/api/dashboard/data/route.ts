@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth';
 import { getPool, isTransientDbError, resetPool } from '@/lib/mysql';
 import {
   buildWhere, previousWindow, METRIC_SELECT, VIDEO_SELECT,
-  AGE_BUCKET_SQL, GRAIN_SQL, isGranularity, UF_BY_NAME,
+  AGE_BUCKET_SQL, GRAIN_SQL, isGranularity, UF_BY_NAME, HAS_DELIVERY,
   type DashboardFilters, type Granularity,
 } from '@/lib/dashboard';
 
@@ -91,7 +91,8 @@ export async function POST(req: NextRequest) {
     // (connectionLimit is 10 and the filters route shares it).
     const [totalsRes, prevRes, dailyRes] = await Promise.all([
       pool.query(
-        `SELECT ${METRIC_SELECT}, COUNT(DISTINCT campaign_name) AS campaigns, COUNT(DISTINCT ad_id) AS ads
+        `SELECT ${METRIC_SELECT}, COUNT(DISTINCT CASE WHEN ${HAS_DELIVERY} THEN campaign_name END) AS campaigns,
+                COUNT(DISTINCT CASE WHEN ${HAS_DELIVERY} THEN ad_id END) AS ads
            FROM gold_platforms_campaigns WHERE ${w.sql}`,
         w.params
       ),
@@ -110,13 +111,15 @@ export async function POST(req: NextRequest) {
       pool.query(
         `SELECT platform, campaign_name, ${METRIC_SELECT}, ${VIDEO_SELECT}
            FROM gold_platforms_campaigns WHERE ${w.sql}
-          GROUP BY platform, campaign_name ORDER BY SUM(cost) DESC LIMIT ${TABLE_LIMIT}`,
+          GROUP BY platform, campaign_name HAVING ${HAS_DELIVERY}
+          ORDER BY SUM(cost) DESC LIMIT ${TABLE_LIMIT}`,
         w.params
       ),
       pool.query(
         `SELECT platform, ad_name, ${METRIC_SELECT}, ${VIDEO_SELECT}
            FROM gold_platforms_campaigns WHERE ${w.sql}
-          GROUP BY platform, ad_name ORDER BY SUM(cost) DESC LIMIT ${TABLE_LIMIT}`,
+          GROUP BY platform, ad_name HAVING ${HAS_DELIVERY}
+          ORDER BY SUM(cost) DESC LIMIT ${TABLE_LIMIT}`,
         w.params
       ),
     ]);
