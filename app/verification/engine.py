@@ -355,11 +355,12 @@ def _merge_by_veiculo(results: list[dict]) -> dict[str, dict]:
         else:
             m = merged[key]
             m["entregue"]    = (m.get("entregue") or 0) + (r.get("entregue") or 0)
-            m["cliques"]     = _add_optional(m.get("cliques"),      r.get("cliques"))
-            m["viewables"]   = _add_optional(m.get("viewables"),    r.get("viewables"))
-            m["views_start"] = _add_optional(m.get("views_start"),  r.get("views_start"))
-            m["views_50"]    = _add_optional(m.get("views_50"),     r.get("views_50"))
-            m["views_100"]   = _add_optional(m.get("views_100"),    r.get("views_100"))
+            # entregue_total/views entram na soma como o resto: o verification de um
+            # mesmo veículo vem partido em vários arquivos (00px "Part 1/2/3") e sem
+            # isso a DIF comparava o comprovante inteiro contra um pedaço só.
+            for k in ("entregue_total", "views", "cliques", "viewables",
+                      "views_start", "views_50", "views_100"):
+                m[k] = _add_optional(m.get(k), r.get(k))
             for cat, val in r.get("indevidas", {}).items():
                 m["indevidas"][cat] = m["indevidas"].get(cat, 0) + val
             for cat, val in r.get("indevidas_cpv", {}).items():

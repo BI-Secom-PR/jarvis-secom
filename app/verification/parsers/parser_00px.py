@@ -250,7 +250,7 @@ def parse_verif(
     i_veiculo    = col_index(header, "Veículo", "Veiculo", "Vehicle",
                               "Veículos", "Veiculos")
     # 00px escreve "Impressões Válidas"/"Views Válidas" (com e sem acento em Válidas);
-    # "Entregues" aparece 3x no header (CPM/CPC/CPV) — não serve de fallback.
+    # "Entregues" aparece até 3x no header (CPM/CPC/CPV) — só serve de fallback.
     i_impressoes = col_index(header, "Impressões", "Impressoes", "Impressions",
                               "Impressões Válidas", "Impressões Validas",
                               "Impressoes Validas", "Impressões Totais", "Impressoes Totais")
@@ -262,6 +262,13 @@ def parse_verif(
                               "Url Veiculada")
     i_data       = col_index(header, "Data", "Date")
     i_estado     = col_index(header, "Estado", "State", "UF")
+
+    # Layout enxuto (ex.: DIVERSA rodada 2): sem coluna de Válidas, a entrega vem
+    # só em "Entregues". Só cai aqui quando não há Impressões nem Views — assim o
+    # "Entregues" do grupo CPM (o primeiro do header) nunca duplica uma coluna CPV.
+    if i_impressoes is None and i_views is None:
+        i_impressoes = col_index(header, "Entregues", "Entregue",
+                                  "Impressões Entregues", "Impressoes Entregues")
 
     if i_veiculo is None or (i_impressoes is None and i_views is None) or i_categoria is None:
         wb.close()
