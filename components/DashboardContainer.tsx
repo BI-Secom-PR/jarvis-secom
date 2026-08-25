@@ -15,7 +15,8 @@ type Tab = "campanhas" | "demografia" | "regiao";
 type Gran = "dia" | "semana" | "mes";
 
 type Totals = { cost: number; impressions: number; reach: number; clicks: number; videoViews: number; engagement: number };
-type Row = Totals & { platform: string; nome: string; p25?: number; p75?: number; p100?: number };
+type Row = Totals & { platform: string; nome: string;
+  p25: number; p50: number; p75: number; p95: number; p100: number; completions: number };
 
 type Payload = {
   totals?: Totals & { campaigns: number; ads: number };
@@ -51,6 +52,7 @@ const compact = (v: number) => {
   return nf(v);
 };
 const div = (a: number, b: number) => (b ? a / b : 0);
+const dash = "—";
 const isoDaysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
 
 /** Value of a metric over one aggregate row — mirrors METRICS on the server. */
@@ -525,22 +527,21 @@ export default function DashboardContainer() {
                         <th className="px-3 py-2.5 text-right">Investimento</th>
                         <th className="px-3 py-2.5 text-right">Impressões</th>
                         <th className="px-3 py-2.5 text-right">CPM</th>
-                        {tmode === "campanha" ? (
-                          <>
-                            <th className="px-3 py-2.5 text-right">Cliques</th>
-                            <th className="px-3 py-2.5 text-right">CTR</th>
-                            <th className="px-3 py-2.5 text-right">Engajamento</th>
-                            <th className="px-3 py-2.5 pr-4 md:pr-6 text-right">Tx. Eng.</th>
-                          </>
-                        ) : (
-                          <>
-                            <th className="px-3 py-2.5 text-right">Visualizações</th>
-                            <th className="px-3 py-2.5 text-right">CPV</th>
-                            <th className="px-3 py-2.5 text-right">VTR</th>
-                            <th className="px-3 py-2.5 text-right">25%</th>
-                            <th className="px-3 py-2.5 pr-4 md:pr-6 text-right">100%</th>
-                          </>
-                        )}
+                        <th className="px-3 py-2.5 text-right">Cliques</th>
+                        <th className="px-3 py-2.5 text-right">CPC</th>
+                        <th className="px-3 py-2.5 text-right">CTR</th>
+                        <th className="px-3 py-2.5 text-right">Engajamento</th>
+                        <th className="px-3 py-2.5 text-right">CPE</th>
+                        <th className="px-3 py-2.5 text-right">Tx. Eng.</th>
+                        <th className="px-3 py-2.5 text-right">Visualizações</th>
+                        <th className="px-3 py-2.5 text-right">CPV</th>
+                        <th className="px-3 py-2.5 text-right">VTR</th>
+                        <th className="px-3 py-2.5 text-right">25%</th>
+                        <th className="px-3 py-2.5 text-right">50%</th>
+                        <th className="px-3 py-2.5 text-right">75%</th>
+                        <th className="px-3 py-2.5 text-right">95%</th>
+                        <th className="px-3 py-2.5 text-right">100%</th>
+                        <th className="px-3 py-2.5 pr-4 md:pr-6 text-right">Completa</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -553,30 +554,33 @@ export default function DashboardContainer() {
                               <span className="text-ink-3 text-[12px]">{platformLabel(r.platform)}</span>
                             </span>
                           </td>
-                          <td className="px-3 py-3 text-ink max-w-[320px]" title={r.nome}>{r.nome}</td>
-                          <td className="px-3 py-3 text-right tabular-nums">{brl(r.cost)}</td>
-                          <td className="px-3 py-3 text-right tabular-nums">{nf(r.impressions)}</td>
-                          <td className="px-3 py-3 text-right tabular-nums">{brl(div(r.cost, r.impressions) * 1000)}</td>
-                          {tmode === "campanha" ? (
-                            <>
-                              <td className="px-3 py-3 text-right tabular-nums">{nf(r.clicks)}</td>
-                              <td className="px-3 py-3 text-right tabular-nums">{pct(div(r.clicks, r.impressions) * 100)}</td>
-                              <td className="px-3 py-3 text-right tabular-nums">{nf(r.engagement)}</td>
-                              <td className="px-3 py-3 pr-4 md:pr-6 text-right tabular-nums">{pct(div(r.engagement, r.impressions) * 100)}</td>
-                            </>
-                          ) : (
-                            <>
-                              <td className="px-3 py-3 text-right tabular-nums">{nf(r.videoViews)}</td>
-                              <td className="px-3 py-3 text-right tabular-nums">{r.videoViews ? brl(div(r.cost, r.videoViews)) : "—"}</td>
-                              <td className="px-3 py-3 text-right tabular-nums">{pct(div(r.videoViews, r.impressions) * 100)}</td>
-                              <td className="px-3 py-3 text-right tabular-nums">{r.p25 ? pct(div(r.p25, r.impressions) * 100, 1) : "—"}</td>
-                              <td className="px-3 py-3 pr-4 md:pr-6 text-right tabular-nums">{r.p100 ? pct(div(r.p100, r.impressions) * 100, 1) : "—"}</td>
-                            </>
-                          )}
+                          <td className="px-3 py-3 text-ink max-w-[320px]" title={r.nome}>
+                            {r.nome || <span className="text-ink-3">sem nome</span>}
+                          </td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{brl(r.cost)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{nf(r.impressions)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{brl(div(r.cost, r.impressions) * 1000)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{nf(r.clicks)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{r.clicks ? brl(div(r.cost, r.clicks)) : dash}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{pct(div(r.clicks, r.impressions) * 100)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{nf(r.engagement)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{r.engagement ? brl(div(r.cost, r.engagement)) : dash}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{pct(div(r.engagement, r.impressions) * 100)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{nf(r.videoViews)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{r.videoViews ? brl(div(r.cost, r.videoViews)) : dash}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{pct(div(r.videoViews, r.impressions) * 100)}</td>
+                          {/* Quartis são CONTAGENS, como no Oracle — e um zero aqui quase
+                              sempre é "a plataforma não reporta", não "ninguém assistiu". */}
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{r.p25 ? nf(r.p25) : dash}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{r.p50 ? nf(r.p50) : dash}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{r.p75 ? nf(r.p75) : dash}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{r.p95 ? nf(r.p95) : dash}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{r.p100 ? nf(r.p100) : dash}</td>
+                          <td className="px-3 py-3 pr-4 md:pr-6 text-right tabular-nums whitespace-nowrap">{r.completions ? nf(r.completions) : dash}</td>
                         </tr>
                       ))}
                       {!tableRows.length && (
-                        <tr><td colSpan={9} className="px-6 py-8 text-center text-ink-3">
+                        <tr><td colSpan={20} className="px-6 py-8 text-center text-ink-3">
                           {loading ? "Carregando…" : "Nenhum resultado para os filtros atuais."}
                         </td></tr>
                       )}
@@ -584,9 +588,7 @@ export default function DashboardContainer() {
                   </table>
                 </div>
                 <div className="px-4 md:px-6 py-3 text-[11px] text-ink-3 border-t border-separator">
-                  {tmode === "campanha"
-                    ? `As ${Math.min(tableRows.length, data?.limit ?? 50)} maiores por investimento. Engajamento = curtidas + comentários + compartilhamentos + reações + salvos.`
-                    : `Os ${Math.min(tableRows.length, data?.limit ?? 50)} maiores por investimento. Quartis de vídeo só existem em Meta, TikTok, Pinterest e Amazon.`}
+                  {`Os ${Math.min(tableRows.length, data?.limit ?? 50)} maiores por investimento, de ${nf(tmode === "campanha" ? (totals?.campaigns ?? 0) : (totals?.ads ?? 0))}. Engajamento = curtidas + comentários + compartilhamentos + reações + salvos. Quartis e “completa” são contagens: 25–100% vêm de Meta, TikTok, GloboAds, Pinterest e Amazon, 95% só da Meta, e “completa” só de Kwai e LinkedIn — um traço significa que a plataforma não reporta.`}
                 </div>
               </section>
             </>

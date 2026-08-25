@@ -75,6 +75,18 @@ export const METRIC_SELECT = `
   SUM(video_views)   AS video_views,
   ${REAL_ENGAGEMENT} AS engagement`;
 
+/** Video quartiles — the block the Oracle table carries, as counts, not rates.
+    Coverage is uneven: p25-p100 come from Meta, TikTok, GloboAds, Pinterest and
+    Amazon; p95 only from Meta; `video_completions` only from Kwai and LinkedIn
+    (Facebook uses p100 instead). A zero is "not reported", not "nobody watched". */
+export const VIDEO_SELECT = `
+  SUM(video_p25)         AS p25,
+  SUM(video_p50)         AS p50,
+  SUM(video_p75)         AS p75,
+  SUM(video_p95)         AS p95,
+  SUM(video_p100)        AS p100,
+  SUM(video_completions) AS completions`;
+
 // ── Faixas etárias ────────────────────────────────────────────────────────
 // The gold table keeps each platform's native buckets, and they do not line up:
 // Kwai reports "25 a 36" / "37 a 50" / "50+" and TikTok "55 a 100". Folding them

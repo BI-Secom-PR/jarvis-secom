@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getPool, isTransientDbError, resetPool } from '@/lib/mysql';
 import {
-  buildWhere, previousWindow, METRIC_SELECT,
+  buildWhere, previousWindow, METRIC_SELECT, VIDEO_SELECT,
   AGE_BUCKET_SQL, GRAIN_SQL, isGranularity, UF_BY_NAME,
   type DashboardFilters, type Granularity,
 } from '@/lib/dashboard';
@@ -19,6 +19,11 @@ type Totals = { cost: number; impressions: number; reach: number; clicks: number
 const totalsOf = (r: Record<string, unknown> | undefined): Totals => ({
   cost: n(r?.cost), impressions: n(r?.impressions), reach: n(r?.reach),
   clicks: n(r?.clicks), videoViews: n(r?.video_views), engagement: n(r?.engagement),
+});
+
+type Video = { p25: number; p50: number; p75: number; p95: number; p100: number; completions: number };
+const videoOf = (r: Record<string, unknown>): Video => ({
+  p25: n(r.p25), p50: n(r.p50), p75: n(r.p75), p95: n(r.p95), p100: n(r.p100), completions: n(r.completions),
 });
 
 const iso = (v: unknown): string =>
@@ -103,14 +108,13 @@ export async function POST(req: NextRequest) {
 
     const [campRes, adRes] = await Promise.all([
       pool.query(
-        `SELECT platform, campaign_name, ${METRIC_SELECT}
+        `SELECT platform, campaign_name, ${METRIC_SELECT}, ${VIDEO_SELECT}
            FROM gold_platforms_campaigns WHERE ${w.sql}
           GROUP BY platform, campaign_name ORDER BY SUM(cost) DESC LIMIT ${TABLE_LIMIT}`,
         w.params
       ),
       pool.query(
-        `SELECT platform, ad_name, ${METRIC_SELECT},
-                SUM(video_p25) AS p25, SUM(video_p75) AS p75, SUM(video_p100) AS p100
+        `SELECT platform, ad_name, ${METRIC_SELECT}, ${VIDEO_SELECT}
            FROM gold_platforms_campaigns WHERE ${w.sql}
           GROUP BY platform, ad_name ORDER BY SUM(cost) DESC LIMIT ${TABLE_LIMIT}`,
         w.params
@@ -125,11 +129,10 @@ export async function POST(req: NextRequest) {
       previous: prevRow ? totalsOf(prevRow) : null,
       daily: (dailyRes[0] as Record<string, unknown>[]).map((r) => ({ date: iso(r.bucket), ...totalsOf(r) })),
       campanhas: (campRes[0] as Record<string, unknown>[]).map((r) => ({
-        platform: String(r.platform), nome: String(r.campaign_name ?? ''), ...totalsOf(r),
+        platform: String(r.platform), nome: String(r.campaign_name ?? ''), ...totalsOf(r), ...videoOf(r),
       })),
       anuncios: (adRes[0] as Record<string, unknown>[]).map((r) => ({
-        platform: String(r.platform), nome: String(r.ad_name ?? ''), ...totalsOf(r),
-        p25: n(r.p25), p75: n(r.p75), p100: n(r.p100),
+        platform: String(r.platform), nome: String(r.ad_name ?? ''), ...totalsOf(r), ...videoOf(r),
       })),
       limit: TABLE_LIMIT,
     });
