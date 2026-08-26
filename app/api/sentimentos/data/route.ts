@@ -35,10 +35,10 @@ function resolveImageUrl(url: string | null): string | null {
   return url;
 }
 
-// creative_image_path is a MinIO object key (e.g. "meta/....jpg"), not a URL —
-// durable, unlike the fbcdn wrapper above. Prioritize it over image_url, and
-// route it through our own proxy (see thumb/route.ts) since the ngrok tunnel
-// in front of MinIO blocks direct browser <img> requests with an interstitial.
+// creative_image_path is an object key (e.g. "meta/....jpg"), not a URL — durable,
+// unlike the fbcdn wrapper above, and unchanged when the bucket moves hosts.
+// Prioritize it over image_url and route it through our own proxy (thumb/route.ts),
+// which presigns the IDrive e2 GET server-side; the bucket is not public.
 function resolveThumbUrl(path: string | null, imageUrl: string | null): string | null {
   if (path) {
     if (/^https?:\/\//i.test(path)) return path; // defensive: already absolute
