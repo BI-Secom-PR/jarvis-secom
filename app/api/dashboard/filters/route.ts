@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getPool, isTransientDbError, resetPool } from '@/lib/mysql';
-import { buildWhere, type DashboardFilters } from '@/lib/dashboard';
+import { buildWhere, fromTable, HAS_DELIVERY, type DashboardFilters } from '@/lib/dashboard';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
     platform: q.get('platform') ?? undefined,
     ad: q.get('ad') ?? undefined,
     objective: q.get('objective') ?? undefined,
+    tema: q.get('tema') ?? undefined,
   };
   const key = JSON.stringify(f);
   const hit = cache.get(key);
@@ -34,22 +35,39 @@ export async function GET(req: NextRequest) {
     const wPlat = buildWhere({ ...f, platform: undefined });
     const wAd = buildWhere({ ...f, ad: undefined });
     const wObj = buildWhere({ ...f, objective: undefined });
+    const wTema = buildWhere({ ...f, tema: undefined });
     const pool = getPool();
+    // Os quatro WHEREs acima herdam `tema`, e `eixo` só existe na view — sem trocar a
+    // tabela junto, cada um deles vira "Unknown column 'eixo'" e o painel de filtros
+    // inteiro esvazia. Trocando, o tema também estreita as listas, como todo o resto.
+    const T = fromTable('gold_platforms_campaigns', f);
 
     // Two waves: platforms/objectives are trivial, campaigns/ads are the
     // heavier DISTINCT scans. Caps peak connections the same way sentimentos does.
-    const [platforms, objectives] = await Promise.all([
-      pool.query(`SELECT DISTINCT platform FROM gold_platforms_campaigns WHERE ${wPlat.sql} ORDER BY platform`, wPlat.params),
-      pool.query(`SELECT DISTINCT objective FROM gold_platforms_campaigns WHERE ${wObj.sql} AND objective IS NOT NULL AND objective != '' ORDER BY objective`, wObj.params),
+    const [platforms, objectives, temas] = await Promise.all([
+      pool.query(`SELECT DISTINCT platform FROM ${T} WHERE ${wPlat.sql} ORDER BY platform`, wPlat.params),
+      pool.query(`SELECT DISTINCT objective FROM ${T} WHERE ${wObj.sql} AND objective IS NOT NULL AND objective != '' ORDER BY objective`, wObj.params),
+      // Única query que sempre roda contra a view — é a fonte da lista de temas.
+      // O gate de entrega é o que importa: a classificação está defasada (agosto/2026
+      // zerado), então sem ele o select ofereceria 14 temas que só devolvem dashboard
+      // vazio. Lista vazia é a resposta honesta para a janela corrente.
+      pool.query(
+        `SELECT DISTINCT eixo, eixo_label FROM gold_campaigns_classified
+          WHERE ${wTema.sql} AND eixo IS NOT NULL AND (${HAS_DELIVERY}) ORDER BY eixo_label`,
+        wTema.params
+      ),
     ]);
     const [campaigns, ads] = await Promise.all([
-      pool.query(`SELECT DISTINCT campaign_name FROM gold_platforms_campaigns WHERE ${wCamp.sql} AND campaign_name IS NOT NULL AND campaign_name != '' ORDER BY campaign_name`, wCamp.params),
-      pool.query(`SELECT DISTINCT campaign_name, ad_name FROM gold_platforms_campaigns WHERE ${wAd.sql} AND ad_name IS NOT NULL AND ad_name != '' ORDER BY ad_name`, wAd.params),
+      pool.query(`SELECT DISTINCT campaign_name FROM ${T} WHERE ${wCamp.sql} AND campaign_name IS NOT NULL AND campaign_name != '' ORDER BY campaign_name`, wCamp.params),
+      pool.query(`SELECT DISTINCT campaign_name, ad_name FROM ${T} WHERE ${wAd.sql} AND ad_name IS NOT NULL AND ad_name != '' ORDER BY ad_name`, wAd.params),
     ]);
 
     const data = {
       platforms: (platforms[0] as { platform: string }[]).map((r) => r.platform),
       objectives: (objectives[0] as { objective: string }[]).map((r) => r.objective),
+      temas: (temas[0] as { eixo: string; eixo_label: string | null }[]).map((r) => ({
+        code: r.eixo, label: r.eixo_label ?? r.eixo,
+      })),
       campaigns: (campaigns[0] as { campaign_name: string }[]).map((r) => r.campaign_name),
       ads: (ads[0] as { campaign_name: string | null; ad_name: string }[]).map((r) => ({
         campaign: r.campaign_name,

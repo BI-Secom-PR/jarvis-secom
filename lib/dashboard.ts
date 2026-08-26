@@ -12,6 +12,8 @@ export type DashboardFilters = {
   platform?: string;
   ad?: string;
   objective?: string;
+  /** Eixo temático do Framework v4 (código, ex. 'ECO'). Só existe nas views classificadas. */
+  tema?: string;
 };
 
 export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -26,8 +28,25 @@ export function buildWhere(f: DashboardFilters): { sql: string; params: unknown[
   if (f.platform)  { conds.push('platform = ?');      params.push(f.platform); }
   if (f.ad)        { conds.push('ad_name = ?');       params.push(f.ad); }
   if (f.objective) { conds.push('objective = ?');     params.push(f.objective); }
+  if (f.tema)      { conds.push('eixo = ?');          params.push(f.tema); }
   return { sql: conds.join(' AND '), params };
 }
+
+// As views `*_classified` são supersets das tabelas-base (mesmas colunas + eixo/programa/…,
+// sem JOIN). Conferido ao vivo em 2026-08-26: elas batem impressão por impressão com o fato
+// em todo mês desde abril — o que está defasado é a COBERTURA de `eixo` (abr 84,6% · mai 97,2%
+// · jun 93,9% · jul 46,9% · ago 0,0%), porque o job `creative_classifier` (repo mysql) parou.
+// A troca é condicional ao filtro mesmo assim: sem tema o dashboard não ganha nada lendo a
+// view, e assim nenhuma defasagem futura dela pode mexer nos totais gerais sem ninguém pedir.
+const CLASSIFIED: Record<string, string> = {
+  gold_platforms_campaigns:  'gold_campaigns_classified',
+  gold_platforms_regions:    'gold_regions_classified',
+  gold_platforms_age_gender: 'gold_age_gender_classified',
+};
+
+/** Tabela a consultar: a base, ou a view classificada quando há filtro de tema. */
+export const fromTable = (base: string, f: DashboardFilters) =>
+  f.tema ? CLASSIFIED[base] ?? base : base;
 
 /** The window of equal length immediately before [from, to], for the deltas. */
 export function previousWindow(f: DashboardFilters): { from: string; to: string } | null {

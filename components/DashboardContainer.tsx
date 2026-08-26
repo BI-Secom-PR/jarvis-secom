@@ -33,6 +33,7 @@ type Payload = {
 type FiltersData = {
   platforms: string[];
   objectives: string[];
+  temas: { code: string; label: string }[];
   campaigns: string[];
   ads: { campaign: string | null; ad: string }[];
 };
@@ -92,6 +93,7 @@ export default function DashboardContainer() {
   const [platform, setPlatform] = useState("");
   const [ad, setAd] = useState("");
   const [objective, setObjective] = useState("");
+  const [tema, setTema] = useState("");
 
   const [tab, setTab] = useState<Tab>("campanhas");
   const [metric, setMetric] = useState<MetricKey>("impressoes");
@@ -111,16 +113,17 @@ export default function DashboardContainer() {
       if (campaign) qs.set("campaign", campaign);
       if (platform) qs.set("platform", platform);
       if (objective) qs.set("objective", objective);
+      if (tema) qs.set("tema", tema);
       try {
         const res = await fetch(`/api/dashboard/filters?${qs}`, { signal: ctrl.signal });
         if (!res.ok) throw new Error();
         setFiltersData(await res.json());
       } catch {
-        if (!ctrl.signal.aborted) setFiltersData({ platforms: [], objectives: [], campaigns: [], ads: [] });
+        if (!ctrl.signal.aborted) setFiltersData({ platforms: [], objectives: [], temas: [], campaigns: [], ads: [] });
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [from, to, campaign, platform, objective]);
+  }, [from, to, campaign, platform, objective, tema]);
 
   // ── Dados da aba ativa ──
   useEffect(() => {
@@ -129,7 +132,7 @@ export default function DashboardContainer() {
     const t = setTimeout(async () => {
       try {
         const res = await postJson("/api/dashboard/data",
-          { from, to, campaign, platform, ad, objective, tab, gran }, { signal: ctrl.signal });
+          { from, to, campaign, platform, ad, objective, tema, tab, gran }, { signal: ctrl.signal });
         const json = (await res.json()) as Payload;
         if (ctrl.signal.aborted) return;
         if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
@@ -144,7 +147,7 @@ export default function DashboardContainer() {
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [from, to, campaign, platform, ad, objective, tab, gran]);
+  }, [from, to, campaign, platform, ad, objective, tema, tab, gran]);
 
   const adOptions = useMemo(
     () => (filtersData?.ads ?? []).filter((a) => !campaign || a.campaign === campaign).map((a) => a.ad),
@@ -440,7 +443,7 @@ export default function DashboardContainer() {
     }, 400);
     return () => { clearTimeout(t); ctrl.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(insightsInput), tab, metric, from, to, campaign, platform, ad, objective]);
+  }, [JSON.stringify(insightsInput), tab, metric, from, to, campaign, platform, ad, objective, tema]);
 
   // ── Estilos herdados do SentimentosContainer ──
   const selectClass =
@@ -511,6 +514,22 @@ export default function DashboardContainer() {
                 <select className={selectClass} value={objective} onChange={(e) => setObjective(e.target.value)}>
                   <option value="">Todos os objetivos</option>
                   {(filtersData?.objectives ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+                <select className={selectClass} value={tema} onChange={(e) => setTema(e.target.value)}>
+                  <option value="">Todos os temas</option>
+                  {/* A classificação criativa está defasada (o job `creative_classifier` do repo
+                      mysql parou), então em janelas recentes a lista vem vazia. Sem esta linha o
+                      select fica com uma opção só e parece quebrado — foi assim que tropeçamos. */}
+                  {!(filtersData?.temas ?? []).length && (
+                    <option value="" disabled>— nenhum tema classificado nesta janela; amplie o período</option>
+                  )}
+                  {(filtersData?.temas ?? []).map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}
+                  {/* A lista só traz tema com entrega na janela corrente, então trocar o
+                      período pode tirar o tema selecionado dela. Mantém a opção visível
+                      dizendo o porquê, em vez de deixar o select em branco com o dashboard zerado. */}
+                  {tema && !(filtersData?.temas ?? []).some((t) => t.code === tema) && (
+                    <option value={tema}>{tema} — sem entrega no período</option>
+                  )}
                 </select>
                 <div className="md:col-span-2 flex flex-wrap gap-2.5 items-center">
                   <label className="flex items-center gap-1.5 text-[12px] text-ink-3">

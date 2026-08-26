@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth';
 import { getPool, isTransientDbError, resetPool } from '@/lib/mysql';
 import {
   buildWhere, previousWindow, METRIC_SELECT, VIDEO_SELECT,
-  AGE_BUCKET_SQL, GRAIN_SQL, isGranularity, UF_BY_NAME, HAS_DELIVERY,
+  AGE_BUCKET_SQL, GRAIN_SQL, isGranularity, UF_BY_NAME, HAS_DELIVERY, fromTable,
   type DashboardFilters, type Granularity,
 } from '@/lib/dashboard';
 
@@ -43,12 +43,17 @@ export async function POST(req: NextRequest) {
     platform: typeof body.platform === 'string' && body.platform ? body.platform : undefined,
     ad: typeof body.ad === 'string' && body.ad ? body.ad : undefined,
     objective: typeof body.objective === 'string' && body.objective ? body.objective : undefined,
+    tema: typeof body.tema === 'string' && body.tema ? body.tema : undefined,
   };
   const tab = body.tab === 'demografia' || body.tab === 'regiao' ? body.tab : 'campanhas';
   const gran: Granularity = isGranularity(body.gran) ? body.gran : 'dia';
 
   const w = buildWhere(f);
   const pool = getPool();
+  // Só troca de tabela quando há tema selecionado (ver fromTable em lib/dashboard).
+  const T_CAMP = fromTable('gold_platforms_campaigns', f);
+  const T_AGE = fromTable('gold_platforms_age_gender', f);
+  const T_REG = fromTable('gold_platforms_regions', f);
 
   try {
     if (tab === 'demografia') {
@@ -56,7 +61,7 @@ export async function POST(req: NextRequest) {
       // gold_platforms_age and _gender each collapse the other dimension.
       const [rows] = await pool.query(
         `SELECT ${AGE_BUCKET_SQL} AS faixa, gender, ${METRIC_SELECT}
-           FROM gold_platforms_age_gender WHERE ${w.sql}
+           FROM ${T_AGE} WHERE ${w.sql}
           GROUP BY faixa, gender`,
         w.params
       );
@@ -70,7 +75,7 @@ export async function POST(req: NextRequest) {
     if (tab === 'regiao') {
       const [rows] = await pool.query(
         `SELECT region_name, ${METRIC_SELECT}
-           FROM gold_platforms_regions WHERE ${w.sql}
+           FROM ${T_REG} WHERE ${w.sql}
           GROUP BY region_name ORDER BY SUM(impressions) DESC`,
         w.params
       );
@@ -93,15 +98,15 @@ export async function POST(req: NextRequest) {
       pool.query(
         `SELECT ${METRIC_SELECT}, COUNT(DISTINCT CASE WHEN ${HAS_DELIVERY} THEN campaign_name END) AS campaigns,
                 COUNT(DISTINCT CASE WHEN ${HAS_DELIVERY} THEN ad_id END) AS ads
-           FROM gold_platforms_campaigns WHERE ${w.sql}`,
+           FROM ${T_CAMP} WHERE ${w.sql}`,
         w.params
       ),
       wPrev
-        ? pool.query(`SELECT ${METRIC_SELECT} FROM gold_platforms_campaigns WHERE ${wPrev.sql}`, wPrev.params)
+        ? pool.query(`SELECT ${METRIC_SELECT} FROM ${T_CAMP} WHERE ${wPrev.sql}`, wPrev.params)
         : Promise.resolve([[]] as unknown as [Record<string, unknown>[]]),
       pool.query(
         `SELECT ${GRAIN_SQL[gran]} AS bucket, ${METRIC_SELECT}
-           FROM gold_platforms_campaigns WHERE ${w.sql}
+           FROM ${T_CAMP} WHERE ${w.sql}
           GROUP BY bucket ORDER BY bucket`,
         w.params
       ),
@@ -110,14 +115,14 @@ export async function POST(req: NextRequest) {
     const [campRes, adRes] = await Promise.all([
       pool.query(
         `SELECT platform, campaign_name, ${METRIC_SELECT}, ${VIDEO_SELECT}
-           FROM gold_platforms_campaigns WHERE ${w.sql}
+           FROM ${T_CAMP} WHERE ${w.sql}
           GROUP BY platform, campaign_name HAVING ${HAS_DELIVERY}
           ORDER BY SUM(cost) DESC LIMIT ${TABLE_LIMIT}`,
         w.params
       ),
       pool.query(
         `SELECT platform, ad_name, ${METRIC_SELECT}, ${VIDEO_SELECT}
-           FROM gold_platforms_campaigns WHERE ${w.sql}
+           FROM ${T_CAMP} WHERE ${w.sql}
           GROUP BY platform, ad_name HAVING ${HAS_DELIVERY}
           ORDER BY SUM(cost) DESC LIMIT ${TABLE_LIMIT}`,
         w.params
