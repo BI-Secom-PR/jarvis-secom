@@ -1,0 +1,34 @@
+# O deploy pela CLI não aplica o .gitignore, então o upload levava node_modules,
+# .next e ~1,3 GB de entregáveis de campanha em verification/ — estourando o
+# limite de 500 MB de tamanho de função. A Vercel instala e builda do zero, e
+# nada aqui é lido em runtime (o engine fica em app/verification/, não neste
+# diretório da raiz).
+node_modules
+.next
+out
+build
+
+# dados reais de campanha (mesma lista do .gitignore)
+/verification/00PX/
+/verification/OOPX25/
+/verification/ADFORCE/
+/verification/METRIKE/
+/verification/SENSE/
+/verification/DGbrasil/
+/verification/TERATECH/
+/verification/Novo Posicionamento Regional Dec 25/
+/verification/comprovantes/
+/verification/verifications_url/
+__MACOSX/
+._*
+
+# vault do obsidian e material de referência
+Jarvis_mem/
+modelos_pdf/
+paper-exemples/
+
+# segredos — nunca subir; as env vars vivem no painel da Vercel
+.env
+.env*.local
+gen-lang-client-*.json
+*-service-account*.json
