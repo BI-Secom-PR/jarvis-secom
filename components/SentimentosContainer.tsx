@@ -33,7 +33,7 @@ type FiltersData = {
 
 type CommentRow = {
   id: number;
-  image_url: string | null;
+  image_urls: string[] | null;
   post_message: string | null;
   comment: string | null;
   author: string | null;
@@ -72,30 +72,76 @@ const PLATFORM_LABELS: Record<string, string> = {
 const platformLabel = (p: string | null | undefined) =>
   !p ? "—" : PLATFORM_LABELS[p.toLowerCase()] ?? p;
 
-function Thumb({ url, onOpen }: { url: string | null; onOpen: (url: string) => void }) {
-  const [failed, setFailed] = useState(false);
-  if (!url || failed)
+// A carousel ad has one card per image. Single-image ads get the exact same markup they
+// had before — no arrows, no counter — so only carousels look different.
+function Thumb({
+  urls,
+  onOpen,
+}: {
+  urls: string[] | null;
+  onOpen: (urls: string[], index: number) => void;
+}) {
+  const [failed, setFailed] = useState<Record<number, boolean>>({});
+  const [i, setI] = useState(0);
+
+  // A card that 404s is dropped rather than blanking the whole thumbnail.
+  const live = (urls ?? []).filter((_, n) => !failed[n]);
+  if (live.length === 0)
     return (
       <div className="h-12 w-12 shrink-0 rounded-lg border border-separator bg-fill flex items-center justify-center text-ink-3">
         ◇
       </div>
     );
+
+  const idx = Math.min(i, live.length - 1);
+  const step = (e: React.MouseEvent, delta: number) => {
+    e.stopPropagation(); // never open the lightbox when the intent was "next card"
+    setI((prev) => (prev + delta + live.length) % live.length);
+  };
+
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(url)}
-      aria-label="Ampliar criativo"
-      className="group relative h-30 w-30 shrink-0 rounded-lg border border-separator overflow-hidden cursor-pointer p-0 focus:outline-none focus-visible:border-accent-border hover:border-accent-border transition-colors"
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={url}
-        alt="criativo"
-        loading="lazy"
-        onError={() => setFailed(true)}
-        className="h-full w-full object-cover transition-opacity group-hover:opacity-90"
-      />
-    </button>
+    <div className="group relative h-30 w-30 shrink-0 rounded-lg border border-separator overflow-hidden focus-within:border-accent-border hover:border-accent-border transition-colors">
+      <button
+        type="button"
+        onClick={() => onOpen(live, idx)}
+        aria-label={live.length > 1 ? `Ampliar criativo ${idx + 1} de ${live.length}` : "Ampliar criativo"}
+        className="block h-full w-full cursor-pointer p-0 focus:outline-none"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={live[idx]}
+          alt={live.length > 1 ? `criativo, card ${idx + 1} de ${live.length}` : "criativo"}
+          loading="lazy"
+          onError={() =>
+            setFailed((f) => ({ ...f, [(urls ?? []).indexOf(live[idx])]: true }))
+          }
+          className="h-full w-full object-cover transition-opacity group-hover:opacity-90"
+        />
+      </button>
+      {live.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => step(e, -1)}
+            aria-label="Card anterior"
+            className="absolute left-0 top-1/2 -translate-y-1/2 h-7 w-5 bg-black/45 text-white text-xs leading-none opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={(e) => step(e, 1)}
+            aria-label="Próximo card"
+            className="absolute right-0 top-1/2 -translate-y-1/2 h-7 w-5 bg-black/45 text-white text-xs leading-none opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+          >
+            ›
+          </button>
+          <span className="absolute bottom-1 right-1 rounded bg-black/55 px-1 text-[10px] leading-4 text-white tabular-nums">
+            {idx + 1}/{live.length}
+          </span>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -119,22 +165,33 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
   const [error, setError] = useState<string | null>(null);
   const [topMode, setTopMode] = useState<"Negativo" | "Positivo">("Negativo");
   const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>("month");
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // The lightbox holds the whole carousel, so ampliação can walk the cards too.
+  const [preview, setPreview] = useState<{ urls: string[]; i: number } | null>(null);
   const [previewFrame, setPreviewFrame] = useState<{ w: number; h: number } | null>(null);
+  const previewUrl = preview ? preview.urls[preview.i] : null;
 
-  const openPreview = useCallback((url: string) => {
+  const openPreview = useCallback((urls: string[], index: number) => {
     setPreviewFrame(null);
-    setPreviewUrl(url);
+    setPreview({ urls, i: index });
+  }, []);
+
+  const stepPreview = useCallback((delta: number) => {
+    setPreviewFrame(null);
+    setPreview((p) =>
+      p ? { ...p, i: (p.i + delta + p.urls.length) % p.urls.length } : p
+    );
   }, []);
 
   useEffect(() => {
-    if (!previewUrl) return;
+    if (!preview) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPreviewUrl(null);
+      if (e.key === "Escape") setPreview(null);
+      else if (e.key === "ArrowRight") stepPreview(1);
+      else if (e.key === "ArrowLeft") stepPreview(-1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [previewUrl]);
+  }, [preview, stepPreview]);
 
   // Debounced filters fetch + abort so rapid filter changes don't stack DB load.
   useEffect(() => {
@@ -593,7 +650,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
                 <tbody>
                   {(data?.comments ?? []).map((row) => (
                     <tr key={row.id} className="border-b border-separator/60 align-top hover:bg-fill/40">
-                      <td className="px-4 md:px-6 py-3"><Thumb url={row.image_url} onOpen={openPreview} /></td>
+                      <td className="px-4 md:px-6 py-3"><Thumb urls={row.image_urls} onOpen={openPreview} /></td>
                       <td className="px-3 py-3">
                         <p className="text-ink-2" title={row.post_message ?? undefined}>
                           {truncate(row.post_message, 140)}
@@ -672,22 +729,51 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
           aria-modal="true"
           aria-label="Visualização do criativo"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setPreviewUrl(null);
+            if (e.target === e.currentTarget) setPreview(null);
           }}
         >
           <button
             type="button"
-            onClick={() => setPreviewUrl(null)}
+            onClick={() => setPreview(null)}
             className="absolute top-4 right-4 z-10 h-10 w-10 rounded-full border border-separator bg-fill/90 text-ink-2 hover:text-ink flex items-center justify-center"
             aria-label="Fechar"
           >
             ✕
           </button>
+          {preview && preview.urls.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  stepPreview(-1);
+                }}
+                aria-label="Card anterior"
+                className="absolute left-4 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full border border-separator bg-fill/90 text-ink-2 hover:text-ink flex items-center justify-center text-xl"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  stepPreview(1);
+                }}
+                aria-label="Próximo card"
+                className="absolute right-4 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full border border-separator bg-fill/90 text-ink-2 hover:text-ink flex items-center justify-center text-xl"
+              >
+                ›
+              </button>
+              <span className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 rounded-full bg-black/60 px-3 py-1 text-xs text-white tabular-nums">
+                {preview.i + 1} / {preview.urls.length}
+              </span>
+            </>
+          )}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={previewUrl}
             alt="criativo ampliado"
-            onError={() => setPreviewUrl(null)}
+            onError={() => setPreview(null)}
             onLoad={(e) => {
               const { naturalWidth: nw, naturalHeight: nh } = e.currentTarget;
               if (!nw || !nh) return;

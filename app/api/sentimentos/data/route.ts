@@ -39,18 +39,34 @@ function resolveImageUrl(url: string | null): string | null {
 // unlike the fbcdn wrapper above, and unchanged when the bucket moves hosts.
 // Prioritize it over image_url and route it through our own proxy (thumb/route.ts),
 // which presigns the IDrive e2 GET server-side; the bucket is not public.
-function resolveThumbUrl(path: string | null, imageUrl: string | null): string | null {
+// A carousel ad stores every card in one column, joined by ';' — "meta/1~1.jpg;meta/1~2.jpg".
+// Returns one URL per card, in card order; a single-image ad simply yields a list of one.
+function resolveThumbUrls(path: string | null, imageUrl: string | null): string[] {
   if (path) {
-    if (/^https?:\/\//i.test(path)) return path; // defensive: already absolute
-    return `/api/sentimentos/thumb?key=${encodeURIComponent(path.replace(/^\/+/, ''))}`;
+    return path
+      .split(';')
+      .map((key) => key.trim())
+      .filter(Boolean)
+      .map((key) =>
+        /^https?:\/\//i.test(key) // defensive: already absolute
+          ? key
+          : `/api/sentimentos/thumb?key=${encodeURIComponent(key.replace(/^\/+/, ''))}`
+      );
   }
-  return resolveImageUrl(imageUrl);
+  // image_url can also carry several cards (the uploader writes both columns the same way)
+  return (imageUrl ?? '')
+    .split(';')
+    .map((u) => resolveImageUrl(u.trim()))
+    .filter((u): u is string => Boolean(u));
 }
 
 function resolveComments(rows: Array<Record<string, unknown>>) {
   return rows.map(({ creative_image_path, image_url, ...rest }) => ({
     ...rest,
-    image_url: resolveThumbUrl(creative_image_path as string | null, image_url as string | null),
+    image_urls: resolveThumbUrls(
+      creative_image_path as string | null,
+      image_url as string | null
+    ),
   }));
 }
 
