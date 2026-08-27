@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import CampaignRulesModal from "./CampaignRulesModal";
 import ChartWidget from "./ChartWidget";
 import HudBackground from "./HudBackground";
 import HudCorners from "./HudCorners";
@@ -86,7 +87,7 @@ function Spark({ values }: { values: number[] }) {
   );
 }
 
-export default function DashboardContainer() {
+export default function DashboardContainer({ isAdmin = false }: { isAdmin?: boolean }) {
   const [from, setFrom] = useState(isoDaysAgo(30));
   const [to, setTo] = useState(isoDaysAgo(0));
   const [campaign, setCampaign] = useState("");
@@ -99,6 +100,11 @@ export default function DashboardContainer() {
   const [metric, setMetric] = useState<MetricKey>("impressoes");
   const [gran, setGran] = useState<Gran>("dia");
   const [tmode, setTmode] = useState<"campanha" | "anuncio">("campanha");
+
+  // Editor de regras de grupo (só admin). `rulesVersion` força o refetch dos filtros
+  // depois de salvar — o dropdown É o preview das regras.
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [rulesVersion, setRulesVersion] = useState(0);
 
   const [filtersData, setFiltersData] = useState<FiltersData | null>(null);
   const [data, setData] = useState<Payload | null>(null);
@@ -123,7 +129,7 @@ export default function DashboardContainer() {
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [from, to, campaign, platform, objective, tema]);
+  }, [from, to, campaign, platform, objective, tema, rulesVersion]);
 
   // ── Dados da aba ativa ──
   useEffect(() => {
@@ -466,6 +472,9 @@ export default function DashboardContainer() {
   return (
     <div className="h-dvh w-full flex flex-col overflow-hidden relative hud-theme hud-void-bg">
       <HudBackground variant="subtle" />
+      {rulesOpen && (
+        <CampaignRulesModal onClose={() => setRulesOpen(false)} onSaved={() => setRulesVersion((v) => v + 1)} />
+      )}
 
       <header className="relative z-10 shrink-0 flex items-center justify-between gap-3 px-4 md:px-6 pb-3 md:pb-4 pt-[max(0.75rem,env(safe-area-inset-top))] md:pt-4 border-b border-separator">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -503,8 +512,18 @@ export default function DashboardContainer() {
                 <span style={{ color: "var(--hud-cyan)" }}>◇</span> Filtros
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                <SearchableSelect className={selectClass} value={campaign} options={filtersData?.campaigns ?? []}
-                  emptyLabel="Todas as campanhas" onChange={(v) => { setCampaign(v); setAd(""); }} />
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <SearchableSelect className={selectClass} value={campaign} options={filtersData?.campaigns ?? []}
+                    emptyLabel="Todas as campanhas" onChange={(v) => { setCampaign(v); setAd(""); }} />
+                  {/* As campanhas aparecem agrupadas por regra (lib/campaignGroups); só
+                      admin edita as regras, que valem para todo mundo. */}
+                  {isAdmin && (
+                    <button onClick={() => setRulesOpen(true)} title="Editar os grupos de campanha"
+                      className="shrink-0 px-2 py-2 rounded-lg border border-separator text-ink-3 hover:text-ink transition-colors text-[13px] leading-none">
+                      ⚙
+                    </button>
+                  )}
+                </div>
                 <SearchableSelect className={selectClass} value={ad} options={adOptions}
                   emptyLabel="Todos os anúncios" onChange={setAd} />
                 <select className={selectClass} value={platform} onChange={(e) => setPlatform(e.target.value)}>

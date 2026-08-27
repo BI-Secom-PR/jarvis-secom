@@ -8,7 +8,10 @@ export type DashboardFilters = {
   /** Inclusive date range over `date`, YYYY-MM-DD. */
   from?: string;
   to?: string;
+  /** Rótulo do GRUPO de campanha (ver lib/campaignGroups), não o nome cru. */
   campaign?: string;
+  /** Os `campaign_name` crus que o grupo cobre — é o que vai para o WHERE. */
+  campaignNames?: string[];
   platform?: string;
   ad?: string;
   objective?: string;
@@ -24,7 +27,13 @@ export function buildWhere(f: DashboardFilters): { sql: string; params: unknown[
   const params: unknown[] = [];
   if (f.from && ISO_DATE.test(f.from)) { conds.push('date >= ?'); params.push(f.from); }
   if (f.to && ISO_DATE.test(f.to))     { conds.push('date <= ?'); params.push(f.to); }
-  if (f.campaign)  { conds.push('campaign_name = ?'); params.push(f.campaign); }
+  // `campaign` é rótulo de grupo; quem filtra é a lista de nomes crus que ele cobre.
+  // Grupo sem nenhum nome na janela (rótulo obsoleto) tem de zerar, e `IN ()` é erro
+  // de sintaxe no MySQL — daí o 1=0. mysql2 expande o array num único `?`.
+  if (f.campaignNames) {
+    if (f.campaignNames.length) { conds.push('campaign_name IN (?)'); params.push(f.campaignNames); }
+    else conds.push('1=0');
+  }
   if (f.platform)  { conds.push('platform = ?');      params.push(f.platform); }
   if (f.ad)        { conds.push('ad_name = ?');       params.push(f.ad); }
   if (f.objective) { conds.push('objective = ?');     params.push(f.objective); }

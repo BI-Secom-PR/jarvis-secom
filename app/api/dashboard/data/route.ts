@@ -6,6 +6,7 @@ import {
   AGE_BUCKET_SQL, GRAIN_SQL, isGranularity, UF_BY_NAME, HAS_DELIVERY, fromTable,
   type DashboardFilters, type Granularity,
 } from '@/lib/dashboard';
+import { withCampaignNames } from '@/lib/campaignGroups';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -48,7 +49,6 @@ export async function POST(req: NextRequest) {
   const tab = body.tab === 'demografia' || body.tab === 'regiao' ? body.tab : 'campanhas';
   const gran: Granularity = isGranularity(body.gran) ? body.gran : 'dia';
 
-  const w = buildWhere(f);
   const pool = getPool();
   // Só troca de tabela quando há tema selecionado (ver fromTable em lib/dashboard).
   const T_CAMP = fromTable('gold_platforms_campaigns', f);
@@ -56,6 +56,11 @@ export async function POST(req: NextRequest) {
   const T_REG = fromTable('gold_platforms_regions', f);
 
   try {
+    // `campaign` chega como rótulo de grupo (ver lib/campaignGroups); o WHERE precisa
+    // dos campaign_name crus que ele cobre. Resolvido sempre pela tabela de campanhas,
+    // que é onde os nomes vivem — as de região/demografia repetem os mesmos.
+    const w = buildWhere(await withCampaignNames(pool, f, T_CAMP));
+
     if (tab === 'demografia') {
       // The crossed table is the only place age and gender coexist —
       // gold_platforms_age and _gender each collapse the other dimension.
@@ -90,7 +95,12 @@ export async function POST(req: NextRequest) {
 
     // ── Campanhas ────────────────────────────────────────────────────────
     const prev = previousWindow(f);
-    const wPrev = prev ? buildWhere({ ...f, from: prev.from, to: prev.to }) : null;
+    // A janela anterior resolve o grupo de novo, na SUA janela: os nomes crus que um
+    // grupo cobre mudam de mês para mês (PI e ID novos), e sem re-resolver o delta
+    // compararia "campanha X" com "tudo".
+    const wPrev = prev
+      ? buildWhere(await withCampaignNames(pool, { ...f, from: prev.from, to: prev.to }, T_CAMP))
+      : null;
 
     // Two waves so the pool never sees more than three of these at once
     // (connectionLimit is 10 and the filters route shares it).
