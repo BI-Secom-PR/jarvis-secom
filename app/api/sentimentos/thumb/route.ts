@@ -5,7 +5,9 @@ import { creativeObjectUrl } from '@/lib/creatives';
 export const dynamic = 'force-dynamic';
 
 // Object keys are DB-controlled paths like "meta/12345.jpg" — reject traversal defensively.
-const SAFE_KEY = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
+// `~` is allowed because carousel cards are keyed "meta/<ad_id>~<n>.jpg"; it is unreserved
+// in RFC 3986 and carries no traversal meaning (`..` and the segment shape are checked below).
+const SAFE_KEY = /^[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*$/;
 
 // Creatives sit in an IDrive e2 bucket that cannot be public on the free tier,
 // so the browser can never fetch them directly. We presign a short-lived GET
