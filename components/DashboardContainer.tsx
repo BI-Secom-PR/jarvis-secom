@@ -241,11 +241,12 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
     if (!daily.length) return null;
     const labels = daily.map((r) => r.date.slice(8, 10) + "/" + r.date.slice(5, 7));
     const parts = engMode === "partes" ? activeParts(daily) : [];
-    // Empilhado, o topo da pilha continua sendo o total de antes — só que agora
-    // dá para ver de que tipo de interação ele é feito.
+    // Cada tipo sai do zero, NÃO empilhado. Empilhando, a curva de cima ficava
+    // desenhada na soma acumulada com a cor da série menor — num dia de 2.858
+    // curtidas e 26 compartilhamentos as duas curvas saíam a 26 de distância e
+    // o "Compart." aparecia colado no total. Do zero, cada uma marca o seu valor.
     if (parts.length) return {
-      type: "area",
-      stacked: true,
+      type: "line",
       title: "Engajamento por tipo",
       labels,
       datasets: parts.map((p) => ({ label: p.label, data: daily.map((r) => r[p.key]) })),
