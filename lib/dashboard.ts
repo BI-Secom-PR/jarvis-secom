@@ -4,19 +4,21 @@
 // Read-only over the gold layer. Every value the client sends is either bound
 // as a parameter or looked up in a whitelist here — nothing is interpolated.
 
+// Todo filtro de dimensão é multi-valor: N valores viram OR (`IN`) dentro do
+// próprio filtro e AND entre filtros. Array vazio ou ausente = sem filtro.
 export type DashboardFilters = {
   /** Inclusive date range over `date`, YYYY-MM-DD. */
   from?: string;
   to?: string;
-  /** Rótulo do GRUPO de campanha (ver lib/campaignGroups), não o nome cru. */
-  campaign?: string;
-  /** Os `campaign_name` crus que o grupo cobre — é o que vai para o WHERE. */
+  /** Rótulos dos GRUPOS de campanha (ver lib/campaignGroups), não os nomes crus. */
+  campaigns?: string[];
+  /** Os `campaign_name` crus que os grupos cobrem — é o que vai para o WHERE. */
   campaignNames?: string[];
-  platform?: string;
-  ad?: string;
-  objective?: string;
-  /** Eixo temático do Framework v4 (código, ex. 'ECO'). Só existe nas views classificadas. */
-  tema?: string;
+  platform?: string[];
+  ad?: string[];
+  objective?: string[];
+  /** Eixos temáticos do Framework v4 (códigos, ex. 'ECO'). Só existem nas views classificadas. */
+  tema?: string[];
 };
 
 export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -27,17 +29,21 @@ export function buildWhere(f: DashboardFilters): { sql: string; params: unknown[
   const params: unknown[] = [];
   if (f.from && ISO_DATE.test(f.from)) { conds.push('date >= ?'); params.push(f.from); }
   if (f.to && ISO_DATE.test(f.to))     { conds.push('date <= ?'); params.push(f.to); }
-  // `campaign` é rótulo de grupo; quem filtra é a lista de nomes crus que ele cobre.
-  // Grupo sem nenhum nome na janela (rótulo obsoleto) tem de zerar, e `IN ()` é erro
-  // de sintaxe no MySQL — daí o 1=0. mysql2 expande o array num único `?`.
+  // mysql2 expande o array num único `?`, então `IN (?)` serve para 1 ou N valores.
+  const inList = (col: string, vals?: string[]) => {
+    if (vals?.length) { conds.push(`${col} IN (?)`); params.push(vals); }
+  };
+  // `campaigns` são rótulos de grupo; quem filtra é a lista de nomes crus que eles
+  // cobrem. Aqui, e SÓ aqui, lista vazia significa "grupo sem nenhum nome na janela"
+  // (rótulo obsoleto) e tem de zerar — `IN ()` é erro de sintaxe no MySQL, daí o 1=0.
   if (f.campaignNames) {
     if (f.campaignNames.length) { conds.push('campaign_name IN (?)'); params.push(f.campaignNames); }
     else conds.push('1=0');
   }
-  if (f.platform)  { conds.push('platform = ?');      params.push(f.platform); }
-  if (f.ad)        { conds.push('ad_name = ?');       params.push(f.ad); }
-  if (f.objective) { conds.push('objective = ?');     params.push(f.objective); }
-  if (f.tema)      { conds.push('eixo = ?');          params.push(f.tema); }
+  inList('platform', f.platform);
+  inList('ad_name', f.ad);
+  inList('objective', f.objective);
+  inList('eixo', f.tema);
   return { sql: conds.join(' AND '), params };
 }
 
@@ -55,7 +61,7 @@ const CLASSIFIED: Record<string, string> = {
 
 /** Tabela a consultar: a base, ou a view classificada quando há filtro de tema. */
 export const fromTable = (base: string, f: DashboardFilters) =>
-  f.tema ? CLASSIFIED[base] ?? base : base;
+  f.tema?.length ? CLASSIFIED[base] ?? base : base;
 
 /** The window of equal length immediately before [from, to], for the deltas. */
 export function previousWindow(f: DashboardFilters): { from: string; to: string } | null {

@@ -17,6 +17,10 @@ const TABLE_LIMIT = 50;
 /** mysql2 hands DECIMAL/BIGINT back as strings — coerce once, at the edge. */
 const n = (v: unknown): number => (v == null ? 0 : Number(v));
 
+/** Todo filtro de dimensão chega como lista de strings; nada além disso entra. */
+const strs = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x !== '') : [];
+
 type Totals = { cost: number; impressions: number; reach: number; clicks: number; videoViews: number; engagement: number }
   & Record<EngagementPartKey, number>;
 const totalsOf = (r: Record<string, unknown> | undefined): Totals => ({
@@ -43,11 +47,11 @@ export async function POST(req: NextRequest) {
   const f: DashboardFilters = {
     from: typeof body.from === 'string' ? body.from : undefined,
     to: typeof body.to === 'string' ? body.to : undefined,
-    campaign: typeof body.campaign === 'string' && body.campaign ? body.campaign : undefined,
-    platform: typeof body.platform === 'string' && body.platform ? body.platform : undefined,
-    ad: typeof body.ad === 'string' && body.ad ? body.ad : undefined,
-    objective: typeof body.objective === 'string' && body.objective ? body.objective : undefined,
-    tema: typeof body.tema === 'string' && body.tema ? body.tema : undefined,
+    campaigns: strs(body.campaign),
+    platform: strs(body.platform),
+    ad: strs(body.ad),
+    objective: strs(body.objective),
+    tema: strs(body.tema),
   };
   const tab = body.tab === 'demografia' || body.tab === 'regiao' ? body.tab : 'campanhas';
   const gran: Granularity = isGranularity(body.gran) ? body.gran : 'dia';
@@ -59,7 +63,7 @@ export async function POST(req: NextRequest) {
   const T_REG = fromTable('gold_platforms_regions', f);
 
   try {
-    // `campaign` chega como rótulo de grupo (ver lib/campaignGroups); o WHERE precisa
+    // `campaign` chega como rótulo(s) de grupo (ver lib/campaignGroups); o WHERE precisa
     // dos campaign_name crus que ele cobre. Resolvido sempre pela tabela de campanhas,
     // que é onde os nomes vivem — as de região/demografia repetem os mesmos.
     const w = buildWhere(await withCampaignNames(pool, f, T_CAMP));

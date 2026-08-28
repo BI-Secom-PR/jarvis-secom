@@ -96,11 +96,13 @@ function Spark({ values }: { values: number[] }) {
 export default function DashboardContainer({ isAdmin = false }: { isAdmin?: boolean }) {
   const [from, setFrom] = useState(isoDaysAgo(30));
   const [to, setTo] = useState(isoDaysAgo(0));
-  const [campaign, setCampaign] = useState("");
-  const [platform, setPlatform] = useState("");
-  const [ad, setAd] = useState("");
-  const [objective, setObjective] = useState("");
-  const [tema, setTema] = useState("");
+  // Todo filtro é multi-valor: [] = sem filtro, N valores = OR dentro do filtro
+  // e AND entre filtros (Meta OU TikTok, E objetivo "tráfego").
+  const [campaigns, setCampaigns] = useState<string[]>([]);
+  const [platforms, setPlatforms] = useState<string[]>([]);
+  const [ads, setAds] = useState<string[]>([]);
+  const [objectives, setObjectives] = useState<string[]>([]);
+  const [temas, setTemas] = useState<string[]>([]);
 
   const [tab, setTab] = useState<Tab>("campanhas");
   const [metric, setMetric] = useState<MetricKey>("impressoes");
@@ -123,10 +125,11 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
       const qs = new URLSearchParams({ from, to });
-      if (campaign) qs.set("campaign", campaign);
-      if (platform) qs.set("platform", platform);
-      if (objective) qs.set("objective", objective);
-      if (tema) qs.set("tema", tema);
+      // Repetido por valor (`platform=meta&platform=tiktok`) — a rota lê com getAll.
+      for (const v of campaigns) qs.append("campaign", v);
+      for (const v of platforms) qs.append("platform", v);
+      for (const v of objectives) qs.append("objective", v);
+      for (const v of temas) qs.append("tema", v);
       try {
         const res = await fetch(`/api/dashboard/filters?${qs}`, { signal: ctrl.signal });
         if (!res.ok) throw new Error();
@@ -136,7 +139,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [from, to, campaign, platform, objective, tema, rulesVersion]);
+  }, [from, to, campaigns, platforms, objectives, temas, rulesVersion]);
 
   // ── Dados da aba ativa ──
   useEffect(() => {
@@ -145,7 +148,8 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
     const t = setTimeout(async () => {
       try {
         const res = await postJson("/api/dashboard/data",
-          { from, to, campaign, platform, ad, objective, tema, tab, gran }, { signal: ctrl.signal });
+          { from, to, campaign: campaigns, platform: platforms, ad: ads, objective: objectives, tema: temas, tab, gran },
+          { signal: ctrl.signal });
         const json = (await res.json()) as Payload;
         if (ctrl.signal.aborted) return;
         if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
@@ -160,12 +164,20 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [from, to, campaign, platform, ad, objective, tema, tab, gran]);
+  }, [from, to, campaigns, platforms, ads, objectives, temas, tab, gran]);
 
   const adOptions = useMemo(
-    () => (filtersData?.ads ?? []).filter((a) => !campaign || a.campaign === campaign).map((a) => a.ad),
-    [filtersData, campaign]
+    () => (filtersData?.ads ?? [])
+      .filter((a) => !campaigns.length || (a.campaign && campaigns.includes(a.campaign)))
+      .map((a) => a.ad),
+    [filtersData, campaigns]
   );
+
+  // O select de tema guarda o código (`ECO`) e mostra o rótulo humano.
+  const temaLabel = useMemo(() => {
+    const byCode = new Map((filtersData?.temas ?? []).map((t) => [t.code, t.label]));
+    return (code: string) => byCode.get(code) ?? code;
+  }, [filtersData?.temas]);
 
   const totals = data?.totals;
   const daily = data?.daily ?? [];
@@ -457,7 +469,9 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
 
   useEffect(() => {
     if (!insightsInput) { setAiInsights(null); setAiLoading(false); return; }
-    const payload = { tab, metric, periodo: { from, to }, filtros: { campaign, platform, ad, objective }, resumo: insightsInput };
+    const payload = { tab, metric, periodo: { from, to },
+      filtros: { campaign: campaigns, platform: platforms, ad: ads, objective: objectives, tema: temas },
+      resumo: insightsInput };
     const key = JSON.stringify(payload);
     const cached = aiCache.current.get(key);
     if (cached) { setAiInsights(cached); setAiLoading(false); return; }
@@ -480,7 +494,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
     }, 400);
     return () => { clearTimeout(t); ctrl.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(insightsInput), tab, metric, from, to, campaign, platform, ad, objective, tema]);
+  }, [JSON.stringify(insightsInput), tab, metric, from, to, campaigns, platforms, ads, objectives, temas]);
 
   // ── Estilos herdados do SentimentosContainer ──
   const selectClass =
@@ -553,8 +567,8 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <SearchableSelect className={selectClass} value={campaign} options={filtersData?.campaigns ?? []}
-                    emptyLabel="Todas as campanhas" onChange={(v) => { setCampaign(v); setAd(""); }} />
+                  <SearchableSelect multiple className={selectClass} value={campaigns} options={filtersData?.campaigns ?? []}
+                    emptyLabel="Todas as campanhas" onChange={(v) => { setCampaigns(v); setAds([]); }} />
                   {/* As campanhas aparecem agrupadas por regra (lib/campaignGroups); só
                       admin edita as regras, que valem para todo mundo. */}
                   {isAdmin && (
@@ -564,32 +578,24 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                     </button>
                   )}
                 </div>
-                <SearchableSelect className={selectClass} value={ad} options={adOptions}
-                  emptyLabel="Todos os anúncios" onChange={setAd} />
-                <select className={selectClass} value={platform} onChange={(e) => setPlatform(e.target.value)}>
-                  <option value="">Todas as plataformas</option>
-                  {(filtersData?.platforms ?? []).map((p) => <option key={p} value={p}>{platformLabel(p)}</option>)}
-                </select>
-                <select className={selectClass} value={objective} onChange={(e) => setObjective(e.target.value)}>
-                  <option value="">Todos os objetivos</option>
-                  {(filtersData?.objectives ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
-                <select className={selectClass} value={tema} onChange={(e) => setTema(e.target.value)}>
-                  <option value="">Todos os temas</option>
-                  {/* A classificação criativa está defasada (o job `creative_classifier` do repo
-                      mysql parou), então em janelas recentes a lista vem vazia. Sem esta linha o
-                      select fica com uma opção só e parece quebrado — foi assim que tropeçamos. */}
-                  {!(filtersData?.temas ?? []).length && (
-                    <option value="" disabled>— nenhum tema classificado nesta janela; amplie o período</option>
-                  )}
-                  {(filtersData?.temas ?? []).map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}
-                  {/* A lista só traz tema com entrega na janela corrente, então trocar o
-                      período pode tirar o tema selecionado dela. Mantém a opção visível
-                      dizendo o porquê, em vez de deixar o select em branco com o dashboard zerado. */}
-                  {tema && !(filtersData?.temas ?? []).some((t) => t.code === tema) && (
-                    <option value={tema}>{tema} — sem entrega no período</option>
-                  )}
-                </select>
+                <SearchableSelect multiple className={selectClass} value={ads} options={adOptions}
+                  emptyLabel="Todos os anúncios" onChange={setAds} />
+                <SearchableSelect multiple className={selectClass} value={platforms}
+                  options={filtersData?.platforms ?? []} labelOf={platformLabel}
+                  emptyLabel="Todas as plataformas" onChange={setPlatforms} />
+                <SearchableSelect multiple className={selectClass} value={objectives}
+                  options={filtersData?.objectives ?? []}
+                  emptyLabel="Todos os objetivos" onChange={setObjectives} />
+                {/* A classificação criativa está defasada (o job `creative_classifier` do repo
+                    mysql parou), então em janelas recentes a lista vem vazia — o hint diz o
+                    porquê em vez de deixar um dropdown vazio parecendo quebrado. Tema que sai
+                    da janela continua visível no campo, porque ele desenha a partir do valor
+                    selecionado, não das opções. */}
+                <SearchableSelect multiple className={selectClass} value={temas}
+                  options={(filtersData?.temas ?? []).map((t) => t.code)} labelOf={temaLabel}
+                  emptyLabel="Todos os temas"
+                  noOptionsHint="Nenhum tema classificado nesta janela; amplie o período"
+                  onChange={setTemas} />
                 <div className="md:col-span-2 flex flex-wrap gap-2.5 items-center">
                   <label className="flex items-center gap-1.5 text-[12px] text-ink-3">
                     de <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className={dateClass} />

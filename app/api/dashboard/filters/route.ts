@@ -16,14 +16,15 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const q = req.nextUrl.searchParams;
+  // Cada dimensão é multi-valor: o cliente repete o parâmetro (`platform=meta&platform=tiktok`).
   const f: DashboardFilters = {
     from: q.get('from') ?? undefined,
     to: q.get('to') ?? undefined,
-    campaign: q.get('campaign') ?? undefined,
-    platform: q.get('platform') ?? undefined,
-    ad: q.get('ad') ?? undefined,
-    objective: q.get('objective') ?? undefined,
-    tema: q.get('tema') ?? undefined,
+    campaigns: q.getAll('campaign'),
+    platform: q.getAll('platform'),
+    ad: q.getAll('ad'),
+    objective: q.getAll('objective'),
+    tema: q.getAll('tema'),
   };
   try {
     // As regras entram na chave: sem isso um PUT no editor demoraria os 10 min do
@@ -34,11 +35,11 @@ export async function GET(req: NextRequest) {
     if (hit && Date.now() - hit.loadedAt < CACHE_TTL_MS) return NextResponse.json(hit.data);
 
     const pool = getPool();
-    // `campaign` chega como rótulo de grupo — traduz para os nomes crus antes dos WHEREs.
+    // `campaign` chega como rótulo(s) de grupo — traduz para os nomes crus antes dos WHEREs.
     const fr = await withCampaignNames(pool, f, fromTable('gold_platforms_campaigns', f));
     // Faceted: each list is constrained by every filter EXCEPT its own dimension,
     // so picking a platform narrows the campaign list but not the platform list.
-    const wCamp = buildWhere({ ...fr, campaign: undefined, campaignNames: undefined, ad: undefined });
+    const wCamp = buildWhere({ ...fr, campaigns: undefined, campaignNames: undefined, ad: undefined });
     const wPlat = buildWhere({ ...fr, platform: undefined });
     const wAd = buildWhere({ ...fr, ad: undefined });
     const wObj = buildWhere({ ...fr, objective: undefined });
@@ -84,7 +85,7 @@ export async function GET(req: NextRequest) {
       campaigns: [...new Set((campaigns[0] as { campaign_name: string }[])
         .map((r) => groupOf(r.campaign_name, rules)))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
       // O anúncio carrega o GRUPO da campanha, senão o filtro por campanha do cliente
-      // (`a.campaign === campaign`) compararia rótulo com nome cru e esvaziaria a lista.
+      // (`campaigns.includes(a.campaign)`) compararia rótulo com nome cru e esvaziaria a lista.
       // Dedupe porque o DISTINCT do banco é por nome cru: campanhas diferentes do
       // mesmo grupo com o mesmo anúncio virariam linhas repetidas no dropdown.
       ads: [...new Map((ads[0] as { campaign_name: string | null; ad_name: string }[])

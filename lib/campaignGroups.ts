@@ -110,21 +110,24 @@ function hash32(s: string): number {
   return h >>> 0;
 }
 
-// ── Rótulo → nomes crus ───────────────────────────────────────────────────
-// O filtro chega como rótulo de grupo; o WHERE precisa dos campaign_name que ele
-// cobre. Um DISTINCT só com a janela de datas (sem os outros filtros — o conjunto
-// de nomes de um grupo não depende de plataforma/objetivo) e o agrupamento em TS.
+// ── Rótulos → nomes crus ──────────────────────────────────────────────────
+// O filtro chega como rótulo(s) de grupo; o WHERE precisa dos campaign_name que
+// eles cobrem. Um DISTINCT só com a janela de datas (sem os outros filtros — o
+// conjunto de nomes de um grupo não depende de plataforma/objetivo) e o
+// agrupamento em TS. N rótulos custam a mesma varredura: só a checagem muda.
 const MEMBERS_TTL_MS = 10 * 60 * 1000;
 const membersCache = new Map<string, { names: string[]; loadedAt: number }>();
 
-export async function resolveGroup(
+export async function resolveGroups(
   pool: Pool,
   f: Pick<DashboardFilters, 'from' | 'to'>,
-  label: string,
+  labels: string[],
   table = 'gold_platforms_campaigns',
 ): Promise<string[]> {
   const { text, rules } = await loadCampaignRules();
-  const key = `${table}|${f.from ?? ''}|${f.to ?? ''}|${rulesHash(text)}|${label}`;
+  // Ordena para que a mesma seleção em outra ordem reaproveite o cache.
+  const wanted = new Set(labels);
+  const key = `${table}|${f.from ?? ''}|${f.to ?? ''}|${rulesHash(text)}|${[...wanted].sort().join('\u0000')}`;
   const hit = membersCache.get(key);
   if (hit && Date.now() - hit.loadedAt < MEMBERS_TTL_MS) return hit.names;
 
@@ -139,19 +142,19 @@ export async function resolveGroup(
   );
   const names = (rows as { campaign_name: string }[])
     .map((r) => r.campaign_name)
-    .filter((n) => groupOf(n, rules) === label);
+    .filter((n) => wanted.has(groupOf(n, rules)));
 
   if (membersCache.size > 200) membersCache.clear(); // ponytail: corte cru, LRU se um dia doer
   membersCache.set(key, { names, loadedAt: Date.now() });
   return names;
 }
 
-/** Aplica o grupo aos filtros: `campaign` (rótulo) → `campaignNames` (nomes crus). */
+/** Aplica os grupos aos filtros: `campaigns` (rótulos) → `campaignNames` (nomes crus). */
 export async function withCampaignNames<T extends DashboardFilters>(
   pool: Pool,
   f: T,
   table?: string,
 ): Promise<T> {
-  if (!f.campaign) return f;
-  return { ...f, campaignNames: await resolveGroup(pool, f, f.campaign, table) };
+  if (!f.campaigns?.length) return f;
+  return { ...f, campaignNames: await resolveGroups(pool, f, f.campaigns, table) };
 }
