@@ -44,7 +44,19 @@ type VerificationResult = {
   url_check_anomalies: UrlAnomaly[];
   url_check_rows?: UrlCheckedRow[];
   url_check_failed?: number;
+  url_sample?: UrlSampleItem[];
+  url_categorias?: string[];
 };
+
+type UrlSampleItem = { url: string; categoria: string; veiculo: string; impressoes: number };
+
+// Fatia mandada por chamada. O servidor audita o que couber no orçamento dele e
+// devolve `checked`; avançamos por esse número em vez de assumir que o lote
+// inteiro passou — assim nenhuma requisição chega perto dos 300s da Vercel e
+// nada se perde quando o modelo está lento.
+const URL_BATCH = 400;
+// ponytail: trava contra laço infinito se o servidor voltar checked=0.
+const URL_MAX_ROUNDS = 100;
 
 type ViewRule = {
   veiculo: string;
@@ -294,7 +306,7 @@ export default function VerificationContainer() {
   const [fim, setFim] = useState("");
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
-  const [urlSamplePct, setUrlSamplePct] = useState(10);
+  const [urlSharePct, setUrlSharePct] = useState(2);
   const [praca, setPraca] = useState<string>("");
   const [viewRules, setViewRules] = useState<ViewRule[]>([]);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -372,6 +384,8 @@ export default function VerificationContainer() {
     setError(null);
     setResult(null);
 
+    let engineResult: VerificationResult | null = null;
+
     const consumeVerifStream = async (res: Response) => {
       if (!res.ok && res.status !== 200) {
         const text = await res.text();
@@ -394,13 +408,7 @@ export default function VerificationContainer() {
           const ev = JSON.parse(line.slice(6));
           if (ev.type === 'engine_start')           { setProgressPct(10); setProgressLabel('Processando arquivos...'); }
           else if (ev.type === 'engine_done')        { setProgressPct(45); setProgressLabel('Cruzando veículos com o consolidado...'); }
-          else if (ev.type === 'url_check_start')    { setProgressLabel(`Verificando URLs com IA... (0/${ev.total})`); }
-          else if (ev.type === 'url_check_progress') {
-            setProgressPct(45 + Math.round((ev.done / ev.total) * 43));
-            setProgressLabel(`Verificando URLs com IA... (${ev.done}/${ev.total})`);
-          }
-          else if (ev.type === 'writing')            { setProgressPct(92); setProgressLabel('Gerando arquivo verificado...'); }
-          else if (ev.type === 'done')               { setProgressPct(100); setResult(ev.result); break outer; }
+          else if (ev.type === 'done')               { engineResult = ev.result as VerificationResult; break outer; }
           else if (ev.type === 'error')              { throw new Error(ev.message); }
         }
       }
@@ -477,7 +485,7 @@ export default function VerificationContainer() {
             verif_files: verifFiles,
             ...(ini ? { ini } : {}),
             ...(fim ? { fim } : {}),
-            url_sample_pct: urlSamplePct,
+            url_share_pct: urlSharePct,
             ...(viewRules.length > 0 ? { view_rules: JSON.stringify(viewRules) } : {}),
             ...(praca ? { praca } : {}),
           }),
@@ -492,7 +500,7 @@ export default function VerificationContainer() {
         for (const f of verifs) form.append("verif", f);
         if (ini) form.append("ini", ini);
         if (fim) form.append("fim", fim);
-        form.append("url_sample_pct", String(urlSamplePct));
+        form.append("url_share_pct", String(urlSharePct));
         if (viewRules.length > 0)
           form.append("view_rules", JSON.stringify(viewRules));
         if (praca) form.append("praca", praca);
@@ -503,12 +511,75 @@ export default function VerificationContainer() {
         });
         await consumeVerifStream(res);
       }
+
+      if (engineResult) setResult(await runUrlCheck(engineResult));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
       setUploadProgress(null);
     }
+  }
+
+  /**
+   * Consome a amostra de URLs em lotes curtos.
+   *
+   * O engine devolve a amostra (regra de share: ~3.5k URLs nos 29 verifs SENSE)
+   * mas não a audita — não caberia nos 300s da função. O browser não tem esse
+   * limite, então itera aqui e fecha em /url-write, que grava a col 30.
+   */
+  async function runUrlCheck(base: VerificationResult): Promise<VerificationResult> {
+    const sample = base.url_sample ?? [];
+    if (sample.length === 0) return base;
+
+    const rows: UrlCheckedRow[] = [];
+    let offset = 0;
+    let failed = 0;
+    setProgressLabel(`Verificando URLs com IA... (0/${sample.length})`);
+
+    for (let round = 0; offset < sample.length && round < URL_MAX_ROUNDS; round++) {
+      const resp = await fetch("/api/verification/url-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: sample.slice(offset, offset + URL_BATCH),
+          categorias: base.url_categorias ?? [],
+        }),
+      });
+      if (!resp.ok) break;
+      const data = await resp.json() as { rows: UrlCheckedRow[]; checked: number; failed: number };
+      rows.push(...(data.rows ?? []));
+      failed += data.failed ?? 0;
+      if (!data.checked) break;               // servidor não avançou: não insistir
+      offset += data.checked;
+      setProgressPct(45 + Math.round((offset / sample.length) * 43));
+      setProgressLabel(`Verificando URLs com IA... (${Math.min(offset, sample.length)}/${sample.length})`);
+    }
+    failed += sample.length - offset;         // o que não deu tempo de auditar
+
+    setProgressPct(92);
+    setProgressLabel("Gerando arquivo verificado...");
+    const wrote = await fetch("/api/verification/url-write", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        file_base64: base.file_base64,
+        file_name: base.file_name,
+        rows,
+        veiculos: base.veiculos,
+      }),
+    });
+    setProgressPct(100);
+    if (!wrote.ok) return { ...base, url_check_rows: rows, url_check_failed: failed };
+
+    const out = await wrote.json() as Partial<VerificationResult>;
+    return {
+      ...base,
+      file_base64:         out.file_base64 ?? base.file_base64,
+      url_check_rows:      out.url_check_rows ?? rows,
+      url_check_anomalies: out.url_check_anomalies ?? [],
+      url_check_failed:    failed,
+    };
   }
 
   function handleDownload() {
@@ -556,7 +627,7 @@ export default function VerificationContainer() {
     setFim("");
     setSelectedYear(currentYear);
     setSelectedMonth(null);
-    setUrlSamplePct(10);
+    setUrlSharePct(2);
     setPraca("");
     setViewRules([]);
     setResult(null);
@@ -662,15 +733,15 @@ export default function VerificationContainer() {
           {/* % de URLs analisadas */}
           <div className="flex items-center gap-4 flex-wrap">
             <span className="text-[10px] text-accent-text font-hud uppercase tracking-[0.18em] shrink-0">
-              % URLs analisadas por IA
+              Share mínimo da URL (%)
             </span>
             <div className="flex items-center gap-1">
               <button
                 id="decreaseButton"
                 type="button"
-                onClick={() => setUrlSamplePct((v) => Math.max(0, v - 5))}
+                onClick={() => setUrlSharePct((v) => Math.round(Math.max(0.5, v - 0.5) * 10) / 10)}
                 className="w-11 h-11 md:w-7 md:h-7 flex items-center justify-center rounded-lg md:rounded-md bg-fill border border-separator text-ink-2 hover:bg-fill-2 hover:text-ink hover:border-separator-strong active:bg-fill-2 transition-all disabled:opacity-30"
-                disabled={urlSamplePct === 0}
+                disabled={urlSharePct <= 0.5}
               >
                 <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
                   <path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z" />
@@ -678,20 +749,21 @@ export default function VerificationContainer() {
               </button>
               <input
                 type="number"
-                min={0}
-                max={100}
-                value={urlSamplePct}
+                min={0.5}
+                max={20}
+                step={0.5}
+                value={urlSharePct}
                 onChange={(e) =>
-                  setUrlSamplePct(Math.max(0, Math.min(100, Number(e.target.value))))
+                  setUrlSharePct(Math.max(0.5, Math.min(20, Number(e.target.value))))
                 }
                 className="w-16 md:w-14 bg-fill border border-separator rounded-md py-2 md:py-1 text-[16px] md:text-sm text-ink text-center focus:outline-none focus:border-accent-border [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
               <button
                 id="increaseButton"
                 type="button"
-                onClick={() => setUrlSamplePct((v) => Math.min(100, v + 5))}
+                onClick={() => setUrlSharePct((v) => Math.round(Math.min(20, v + 0.5) * 10) / 10)}
                 className="w-11 h-11 md:w-7 md:h-7 flex items-center justify-center rounded-lg md:rounded-md bg-fill border border-separator text-ink-2 hover:bg-fill-2 hover:text-ink hover:border-separator-strong active:bg-fill-2 transition-all disabled:opacity-30"
-                disabled={urlSamplePct === 100}
+                disabled={urlSharePct >= 20}
               >
                 <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
                   <path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z" />
@@ -699,7 +771,7 @@ export default function VerificationContainer() {
               </button>
             </div>
             <span className="text-xs text-ink-3">
-              {urlSamplePct === 0 ? "todas as URLs · só > 100 imp · máx 1000" : `${urlSamplePct}% por categoria · só > 100 imp · máx 1000`}
+              {`URL entra se vale ≥ ${urlSharePct}% das impressões do seu veículo + categoria · máx 15 por grupo`}
             </span>
           </div>
           {/* Filtro de Praça */}

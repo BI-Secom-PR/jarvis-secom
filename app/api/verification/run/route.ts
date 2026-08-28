@@ -6,8 +6,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { createSignedDownloadUrl, removeFiles } from '@/lib/storage';
-import { Ollama } from 'ollama';
-import { isHomeRoot } from '@/lib/verification';
+import type { UrlSampleItem, UrlAnomalyItem, UrlCheckedRow } from '@/lib/urlCheck';
 
 export const maxDuration = 300;
 
@@ -21,16 +20,6 @@ function validateDate(label: string, val: string): string | null {
   return DATE_RE.test(val) ? null : `${label} deve estar no formato DD/MM/YYYY`;
 }
 
-const ollamaClient = new Ollama({
-  host: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434',
-  headers: process.env.OLLAMA_API_KEY
-    ? { Authorization: `Bearer ${process.env.OLLAMA_API_KEY}` }
-    : undefined,
-});
-
-type UrlSampleItem  = { url: string; categoria: string; veiculo: string; impressoes: number };
-type UrlAnomalyItem = { url: string; categoria: string; categoria_sugerida: string | null; veiculo: string; reason: string; impressoes: number; pct: number };
-type UrlCheckedRow  = UrlAnomalyItem & { status: 'CORRETA' | 'INCORRETA' };
 type Send = (ev: object) => void;
 type VerificationResult = {
   veiculos: unknown;
@@ -41,153 +30,12 @@ type VerificationResult = {
   parse_errors: unknown;
   file_base64: string | null;
   file_name: string;
+  url_sample: UrlSampleItem[];
+  url_categorias: string[];
   url_check_anomalies: UrlAnomalyItem[];
   url_check_rows: UrlCheckedRow[];
   url_check_failed: number;
 };
-
-// Ollama cloud rejects more than a handful of concurrent chats ("too many
-// concurrent requests"), and the ~1.2k-token persona prompt was being resent
-// once per URL. Both are fixed by grouping URLs into one call and capping
-// in-flight calls; measured ceiling is ~4 concurrent before requests start
-// failing or queueing.
-const URLS_PER_CALL = 10;
-const URL_CHECK_CONCURRENCY = 4;
-
-type UrlCheckOutcome = { rows: UrlCheckedRow[]; failed: number };
-
-async function chatWithRetry(content: string, numPredict: number, tries = 3): Promise<string> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      const response = await ollamaClient.chat({
-        model: 'gemma4:31b-cloud',
-        options: { num_predict: numPredict },
-        messages: [{ role: 'user', content }],
-      });
-      return response.message.content.trim();
-    } catch (err) {
-      const busy = String(err).includes('too many concurrent requests');
-      if (!busy || attempt >= tries - 1) throw err;
-      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
-    }
-  }
-}
-
-/**
- * Audits a chunk of URLs in a single model call.
- *
- * Anything that stops a URL from actually being judged — transport error, an
- * unparseable reply, a missing entry in the array — is counted in `failed`
- * rather than dropped. A silently swallowed failure reads as "URL is fine",
- * which is the one answer this check must never invent.
- */
-async function checkUrlChunk(items: UrlSampleItem[], categoriasDisponiveis: string[]): Promise<UrlCheckOutcome> {
-  const list = items.map((it, i) => `${i + 1}. URL: ${it.url}\n   Categoria atribuída: ${it.categoria}`).join('\n');
-  const content = `Você é um classificador especialista em Brand Safety e auditoria de mídia programática para a SECOM (Secretaria de Comunicação Social do Governo Federal do Brasil). 
-
-Sua missão é auditar a classificação de conteúdo feita por um adserver. Dado uma URL, o título/conteúdo da página e a categoria atribuída pelo adserver, avalie se a classificação está CORRETA ou INCORRETA.
-
-### DIRETRIZES DE AVALIAÇÃO (Regras de Negócio)
-
-1. TRATAMENTO DE CATEGORIAS TÉCNICAS (Safeframe, Aplicativo Móvel, Teste de Tag):
-   - O adserver frequentemente classifica URLs reais incorretamente como "safeframe", "aplicativo móvel" ou "teste de tag" devido a falhas de rastreamento.
-   - Você DEVE analisar o conteúdo real da URL. Se a URL apontar para uma notícia, blog ou portal de conteúdo, e o adserver a classificou como "safeframe" (ou similar), isso é uma classificação INCORRETA (Erro de categorização técnica). Indique a categoria real do conteúdo.
-   - Só considere CORRETA se a URL for genuinamente apenas um frame técnico isolado, sem conteúdo editorial visível.
-
-1b. CATEGORIA "HOME" (página inicial):
-   - "Home" é uma categoria VÁLIDA e DISTINTA: é a página raiz do site (sem caminho interno), ex.: https://www.uol.com.br/, https://g1.globo.com/.
-   - Home NÃO é Notícias/Editorial. Nunca sugira uma categoria de conteúdo (Notícias, Política, Esportes…) para uma URL raiz classificada como "Home" — isso é CORRETA.
-   - Se a URL aponta para uma página interna (matéria, seção, com caminho após o domínio) mas foi classificada como "Home", isso é INCORRETA — sugira a categoria real do conteúdo.
-
-2. CONTEXTO DOMINANTE VS. PALAVRAS-CHAVE: Não classifique uma página como "indevida" apenas pela presença de palavras-chave isoladas. Analise o CONTEXTO DOMINANTE. 
-   - Matérias jornalísticas, artigos de opinião política, análises históricas, avanços tecnológicos, geopolítica ou notícias de segurança pública NÃO devem ser classificados automaticamente como "Violência" ou "Crimes", a menos que haja exposição gráfica, apologia ou sensacionalismo extremo.
-
-### CATEGORIAS INDEVIDAS DA SECOM (Definições Estritas)
-- Língua estrangeira: Conteúdo principal fora do português brasileiro.
-- Conteúdo adulto: Sexo explícito, pornografia, erotismo e afins.
-- Violência: Imagens ou descrições explícitas de acidentes violentos, armas, mortes brutais, apologia à guerra. (Geopolítica, história militar, tecnologia de defesa ou notícias cotidianas de portais de grande mídia NÃO são violência).
-- Crimes: Apologia ao crime, violação grave de direitos. (Atividade policial padrão ou notícias jurídicas/jornalísticas NÃO são crimes).
-- Pirataria: Links e métodos para distribuição ilegal de conteúdo protegido.
-- Terrorismo: Propaganda, recrutamento ou apologia a grupos extremistas/ataques.
-- Discurso de ódio: Conteúdo explicitamente discriminatório (raça, gênero, religião, orientação sexual, etc.).
-- Conteúdo gerado pelo usuário sem moderação: Fóruns abertos, chats anonimizados (alto risco de pedofilia/crimes).
-- Drogas: Apologia, comércio ou tutorial de uso de substâncias ilícitas.
-
-### INSTRUÇÕES DE SAÍDA (Formato de Resposta)
-Você deve seguir estritamente o formato JSON abaixo para sua resposta. Pense passo a passo antes de definir o status.
-
-{
-  "analise_contexto": "Explique brevemente o foco principal da URL e o que de fato há na página.",
-  "justificativa_brand_safety": "Avalie se o adserver errou a classificação (seja por falso positivo de Brand Safety ou por erro de categoria técnica como safeframe).",
-  "status": "CORRETA" ou "INCORRETA",
-  "categoria_sugerida": "Manter a atual se o status for CORRETA, ou indicar a categoria real (ex: 'Notícias', 'Tecnologia', 'Política') se for INCORRETA."
-}
-
-### EXEMPLOS PARA APRENDIZADO (Few-Shot)
-
-Exemplo 1 (Falso Positivo de safeframe):
-- URL: https://g1.globo.com/politica/noticia/2026/06/governo-anuncia-novas-medidas-economicas.html
-- Categoria do Adserver: safeframe
-- Resposta esperada:
-{
-  "analise_contexto": "A URL aponta para uma notícia jornalística real do portal G1 sobre política e economia governamental.",
-  "justificativa_brand_safety": "INCORRETA. O adserver classificou erroneamente como 'safeframe' devido a uma limitação técnica de rastreamento no momento do leilão, mas a URL contém conteúdo editorial legítimo que deveria ser mapeado.",
-  "status": "INCORRETA",
-  "categoria_sugerida": "Política / Economia"
-}
-
-Exemplo 2 (Falso Positivo de Violência):
-- URL: https://revistaforum.com.br/revista-forum/nem-portos-nem-barreiras-maior-marinha-do-mundo-cria-sistema-para-desembarcar-em-qualquer-costa/
-- Categoria do Adserver: Violência
-- Resposta esperada:
-{
-  "analise_contexto": "O artigo aborda um avanço tecnológico e logístico da marinha, focado em estratégia e engenharia.",
-  "justificativa_brand_safety": "INCORRETA. Falso positivo. A presença de termos militares acionou o gatilho de 'Violência' do adserver, mas o texto não contém violência gráfica ou conflito armado. Trata-se de inovação/geopolítica.",
-  "status": "INCORRETA",
-  "categoria_sugerida": "Tecnologia / Geopolítica"
-}
-${categoriasDisponiveis.length > 0 ? `
-Categorias usadas neste arquivo de verificação (prefira sugerir uma destas, ou uma categoria indevida do SECOM acima):
-${categoriasDisponiveis.map((c) => `- ${c}`).join('\n')}
-` : ''}
-### AVALIE TODAS AS URLS ABAIXO
-Responda APENAS com um array JSON, um objeto por URL, na mesma ordem, com "i" igual ao número da URL. Sem texto fora do array.
-[{"i":1,"status":"CORRETA","categoria_sugerida":"...","justificativa_brand_safety":"..."}]
-
-${list}`;
-
-  let parsed: { i?: number; status?: string; categoria_sugerida?: string; justificativa_brand_safety?: string }[];
-  try {
-    const raw = (await chatWithRetry(content, 220 * items.length))
-      .replace(/^```(?:json)?\s*/i, '')
-      .replace(/\s*```\s*$/, '');
-    const arr: unknown = JSON.parse(raw.slice(raw.indexOf('['), raw.lastIndexOf(']') + 1));
-    if (!Array.isArray(arr)) throw new Error('not an array');
-    parsed = arr as typeof parsed;
-  } catch (err) {
-    console.error(`[url-check] chunk of ${items.length} failed: ${String(err).slice(0, 200)}`);
-    return { rows: [], failed: items.length };
-  }
-
-  const rows: UrlCheckedRow[] = [];
-  let failed = 0;
-  items.forEach((item, idx) => {
-    const entry = parsed.find((e) => e.i === idx + 1) ?? parsed[idx];
-    const status = (entry?.status ?? '').trim().toUpperCase();
-    if (!entry || (status !== 'CORRETA' && status !== 'INCORRETA')) { failed++; return; }
-    rows.push({
-      url: item.url,
-      categoria: item.categoria,
-      categoria_sugerida: entry.categoria_sugerida?.trim() || null,
-      veiculo: item.veiculo,
-      reason: entry.justificativa_brand_safety?.trim() || (status === 'CORRETA' ? '' : 'Classificação suspeita'),
-      impressoes: item.impressoes,
-      pct: 0,
-      status,
-    });
-  });
-  return { rows, failed };
-}
 
 const ENGINE_PATH = path.join(process.cwd(), 'app', 'verification', 'engine.py');
 
@@ -274,7 +122,7 @@ export async function POST(req: NextRequest) {
       verif_files?: StoredFile[];
       ini?: string;
       fim?: string;
-      url_sample_pct?: number;
+      url_share_pct?: number;
       view_rules?: string;
       praca?: string;
     };
@@ -306,7 +154,7 @@ export async function POST(req: NextRequest) {
       comp_files: await Promise.all(comp_files.map(signed)),
       verif_files: await Promise.all(verif_files.map(signed)),
       adserver,
-      url_sample_pct: body.url_sample_pct ?? 10,
+      url_share_pct: body.url_share_pct ?? 2,
       ...(body.ini ? { ini: body.ini } : {}),
       ...(body.fim ? { fim: body.fim } : {}),
       ...(body.view_rules ? { view_rules: body.view_rules } : {}),
@@ -347,7 +195,7 @@ export async function POST(req: NextRequest) {
         await removeFiles(allPaths);
       }
       send({ type: 'engine_done' });
-      const result = await buildEngineResponse(engineResult, send, req.headers.get('cookie') ?? '');
+      const result = await buildEngineResponse(engineResult);
       send({ type: 'done', result });
     });
   }
@@ -371,7 +219,7 @@ export async function POST(req: NextRequest) {
   const fim = form.get('fim') as string | null;
   if (ini) { const e = validateDate('ini', ini); if (e) return NextResponse.json({ error: e }, { status: 400 }); }
   if (fim) { const e = validateDate('fim', fim); if (e) return NextResponse.json({ error: e }, { status: 400 }); }
-  const urlSamplePct = Number(form.get('url_sample_pct') ?? 10);
+  const urlSharePct = Number(form.get('url_share_pct') ?? 2);
   const viewRulesRaw = form.get('view_rules') as string | null;
   const pracaRaw = form.get('praca') as string | null;
 
@@ -389,7 +237,7 @@ export async function POST(req: NextRequest) {
         comp_files: await Promise.all(compFiles.map(async (f) => ({ name: f.name, b64: await toB64(f) }))),
         verif_files: await Promise.all(verifFiles.map(async (f) => ({ name: f.name, b64: await toB64(f) }))),
         adserver,
-        url_sample_pct: urlSamplePct,
+        url_share_pct: urlSharePct,
         ...(ini ? { ini } : {}),
         ...(fim ? { fim } : {}),
         ...(viewRulesRaw ? { view_rules: viewRulesRaw } : {}),
@@ -449,7 +297,7 @@ export async function POST(req: NextRequest) {
         if (verifPaths.length > 0) args.push('--verif', ...verifPaths);
         if (ini) args.push('--ini', ini);
         if (fim) args.push('--fim', fim);
-        args.push('--url-pct', String(urlSamplePct));
+        args.push('--url-share-pct', String(urlSharePct));
         if (viewRulesRaw) args.push('--view-rules', viewRulesRaw);
         if (pracaRaw) args.push('--praca', pracaRaw);
 
@@ -469,15 +317,13 @@ export async function POST(req: NextRequest) {
     }
 
     send({ type: 'engine_done' });
-    const result = await buildEngineResponse(engineResult, send, req.headers.get('cookie') ?? '');
+    const result = await buildEngineResponse(engineResult);
     send({ type: 'done', result });
   });
 }
 
 async function buildEngineResponse(
   engineResult: Record<string, unknown>,
-  send: Send,
-  cookie: string,
 ): Promise<VerificationResult> {
   let fileBase64: string | null = (engineResult.output_b64 as string | null) ?? null;
   const outputPath: string = (engineResult.output as string) ?? '';
@@ -485,114 +331,11 @@ async function buildEngineResponse(
     ? (engineResult.output_name as string)
     : outputPath ? path.basename(outputPath) : 'verificado.xlsx';
 
-  // ── AI URL check ──────────────────────────────────────────────────────────
-  let urlCheckRows: UrlCheckedRow[] = [];
-  let urlCheckFailed = 0;
-  const urlSample: UrlSampleItem[] = (engineResult.url_sample as UrlSampleItem[]) ?? [];
-  const urlCategorias: string[] = (engineResult.url_categorias as string[]) ?? [];
-
-  // URL raiz classificada como "Home" está correta por definição — resolver
-  // aqui evita a chamada à IA (que sugeria "Notícias" ao ler o portal).
-  const homeRows: UrlCheckedRow[] = [];
-  const toCheck: UrlSampleItem[] = [];
-  for (const item of urlSample) {
-    if (isHomeRoot(item.url, item.categoria)) {
-      homeRows.push({ ...item, categoria_sugerida: null, reason: 'Home = raiz do site (regra determinística, sem IA)', pct: 0, status: 'CORRETA' });
-    } else {
-      toCheck.push(item);
-    }
-  }
-  urlCheckRows.push(...homeRows);
-  console.log(`[url-check] url_sample=${urlSample.length} home_root=${homeRows.length} para_ia=${toCheck.length} OLLAMA_BASE_URL=${process.env.OLLAMA_BASE_URL ?? '(not set)'}`);
-
-  if (toCheck.length > 0 && process.env.OLLAMA_BASE_URL) {
-    send({ type: 'url_check_start', total: toCheck.length });
-    const chunks: UrlSampleItem[][] = [];
-    for (let i = 0; i < toCheck.length; i += URLS_PER_CALL) chunks.push(toCheck.slice(i, i + URLS_PER_CALL));
-
-    let done = 0;
-    let next = 0;
-    const worker = async () => {
-      while (next < chunks.length) {
-        const chunk = chunks[next++];
-        const { rows, failed } = await checkUrlChunk(chunk, urlCategorias);
-        urlCheckRows.push(...rows);
-        urlCheckFailed += failed;
-        done += chunk.length;
-        send({ type: 'url_check_progress', done, total: toCheck.length });
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(URL_CHECK_CONCURRENCY, chunks.length) }, worker));
-    if (urlCheckFailed > 0) console.warn(`[url-check] ${urlCheckFailed}/${toCheck.length} URLs não verificadas`);
-  }
-
-  // ── Calcular pct de impressões por veículo ────────────────────────────────
-  if (urlCheckRows.length > 0) {
-    const entregueByMatch = new Map<string, number>();
-    for (const v of (engineResult.veiculos ?? []) as { veiculo: string; match: string | null; entregue_consol: number }[]) {
-      if (v.entregue_consol) {
-        if (v.match) entregueByMatch.set(v.match, v.entregue_consol);
-        entregueByMatch.set(v.veiculo, v.entregue_consol);
-      }
-    }
-    urlCheckRows = urlCheckRows.map((a) => {
-      const total = entregueByMatch.get(a.veiculo) ?? 0;
-      return { ...a, pct: total > 0 ? Math.round((a.impressoes / total) * 10000) / 100 : 0 };
-    });
-  }
-
-  const urlCheckAnomalies: UrlAnomalyItem[] = urlCheckRows.filter((r) => r.status === 'INCORRETA');
-
-  // ── Escrever URL info (col 30) no arquivo verificado ─────────────────────
-  if (urlCheckAnomalies.length > 0) {
-    send({ type: 'writing' });
-    const matchToConsol = new Map<string, string>();
-    for (const v of (engineResult.veiculos ?? []) as { veiculo: string; match: string | null }[]) {
-      if (v.match) matchToConsol.set(v.match, v.veiculo);
-    }
-    const urlInfoByVeiculo: Record<string, string[]> = {};
-    for (const a of urlCheckAnomalies) {
-      const consolName = matchToConsol.get(a.veiculo) ?? a.veiculo;
-      if (!urlInfoByVeiculo[consolName]) urlInfoByVeiculo[consolName] = [];
-      urlInfoByVeiculo[consolName].push(
-        `${a.url} [${a.impressoes} imp, ${a.pct}%] → categoria atual: ${a.categoria}; sugerida: ${a.categoria_sugerida ?? '—'} (${a.reason})`
-      );
-    }
-    const urlInfoFlat = Object.fromEntries(
-      Object.entries(urlInfoByVeiculo).map(([k, v]) => [k, v.join('\n')])
-    );
-
-    try {
-      if (process.env.VERCEL_URL) {
-        const pyUrl = `https://${process.env.VERCEL_URL}/api/py/verification`;
-        const pyResp = await fetch(pyUrl, {
-          method: 'POST',
-          headers: pyHeaders(cookie),
-          body: JSON.stringify({
-            output_b64:          fileBase64,
-            output_name:         outputName,
-            url_info_by_veiculo: urlInfoFlat,
-          }),
-        });
-        if (pyResp.ok) {
-          const upd = await pyResp.json() as { output_b64?: string };
-          if (upd.output_b64) fileBase64 = upd.output_b64;
-        }
-      } else {
-        const WRITE_URL_INFO = path.join(path.dirname(ENGINE_PATH), 'parsers', 'write_url_info.py');
-        await new Promise<void>((resolve, reject) => {
-          const proc = spawn('python3', [WRITE_URL_INFO, outputPath, JSON.stringify(urlInfoFlat)], {
-            env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
-          });
-          proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`write_url_info exited ${code}`)));
-          proc.on('error', reject);
-        });
-        try {
-          fileBase64 = (await fs.readFile(outputPath)).toString('base64');
-        } catch { /* non-critical */ }
-      }
-    } catch { /* falha não-crítica: arquivo segue sem col 30 */ }
-  } else if (!fileBase64 && outputPath) {
+  // A checagem de URL saiu daqui: a amostra da regra de share (3.514 URLs nos
+  // 29 verifs SENSE) não cabe nos 300s desta função. O cliente recebe a amostra
+  // e a consome em lotes via /api/verification/url-check, depois fecha em
+  // /api/verification/url-write. Ver lib/urlCheck.ts.
+  if (!fileBase64 && outputPath) {
     try {
       fileBase64 = (await fs.readFile(outputPath)).toString('base64');
     } catch { /* non-critical */ }
@@ -607,8 +350,10 @@ async function buildEngineResponse(
     parse_errors:        engineResult.parse_errors,
     file_base64:         fileBase64,
     file_name:           outputName,
-    url_check_anomalies: urlCheckAnomalies,
-    url_check_rows:      urlCheckRows,
-    url_check_failed: urlCheckFailed,
+    url_sample:          (engineResult.url_sample as UrlSampleItem[]) ?? [],
+    url_categorias:      (engineResult.url_categorias as string[]) ?? [],
+    url_check_anomalies: [],
+    url_check_rows:      [],
+    url_check_failed:    0,
   };
 }

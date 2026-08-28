@@ -65,8 +65,14 @@ PARSER_MAP: dict[str, str] = {
 FUZZY_THRESHOLD  = 85     # % mínimo para aceitar match de veículo
 HEADER_ROW       = 8      # linha 1-indexed do cabeçalho no template (fallback)
 DATA_START_ROW   = 9      # primeira linha de dados (1-indexed) (fallback)
-URL_MIN_IMPRESSOES = 100  # URLs abaixo disso são ruído — não vão para a IA
-URL_MAX_SAMPLE     = 1000 # teto absoluto de URLs enviadas à IA (Vercel-safe)
+# Seleção de URLs para a IA: uma URL entra se sozinha vale X% das impressões do
+# seu grupo (veículo, categoria). Um corte absoluto de impressões cegava as
+# categorias pequenas — SEEDTAG/Pornografia tem 150 URLs distintas e nenhuma
+# passa de 184 impressões, e são cifras de sertanejo classificadas como
+# pornografia: exatamente o falso positivo que a auditoria existe para achar.
+URL_SHARE_PCT      = 2.0  # share mínimo da URL dentro do grupo (%)
+URL_MAX_POR_GRUPO  = 15   # teto por grupo — seguro contra verif patológico
+URL_MAX_SAMPLE     = 20000 # teto de memória/payload, não de tempo (ver lib/urlCheck.ts)
 
 # Cores para a Devolutiva no Excel (Standard Excel Theme: Green/Red/Yellow/Gray)
 COLOR_OK       = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid") # Verde claro
@@ -635,7 +641,7 @@ def verificar(
     data_ini: date | None = None,
     data_fim: date | None = None,
     output_path: str | None = None,
-    url_sample_pct: int = 10,
+    url_share_pct: float = URL_SHARE_PCT,
     view_rules: list[dict] | None = None,
     praca: str | None = None,
 ) -> dict:
@@ -649,6 +655,7 @@ def verificar(
     data_ini / data_fim — filtro de período (opcional)
     output_path      — caminho de saída; padrão: <nome> - Verificado.xlsx
     praca            — sigla do estado para filtrar verification (ex.: "SP")
+    url_share_pct    — share mínimo (%) da URL no seu grupo (veículo, categoria)
 
     Retorna dict com:
       {
@@ -736,8 +743,10 @@ def verificar(
     ]
 
     # ── Agrupa URLs duplicadas por (url, categoria, veiculo) somando impressões ──
-    # O mesmo URL pode aparecer em múltiplas linhas do verification file. Agrupar
-    # evita re-análise pela IA e dá o total real de impressões por URL.
+    # O UrlAggregator já faz isso dentro de cada arquivo; aqui a mesma chave é
+    # fundida ENTRE arquivos — um veículo espalhado em vários verifs (00PX,
+    # TERATECH) só tem o alcance real da URL depois desta passagem, e o share
+    # do funil precisa desse total, não do pedaço de um arquivo.
     grouped: dict[tuple[str, str, str], dict] = {}
     for item in url_pool:
         key = (item["url"], item["categoria"], item["veiculo"])
@@ -962,35 +971,27 @@ def verificar(
             item["impressoes"] = item.get("cpm") or 0
         elif tipo == "CPV" and "cpv" in item:
             item["impressoes"] = item.get("cpv") or 0
-    # Seleção orientada por impressões: só URLs com volume relevante (> threshold)
-    # vão para a IA, priorizando as de maior alcance e respeitando um teto absoluto
-    # para caber no tempo de função da Vercel. O knob url_sample_pct vira um
-    # afunilamento secundário por categoria (top-pct% por impressões).
+    # Seleção por share: uma URL vai para a IA se sozinha representa
+    # url_share_pct% das impressões do seu grupo (veículo, categoria). Agrupar
+    # por veículo — e não só por categoria, como antes — impede que um veículo
+    # dominante ocupe a cota inteira e deixe os pequenos sem nenhuma auditoria.
     if url_pool:
-        by_cat: dict[str, list] = defaultdict(list)
+        by_group: dict[tuple[str, str], list] = defaultdict(list)
         for item in url_pool:
-            by_cat[item["categoria"]].append(item)
+            by_group[(item.get("veiculo", ""), item.get("categoria", ""))].append(item)
 
-        eligible_by_cat: dict[str, list] = {}
-        for cat, items in by_cat.items():
-            qual = [i for i in items if (i.get("impressoes") or 0) > URL_MIN_IMPRESSOES]
-            if not qual:  # fallback: nenhuma URL relevante — mantém a de maior alcance
-                qual = [max(items, key=lambda i: i.get("impressoes") or 0)]
-            qual.sort(key=lambda i: i.get("impressoes") or 0, reverse=True)
-            if url_sample_pct and url_sample_pct > 0:
-                qual = qual[: max(1, len(qual) * url_sample_pct // 100)]
-            eligible_by_cat[cat] = qual
+        url_sample: list[dict] = []
+        for items in by_group.values():
+            items.sort(key=lambda i: i.get("impressoes") or 0, reverse=True)
+            total = sum(i.get("impressoes") or 0 for i in items)
+            limite = total * url_share_pct / 100
+            sel = [i for i in items if (i.get("impressoes") or 0) >= limite][:URL_MAX_POR_GRUPO]
+            # Grupo sem nenhuma URL acima do corte ainda rende a de maior alcance:
+            # é o único sinal que sobra num grupo totalmente pulverizado.
+            url_sample.extend(sel or items[:1])
 
-        total = sum(len(v) for v in eligible_by_cat.values())
-        if total <= URL_MAX_SAMPLE:
-            url_sample: list[dict] = [i for v in eligible_by_cat.values() for i in v]
-        else:  # corte proporcional por categoria, preservando as de maior impressão
-            url_sample = []
-            for qual in eligible_by_cat.values():
-                n = max(1, round(URL_MAX_SAMPLE * len(qual) / total))
-                url_sample.extend(qual[:n])
-            url_sample.sort(key=lambda i: i.get("impressoes") or 0, reverse=True)
-            url_sample = url_sample[:URL_MAX_SAMPLE]
+        url_sample.sort(key=lambda i: i.get("impressoes") or 0, reverse=True)
+        url_sample = url_sample[:URL_MAX_SAMPLE]
     else:
         url_sample = []
 
@@ -1024,8 +1025,8 @@ if __name__ == "__main__":
     ap.add_argument("--fim", default=None, metavar="DD/MM/YYYY")
     ap.add_argument("--output", default=None, metavar="PATH",
                     help="Caminho de saída (padrão: <consolidado> - Verificado.xlsx)")
-    ap.add_argument("--url-pct", type=int, default=10, metavar="PCT",
-                    help="Percentual de URLs indevidas a analisar via IA (0 = todas)")
+    ap.add_argument("--url-share-pct", type=float, default=URL_SHARE_PCT, metavar="PCT",
+                    help="Share mínimo (%%) da URL nas impressões do seu grupo (veículo, categoria)")
     ap.add_argument("--view-rules", default=None,
                     help="JSON array de regras de visualização por veículo")
     ap.add_argument("--praca", default=None, metavar="UF",
@@ -1043,7 +1044,7 @@ if __name__ == "__main__":
             data_ini=cli_date(args.ini),
             data_fim=cli_date(args.fim),
             output_path=args.output,
-            url_sample_pct=args.url_pct,
+            url_share_pct=args.url_share_pct,
             view_rules=json.loads(args.view_rules) if args.view_rules else None,
             praca=args.praca,
         )
