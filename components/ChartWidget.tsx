@@ -6,7 +6,7 @@ import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "reac
 // depois de um hover, que é sempre no cliente.
 const useBeforePaint = typeof window === "undefined" ? useEffect : useLayoutEffect;
 import { ChartData, ScatterPoint } from "@/types/chat";
-import { getChartPalette } from "@/lib/exports/chart-palette";
+import { getChartPalette, niceAxisMax } from "@/lib/exports/chart-palette";
 import { useIsDark } from "@/lib/useIsDark";
 
 interface Props {
@@ -287,9 +287,9 @@ function HudBar({ chart, gid, theme, setHover }: { chart: ChartData; gid: string
   const pl = 50, pr = 8, pt = 20, pb = 26;
   const cW = VIEW_W - pl - pr;
   const cH = VIEW_H - pt - pb;
-  const max = stacked
+  const max = niceAxisMax(stacked
     ? Math.max(...labels.map((_, i) => sumTo(i, series.length - 1)), 1)
-    : Math.max(...series.flatMap((s) => s.values), 1);
+    : Math.max(...series.flatMap((s) => s.values), 1));
   const gap = cW / Math.max(labels.length, 1);
   // 2px of surface between neighbouring bars keeps the groups legible
   const bW = grouped && !stacked
@@ -363,14 +363,16 @@ function HudLineArea({ chart, gid, theme, setHover, area }: { chart: ChartData; 
   const stacked = !!chart.stacked && series.length > 1;
   const sumTo = (i: number, upto: number) =>
     series.slice(0, upto + 1).reduce((sum, s) => sum + (s.values[i] ?? 0), 0);
-  const max = (stacked
+  const max = niceAxisMax(stacked
     ? Math.max(...Array.from({ length: count }, (_, i) => sumTo(i, series.length - 1)), 1)
-    : Math.max(...series.flatMap((s) => s.values), 1)) * 1.08;
+    : Math.max(...series.flatMap((s) => s.values), 1));
   const labelAt = (i: number) => labels[i] ?? `P${i + 1}`;
-  // Hover numa pilha responde pela coluna inteira: as séries + o total.
-  const stackRows = (i: number) => [
+  // Hover responde pela coluna inteira: todas as séries naquele x. Só empilhado
+  // ganha a linha "Total" — sem pilha não existe soma que signifique alguma coisa
+  // (alcance + impressões não é um número).
+  const columnRows = (i: number) => [
     ...series.map((s, k) => ({ label: s.label, value: s.values[i] ?? 0, color: theme.palette[k % theme.palette.length] })),
-    { label: "Total", value: sumTo(i, series.length - 1), color: theme.accent },
+    ...(stacked ? [{ label: "Total", value: sumTo(i, series.length - 1), color: theme.accent }] : []),
   ];
 
   return (
@@ -415,7 +417,7 @@ function HudLineArea({ chart, gid, theme, setHover, area }: { chart: ChartData; 
             {theme.isDark && <path d={d} fill="none" stroke={color} strokeWidth={area ? 4 : 5} opacity={area ? 0.2 : 0.16} filter={`url(#${gid}-glow)`} strokeLinecap="round" />}
             <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             {points.map((p, i) => (
-              <g key={`${s.label}-${i}`} onMouseEnter={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: p.label, rows: stacked ? stackRows(i) : [{ label: s.label, value: p.value, color }], meta: s.meta?.[i] })} onMouseMove={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: p.label, rows: stacked ? stackRows(i) : [{ label: s.label, value: p.value, color }], meta: s.meta?.[i] })} onMouseLeave={() => setHover(null)}>
+              <g key={`${s.label}-${i}`} onMouseEnter={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: p.label, rows: columnRows(i), meta: s.meta?.[i] })} onMouseMove={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: p.label, rows: columnRows(i), meta: s.meta?.[i] })} onMouseLeave={() => setHover(null)}>
                 <circle cx={p.x} cy={p.y} r={area ? 3.5 : 4} fill={theme.dotBg} stroke={color} strokeWidth={area ? 1.5 : 1.8} />
                 <circle cx={p.x} cy={p.y} r={area ? 1.6 : 1.8} fill={color} />
               </g>
@@ -487,8 +489,8 @@ function HudScatter({ chart, gid, theme, setHover }: { chart: ChartData; gid: st
   const allX = series.flatMap((s) => s.points.map((p) => p.x));
   const allY = series.flatMap((s) => s.points.map((p) => p.y));
   const minX = Math.min(...allX, 0);
-  const maxX = Math.max(...allX, 1) * 1.1;
-  const maxY = Math.max(...allY, 1) * 1.15;
+  const maxX = niceAxisMax(Math.max(...allX, 1));
+  const maxY = niceAxisMax(Math.max(...allY, 1));
 
   return (
     <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block h-auto w-full" role="img" aria-label={chart.title ?? "Gráfico de dispersão"}>
