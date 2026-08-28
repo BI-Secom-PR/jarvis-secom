@@ -9,13 +9,15 @@ import HudCorners from "./HudCorners";
 import SearchableSelect from "./SearchableSelect";
 import ThemeToggle from "./ThemeToggle";
 import { postJson } from "@/lib/fetchUtils";
-import { AGE_ORDER, GENDERS, GENDER_LABEL, METRICS, platformLabel, type MetricKey } from "@/lib/dashboard";
+import { AGE_ORDER, ENGAGEMENT_PARTS, GENDERS, GENDER_LABEL, METRICS, platformLabel, type EngagementPartKey, type MetricKey } from "@/lib/dashboard";
 import type { ChartData } from "@/types/chat";
 
 type Tab = "campanhas" | "demografia" | "regiao";
 type Gran = "dia" | "semana" | "mes";
+type EngMode = "total" | "partes";
 
-type Totals = { cost: number; impressions: number; reach: number; clicks: number; videoViews: number; engagement: number };
+type Totals = { cost: number; impressions: number; reach: number; clicks: number; videoViews: number; engagement: number }
+  & Record<EngagementPartKey, number>;
 type Row = Totals & { platform: string; nome: string;
   p25: number; p50: number; p75: number; p95: number; p100: number; completions: number };
 
@@ -55,6 +57,10 @@ const compact = (v: number) => {
 };
 const div = (a: number, b: number) => (b ? a / b : 0);
 const dash = "—";
+/** Componentes com algum valor na janela filtrada. Reações só vêm do Facebook e
+ *  salvos de Facebook + Pinterest — sem esse filtro a maioria dos recortes
+ *  carregaria duas séries e duas colunas cravadas em zero. */
+const activeParts = (rows: Totals[]) => ENGAGEMENT_PARTS.filter((p) => rows.some((r) => r[p.key] > 0));
 const isoDaysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
 
 /** Value of a metric over one aggregate row — mirrors METRICS on the server. */
@@ -100,6 +106,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
   const [metric, setMetric] = useState<MetricKey>("impressoes");
   const [gran, setGran] = useState<Gran>("dia");
   const [tmode, setTmode] = useState<"campanha" | "anuncio">("campanha");
+  const [engMode, setEngMode] = useState<EngMode>("total");
 
   // Editor de regras de grupo (só admin). `rulesVersion` força o refetch dos filtros
   // depois de salvar — o dropdown É o preview das regras.
@@ -220,13 +227,24 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
   // segundo eixo y no mesmo plot distorce a leitura.
   const engChart = useMemo<ChartData | null>(() => {
     if (!daily.length) return null;
+    const labels = daily.map((r) => r.date.slice(8, 10) + "/" + r.date.slice(5, 7));
+    const parts = engMode === "partes" ? activeParts(daily) : [];
+    // Empilhado, o topo da pilha continua sendo o total de antes — só que agora
+    // dá para ver de que tipo de interação ele é feito.
+    if (parts.length) return {
+      type: "area",
+      stacked: true,
+      title: "Engajamento por tipo",
+      labels,
+      datasets: parts.map((p) => ({ label: p.label, data: daily.map((r) => r[p.key]) })),
+    };
     return {
       type: "area",
       title: "Engajamento (curtidas + comentários + compart. + reações + salvos)",
-      labels: daily.map((r) => r.date.slice(8, 10) + "/" + r.date.slice(5, 7)),
+      labels,
       datasets: [{ label: "Engajamento", data: daily.map((r) => r.engagement) }],
     };
-  }, [daily]);
+  }, [daily, engMode]);
 
   const scatterChart = useMemo<ChartData | null>(() => {
     const rows = data?.campanhas ?? [];
@@ -254,6 +272,19 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
     const rows = data?.demografia ?? [];
     if (!rows.length) return null;
     const faixas = AGE_ORDER.filter((f) => rows.some((r) => r.faixa === f));
+    // Discriminado, a barra empilha por tipo de interação; o recorte por gênero
+    // sai do gráfico (a rosca ao lado continua respondendo por ele).
+    const parts = engMode === "partes" && metric === "engajamento" ? activeParts(rows) : [];
+    if (parts.length) return {
+      type: "bar",
+      stacked: true,
+      title: "Engajamento por faixa etária e tipo",
+      labels: [...faixas],
+      datasets: parts.map((p) => ({
+        label: p.label,
+        data: faixas.map((f) => rows.filter((r) => r.faixa === f).reduce((s, r) => s + r[p.key], 0)),
+      })),
+    };
     return {
       type: "bar",
       title: `${METRICS[metric].label} por faixa etária e gênero`,
@@ -266,7 +297,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
         }),
       })),
     };
-  }, [data?.demografia, metric]);
+  }, [data?.demografia, metric, engMode]);
 
   const genderChart = useMemo<ChartData | null>(() => {
     const rows = data?.demografia ?? [];
@@ -291,7 +322,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
   const regiaoRows = useMemo(() => {
     const rows = (data?.regioes ?? []).filter((r) => r.uf);
     return rows
-      .map((r) => ({ uf: r.uf as string, estado: r.estado, value: metricValue(r, metric) }))
+      .map((r) => ({ ...r, uf: r.uf as string, value: metricValue(r, metric) }))
       .sort((a, b) => b.value - a.value);
   }, [data?.regioes, metric]);
 
@@ -460,6 +491,13 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
     `px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${
       on ? "bg-accent-soft border-accent-border text-accent-text" : "bg-fill border-separator text-ink-3 hover:text-ink"
     }`;
+  const engSwitch = (
+    <div className="flex items-center gap-2">
+      <span className="font-hud text-[9px] uppercase tracking-[0.2em] text-ink-3">Engajamento</span>
+      <button className={pill(engMode === "total")} onClick={() => setEngMode("total")}>Total</button>
+      <button className={pill(engMode === "partes")} onClick={() => setEngMode("partes")}>Discriminado</button>
+    </div>
+  );
   const tabCls = (on: boolean) =>
     `px-4 py-2.5 rounded-lg font-hud text-[10px] uppercase tracking-[0.16em] border transition-colors ${
       on ? "bg-accent-soft border-accent-border text-accent-text" : "border-separator text-ink-3 hover:text-ink-2"
@@ -468,6 +506,8 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
   const panelTitle = "font-hud text-[11px] uppercase tracking-[0.24em] text-ink flex items-center gap-2";
 
   const tableRows = tmode === "campanha" ? (data?.campanhas ?? []) : (data?.anuncios ?? []);
+  const tableParts = engMode === "partes" ? activeParts(tableRows) : [];
+  const regiaoParts = engMode === "partes" && metric === "engajamento" ? activeParts(regiaoRows) : [];
 
   return (
     <div className="h-dvh w-full flex flex-col overflow-hidden relative hud-theme hud-void-bg">
@@ -570,10 +610,12 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
 
           {/* ── Seletor de métrica (abas dimensionais) ── */}
           {tab !== "campanhas" && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {METRIC_KEYS.map((k) => (
                 <button key={k} className={pill(metric === k)} onClick={() => setMetric(k)}>{METRICS[k].label}</button>
               ))}
+              {/* fora da métrica de engajamento o interruptor não teria o que discriminar */}
+              {metric === "engajamento" && <span className="ml-2">{engSwitch}</span>}
             </div>
           )}
 
@@ -606,12 +648,13 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                 ))}
               </section>
 
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {(["dia", "semana", "mes"] as Gran[]).map((g) => (
                   <button key={g} className={pill(gran === g)} onClick={() => setGran(g)}>
                     {{ dia: "Diário", semana: "Semanal", mes: "Mensal" }[g]}
                   </button>
                 ))}
+                <span className="ml-2">{engSwitch}</span>
               </div>
 
               <section className="grid grid-cols-1 lg:grid-cols-2 auto-rows-fr gap-4">
@@ -658,6 +701,9 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                         <th className="px-3 py-2.5 text-right">CPC</th>
                         <th className="px-3 py-2.5 text-right">CTR</th>
                         <th className="px-3 py-2.5 text-right">Engajamento</th>
+                        {tableParts.map((p) => (
+                          <th key={p.key} className="px-3 py-2.5 text-right">{p.label}</th>
+                        ))}
                         <th className="px-3 py-2.5 text-right">CPE</th>
                         <th className="px-3 py-2.5 text-right">Tx. Eng.</th>
                         <th className="px-3 py-2.5 text-right">Visualizações</th>
@@ -691,6 +737,9 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                           <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{r.clicks ? brl(div(r.cost, r.clicks)) : dash}</td>
                           <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{pct(div(r.clicks, r.impressions) * 100)}</td>
                           <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{nf(r.engagement)}</td>
+                          {tableParts.map((p) => (
+                            <td key={p.key} className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{r[p.key] ? nf(r[p.key]) : dash}</td>
+                          ))}
                           <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{r.engagement ? brl(div(r.cost, r.engagement)) : dash}</td>
                           <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{pct(div(r.engagement, r.impressions) * 100)}</td>
                           <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{nf(r.videoViews)}</td>
@@ -707,7 +756,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                         </tr>
                       ))}
                       {!tableRows.length && (
-                        <tr><td colSpan={20} className="px-6 py-8 text-center text-ink-3">
+                        <tr><td colSpan={20 + tableParts.length} className="px-6 py-8 text-center text-ink-3">
                           {loading ? "Carregando…" : "Nenhum resultado para os filtros atuais."}
                         </td></tr>
                       )}
@@ -740,7 +789,9 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
           {/* ══ REGIÃO ══ */}
           {tab === "regiao" && (
             <>
-              <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Discriminado, o ranking ganha 5 colunas e não cabe em meia tela:
+                  mapa e tabela passam a ocupar a largura inteira, um sob o outro. */}
+              <section className={`grid grid-cols-1 gap-4 ${regiaoParts.length ? "" : "lg:grid-cols-2"}`}>
                 {geoChart && <ChartWidget chart={geoChart} fill />}
                 <div className={`${panel} overflow-hidden`}>
                   <div className="px-4 md:px-6 pt-5 pb-2">
@@ -755,6 +806,9 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                           <th className="px-4 md:px-6 py-2.5">UF</th>
                           <th className="px-3 py-2.5">Estado</th>
                           <th className="px-3 py-2.5 text-right">{METRICS[metric].label}</th>
+                          {regiaoParts.map((p) => (
+                            <th key={p.key} className="px-3 py-2.5 text-right">{p.label}</th>
+                          ))}
                           <th className="px-3 py-2.5 pr-4 md:pr-6 w-[150px]">Participação</th>
                         </tr>
                       </thead>
@@ -767,6 +821,9 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                               <td className="px-4 md:px-6 py-2.5 font-semibold text-accent-text">{r.uf}</td>
                               <td className="px-3 py-2.5 text-ink">{r.estado}</td>
                               <td className="px-3 py-2.5 text-right tabular-nums">{fmtMetric(r.value, metric)}</td>
+                              {regiaoParts.map((p) => (
+                                <td key={p.key} className="px-3 py-2.5 text-right tabular-nums">{r[p.key] ? nf(r[p.key]) : dash}</td>
+                              ))}
                               <td className="px-3 py-2.5 pr-4 md:pr-6">
                                 <span className="flex items-center gap-2">
                                   <span className="flex-1 h-1.5 rounded-full bg-fill overflow-hidden block">
@@ -782,7 +839,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                           );
                         })}
                         {!regiaoRows.length && (
-                          <tr><td colSpan={4} className="px-6 py-8 text-center text-ink-3">
+                          <tr><td colSpan={4 + regiaoParts.length} className="px-6 py-8 text-center text-ink-3">
                             {loading ? "Carregando…" : "Nenhum resultado para os filtros atuais."}
                           </td></tr>
                         )}

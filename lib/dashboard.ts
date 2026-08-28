@@ -73,7 +73,23 @@ export function previousWindow(f: DashboardFilters): { from: string; to: string 
 // `engagements` is NOT usable: the platforms fill it with wildly different
 // definitions (40,3 mi against 380 k of real interactions in the same window),
 // so every engagement number here is the sum of the real actions instead.
-export const REAL_ENGAGEMENT = 'SUM(likes + comments + shares + reactions + saves)';
+
+/** Componentes reais do engajamento. A ordem é a da pilha e a das colunas.
+ *  Cobertura desigual por plataforma: `reactions` só vem do Facebook e `saves`
+ *  do Facebook + Pinterest, então boa parte dos filtros zera as duas — a UI
+ *  esconde a parte que é zero na janela inteira. */
+export const ENGAGEMENT_PARTS = [
+  { key: 'likes',     label: 'Curtidas' },
+  { key: 'comments',  label: 'Comentários' },
+  { key: 'shares',    label: 'Compart.' },
+  { key: 'reactions', label: 'Reações' },
+  { key: 'saves',     label: 'Salvos' },
+] as const;
+
+export type EngagementPartKey = (typeof ENGAGEMENT_PARTS)[number]['key'];
+
+// Derivado da lista para que o total e as partes não possam divergir.
+export const REAL_ENGAGEMENT = `SUM(${ENGAGEMENT_PARTS.map((p) => p.key).join(' + ')})`;
 
 export type MetricKey =
   | 'investimento' | 'impressoes' | 'alcance' | 'cliques' | 'visualizacoes' | 'engajamento' | 'ctr';
@@ -101,7 +117,8 @@ export const METRIC_SELECT = `
   SUM(reach)         AS reach,
   SUM(clicks)        AS clicks,
   SUM(video_views)   AS video_views,
-  ${REAL_ENGAGEMENT} AS engagement`;
+  ${REAL_ENGAGEMENT} AS engagement,
+  ${ENGAGEMENT_PARTS.map((p) => `SUM(${p.key}) AS ${p.key}`).join(',\n  ')}`;
 
 /** Video quartiles — the block the Oracle table carries, as counts, not rates.
     Coverage is uneven: p25-p100 come from Meta, TikTok, GloboAds, Pinterest and

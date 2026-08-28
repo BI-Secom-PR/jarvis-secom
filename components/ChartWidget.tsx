@@ -279,16 +279,23 @@ function HudBar({ chart, gid, theme, setHover }: { chart: ChartData; gid: string
   // rank, so a filter that drops a category never repaints the survivors.
   const grouped = chart.datasets.length > 1;
   const series = chart.datasets.map((ds) => ({ label: ds.label, values: asNumbers(ds.data), meta: ds.meta }));
+  // Empilhado: uma barra por label, dividida pelas séries — a altura total
+  // continua sendo o total, e a escala é a do somatório da coluna.
+  const stacked = !!chart.stacked && grouped;
+  const sumTo = (i: number, upto: number) =>
+    series.slice(0, upto + 1).reduce((sum, s) => sum + (s.values[i] ?? 0), 0);
   const pl = 50, pr = 8, pt = 20, pb = 26;
   const cW = VIEW_W - pl - pr;
   const cH = VIEW_H - pt - pb;
-  const max = Math.max(...series.flatMap((s) => s.values), 1);
+  const max = stacked
+    ? Math.max(...labels.map((_, i) => sumTo(i, series.length - 1)), 1)
+    : Math.max(...series.flatMap((s) => s.values), 1);
   const gap = cW / Math.max(labels.length, 1);
   // 2px of surface between neighbouring bars keeps the groups legible
-  const bW = grouped
+  const bW = grouped && !stacked
     ? Math.max(2, (gap * 0.72 - 2 * (series.length - 1)) / series.length)
     : Math.min(32, gap * 0.56);
-  const groupW = grouped ? bW * series.length + 2 * (series.length - 1) : bW;
+  const groupW = grouped && !stacked ? bW * series.length + 2 * (series.length - 1) : bW;
 
   return (
     <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block h-auto w-full" role="img" aria-label={chart.title ?? "Gráfico de barras"}>
@@ -303,24 +310,32 @@ function HudBar({ chart, gid, theme, setHover }: { chart: ChartData; gid: string
               const ci = grouped ? si : i;
               const color = theme.palette[ci % theme.palette.length];
               const h = max ? (value / max) * cH : 0;
-              const x = gx + si * (bW + 2);
-              const y = pt + cH - h;
+              const x = stacked ? gx : gx + si * (bW + 2);
+              const y = stacked ? pt + cH - (sumTo(i, si) / max) * cH : pt + cH - h;
               const hover = (e: React.MouseEvent) => setHover({
                 x: e.nativeEvent.offsetX,
                 y: e.nativeEvent.offsetY,
                 title: String(label),
                 rows: grouped
-                  ? series.map((s2, k) => ({
-                      label: s2.label,
-                      value: s2.values[i] ?? 0,
-                      color: theme.palette[k % theme.palette.length],
-                    }))
+                  ? [
+                      ...series.map((s2, k) => ({
+                        label: s2.label,
+                        value: s2.values[i] ?? 0,
+                        color: theme.palette[k % theme.palette.length],
+                      })),
+                      ...(stacked ? [{ label: "Total", value: sumTo(i, series.length - 1), color: theme.accent }] : []),
+                    ]
                   : [{ label: s.label ?? "Valor", value, color }],
                 meta: s.meta?.[i],
               });
               return (
                 <g key={si} onMouseEnter={hover} onMouseMove={hover} onMouseLeave={() => setHover(null)}>
-                  <rect x={x} y={y} width={bW} height={h} rx="1" fill={`url(#${gid}-bar-${ci % theme.palette.length})`} filter={theme.isDark ? `url(#${gid}-soft-glow)` : undefined} />
+                  {/* empilhado usa cor chapada: o gradiente some no rodapé de cada
+                      segmento e deixaria a fatia de baixo aparecer por dentro */}
+                  <rect x={x} y={y} width={bW} height={h} rx="1"
+                    fill={stacked ? color : `url(#${gid}-bar-${ci % theme.palette.length})`}
+                    fillOpacity={stacked ? (theme.isDark ? 0.72 : 0.55) : undefined}
+                    filter={theme.isDark && !stacked ? `url(#${gid}-soft-glow)` : undefined} />
                   <line x1={x} y1={y + 0.7} x2={x + bW} y2={y + 0.7} stroke={color} strokeWidth="2" opacity={theme.isDark ? 0.88 : 0.65} />
                   {/* a value on every grouped bar is unreadable — the tooltip carries them */}
                   {!grouped && value > 0 && <text x={x + bW / 2} y={y - 4} textAnchor="middle" fill={theme.isDark ? color : theme.text} fontSize="9" fontWeight="700" fontFamily="monospace">{formatCompact(value)}</text>}
@@ -341,9 +356,22 @@ function HudLineArea({ chart, gid, theme, setHover, area }: { chart: ChartData; 
   const pl = area ? 48 : 44, pr = 10, pt = 12, pb = 24;
   const cW = VIEW_W - pl - pr;
   const cH = VIEW_H - pt - pb;
-  const max = Math.max(...series.flatMap((s) => s.values), 1) * 1.08;
   const count = Math.max(labels.length, ...series.map((s) => s.values.length), 1);
+  // Empilhado: cada série plota na soma acumulada até ela, e a escala é a do
+  // somatório da coluna — o topo da pilha é o total, que é o número que o
+  // gráfico mostrava antes de discriminar.
+  const stacked = !!chart.stacked && series.length > 1;
+  const sumTo = (i: number, upto: number) =>
+    series.slice(0, upto + 1).reduce((sum, s) => sum + (s.values[i] ?? 0), 0);
+  const max = (stacked
+    ? Math.max(...Array.from({ length: count }, (_, i) => sumTo(i, series.length - 1)), 1)
+    : Math.max(...series.flatMap((s) => s.values), 1)) * 1.08;
   const labelAt = (i: number) => labels[i] ?? `P${i + 1}`;
+  // Hover numa pilha responde pela coluna inteira: as séries + o total.
+  const stackRows = (i: number) => [
+    ...series.map((s, k) => ({ label: s.label, value: s.values[i] ?? 0, color: theme.palette[k % theme.palette.length] })),
+    { label: "Total", value: sumTo(i, series.length - 1), color: theme.accent },
+  ];
 
   return (
     <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block h-auto w-full" role="img" aria-label={chart.title ?? (area ? "Gráfico de área" : "Gráfico de linha")}>
@@ -364,20 +392,30 @@ function HudLineArea({ chart, gid, theme, setHover, area }: { chart: ChartData; 
         const color = theme.palette[si % theme.palette.length];
         const points: SeriesPoint[] = s.values.map((value, i) => ({
           x: count === 1 ? pl + cW / 2 : pl + i * (cW / (count - 1)),
-          y: pt + cH - (value / max) * cH,
+          y: pt + cH - ((stacked ? sumTo(i, si) : value) / max) * cH,
           value,
           label: labelAt(i),
         }));
         if (!points.length) return null;
         const d = pathCurve(points);
         const fillId = `${gid}-area-${si % theme.palette.length}`;
+        const closed = `${d} L${points[points.length - 1].x},${pt + cH} L${points[0].x},${pt + cH} Z`;
         return (
           <g key={s.label}>
-            {(area || chart.type === "line") && <path d={`${d} L${points[points.length - 1].x},${pt + cH} L${points[0].x},${pt + cH} Z`} fill={`url(#${fillId})`} stroke="none" />}
+            {stacked ? (
+              // As séries são desenhadas de cima para baixo (o loop já vem
+              // invertido), então cada faixa visível é a banda entre duas curvas.
+              // O fundo opaco vai antes da cor: sem ele a faixa de baixo herdaria
+              // o alfa de todas as de cima e sairia com a cor errada.
+              <>
+                <path d={closed} fill={theme.bg} stroke="none" />
+                <path d={closed} fill={color} fillOpacity={theme.isDark ? 0.5 : 0.34} stroke="none" />
+              </>
+            ) : (area || chart.type === "line") && <path d={closed} fill={`url(#${fillId})`} stroke="none" />}
             {theme.isDark && <path d={d} fill="none" stroke={color} strokeWidth={area ? 4 : 5} opacity={area ? 0.2 : 0.16} filter={`url(#${gid}-glow)`} strokeLinecap="round" />}
             <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             {points.map((p, i) => (
-              <g key={`${s.label}-${i}`} onMouseEnter={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: p.label, rows: [{ label: s.label, value: p.value, color }], meta: s.meta?.[i] })} onMouseMove={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: p.label, rows: [{ label: s.label, value: p.value, color }], meta: s.meta?.[i] })} onMouseLeave={() => setHover(null)}>
+              <g key={`${s.label}-${i}`} onMouseEnter={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: p.label, rows: stacked ? stackRows(i) : [{ label: s.label, value: p.value, color }], meta: s.meta?.[i] })} onMouseMove={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: p.label, rows: stacked ? stackRows(i) : [{ label: s.label, value: p.value, color }], meta: s.meta?.[i] })} onMouseLeave={() => setHover(null)}>
                 <circle cx={p.x} cy={p.y} r={area ? 3.5 : 4} fill={theme.dotBg} stroke={color} strokeWidth={area ? 1.5 : 1.8} />
                 <circle cx={p.x} cy={p.y} r={area ? 1.6 : 1.8} fill={color} />
               </g>

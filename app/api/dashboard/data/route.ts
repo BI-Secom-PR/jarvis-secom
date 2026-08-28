@@ -4,7 +4,8 @@ import { getPool, isTransientDbError, resetPool } from '@/lib/mysql';
 import {
   buildWhere, previousWindow, METRIC_SELECT, VIDEO_SELECT,
   AGE_BUCKET_SQL, GRAIN_SQL, isGranularity, UF_BY_NAME, HAS_DELIVERY, fromTable,
-  type DashboardFilters, type Granularity,
+  ENGAGEMENT_PARTS,
+  type DashboardFilters, type Granularity, type EngagementPartKey,
 } from '@/lib/dashboard';
 import { withCampaignNames } from '@/lib/campaignGroups';
 
@@ -16,10 +17,12 @@ const TABLE_LIMIT = 50;
 /** mysql2 hands DECIMAL/BIGINT back as strings — coerce once, at the edge. */
 const n = (v: unknown): number => (v == null ? 0 : Number(v));
 
-type Totals = { cost: number; impressions: number; reach: number; clicks: number; videoViews: number; engagement: number };
+type Totals = { cost: number; impressions: number; reach: number; clicks: number; videoViews: number; engagement: number }
+  & Record<EngagementPartKey, number>;
 const totalsOf = (r: Record<string, unknown> | undefined): Totals => ({
   cost: n(r?.cost), impressions: n(r?.impressions), reach: n(r?.reach),
   clicks: n(r?.clicks), videoViews: n(r?.video_views), engagement: n(r?.engagement),
+  ...(Object.fromEntries(ENGAGEMENT_PARTS.map((p) => [p.key, n(r?.[p.key])])) as Record<EngagementPartKey, number>),
 });
 
 type Video = { p25: number; p50: number; p75: number; p95: number; p100: number; completions: number };
