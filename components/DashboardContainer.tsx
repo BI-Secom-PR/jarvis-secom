@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import CampaignRulesModal from "./CampaignRulesModal";
+import DashboardExportModal from "./DashboardExportModal";
 import ChartWidget from "./ChartWidget";
 import HudBackground from "./HudBackground";
 import HudCorners from "./HudCorners";
@@ -113,6 +114,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
   // Editor de regras de grupo (só admin). `rulesVersion` força o refetch dos filtros
   // depois de salvar — o dropdown É o preview das regras.
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [rulesVersion, setRulesVersion] = useState(0);
 
   const [filtersData, setFiltersData] = useState<FiltersData | null>(null);
@@ -530,6 +532,13 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
       {rulesOpen && (
         <CampaignRulesModal onClose={() => setRulesOpen(false)} onSaved={() => setRulesVersion((v) => v + 1)} />
       )}
+      {exportOpen && (
+        <DashboardExportModal
+          onClose={() => setExportOpen(false)}
+          initial={tab === "campanhas" ? "campanhas" : tab}
+          filters={{ from, to, campaign: campaigns, platform: platforms, ad: ads, objective: objectives, tema: temas }}
+        />
+      )}
 
       <header className="relative z-10 shrink-0 flex items-center justify-between gap-3 px-4 md:px-6 pb-3 md:pb-4 pt-[max(0.75rem,env(safe-area-inset-top))] md:pt-4 border-b border-separator">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -543,6 +552,10 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
           </h1>
         </div>
         <div className="flex items-center gap-3 shrink-0">
+          <button onClick={() => setExportOpen(true)}
+            className="font-hud text-[10px] uppercase tracking-[0.16em] px-3 py-1.5 rounded-lg border border-separator text-ink-3 hover:text-ink hover:border-accent-border transition-colors">
+            Exportar
+          </button>
           <ThemeToggle />
           <span className="text-[15px] leading-none animate-hud-flicker motion-reduce:animate-none"
                 style={{ color: "var(--hud-cyan)", textShadow: "0 0 12px var(--hud-cyan)" }}>◇</span>
