@@ -207,17 +207,35 @@ export async function checkUrls(
   const chunks: UrlSampleItem[][] = [];
   for (let i = 0; i < toCheck.length; i += URLS_PER_CALL) chunks.push(toCheck.slice(i, i + URLS_PER_CALL));
 
-  let next = 0, done = 0, failed = 0;
+  // Resultado por chunk, não acumulado: só o prefixo de chunks concluídos conta,
+  // e para achá-lo é preciso saber quais índices fecharam.
+  const chunkRows: (UrlCheckedRow[] | null)[] = new Array(chunks.length).fill(null);
+  const chunkFailed: number[] = new Array(chunks.length).fill(0);
+
+  let next = 0;
   const worker = async () => {
     while (next < chunks.length && Date.now() < deadline) {
-      const chunk = chunks[next++];
-      const r = await checkUrlChunk(chunk, categorias, deadline);
-      rows.push(...r.rows);
-      failed += r.failed;
-      done += chunk.length;
+      const idx = next++;
+      const r = await checkUrlChunk(chunks[idx], categorias, deadline);
+      // Chunk que falhou inteiro já com o prazo vencido foi cortado, não julgado:
+      // o modelo nem chegou a responder. Deixá-lo fora do prefixo faz o cliente
+      // reenviar essas URLs no próximo lote — contá-las como `failed` gastaria a
+      // auditoria delas sem nunca ter perguntado nada à IA.
+      if (r.rows.length === 0 && r.failed > 0 && Date.now() > deadline) continue;
+      chunkRows[idx] = r.rows;
+      chunkFailed[idx] = r.failed;
     }
   };
   await Promise.all(Array.from({ length: Math.min(URL_CHECK_CONCURRENCY, chunks.length) }, worker));
+
+  // Prefixo de chunks concluídos. Os workers pegam chunks em ordem mas terminam
+  // fora dela: sem cortar no primeiro buraco, `checked` passaria por cima de um
+  // chunk que ninguém auditou.
+  let k = 0;
+  while (k < chunks.length && chunkRows[k] !== null) k++;
+  const done = chunks.slice(0, k).reduce((n, c) => n + c.length, 0);
+  for (let i = 0; i < k; i++) rows.push(...chunkRows[i]!);
+  const failed = chunkFailed.slice(0, k).reduce((a, b) => a + b, 0);
 
   // `done` conta as URLs auditadas a partir do início de toCheck. O cliente
   // avança por `checked` dentro de `items`, e as resolvidas por regra (home)
