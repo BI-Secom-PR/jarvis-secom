@@ -1,5 +1,5 @@
 import type { ChartSpec } from './types'
-import { HUD_PALETTE_LIGHT } from './chart-palette'
+import { HUD_PALETTE_LIGHT, niceAxisMax } from './chart-palette'
 
 const W = 720
 const H = 380
@@ -22,17 +22,6 @@ function fmt(n: number): string {
 
 function innerSize() {
   return { w: W - PAD.left - PAD.right, h: H - PAD.top - PAD.bottom }
-}
-
-/* Round up to 1/1.5/2/2.5/3/4/5/6/8/10 × 10^n so axis ticks land on clean values */
-function niceMax(raw: number): number {
-  if (raw <= 0) return 1
-  const exp = Math.floor(Math.log10(raw))
-  const base = Math.pow(10, exp)
-  const frac = raw / base
-  const steps = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]
-  const nice = steps.find((s) => frac <= s) ?? 10
-  return nice * base
 }
 
 /* Rect with rounded top corners only */
@@ -109,7 +98,7 @@ function barGradients(count: number): string {
 
 function renderBar(spec: ChartSpec): string {
   const { w, h } = innerSize()
-  const max = niceMax(Math.max(1, ...spec.datasets.flatMap((d) => d.data)))
+  const max = niceAxisMax(Math.max(1, ...spec.datasets.flatMap((d) => d.data)))
   const groupWidth = w / spec.labels.length
   const barWidth = Math.min(44, (groupWidth * 0.66) / spec.datasets.length)
   const groupInner = barWidth * spec.datasets.length
@@ -131,7 +120,7 @@ function renderBar(spec: ChartSpec): string {
 
 function renderLine(spec: ChartSpec, withArea: boolean): string {
   const { h } = innerSize()
-  const max = niceMax(Math.max(1, ...spec.datasets.flatMap((d) => d.data)))
+  const max = niceAxisMax(Math.max(1, ...spec.datasets.flatMap((d) => d.data)))
   const baseline = PAD.top + h
 
   const defs = spec.datasets

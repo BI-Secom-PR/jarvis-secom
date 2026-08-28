@@ -2,7 +2,7 @@
 
 import React, { useEffect, useId, useRef, useState } from "react";
 import { ChartData, ScatterPoint } from "@/types/chat";
-import { getChartPalette } from "@/lib/exports/chart-palette";
+import { getChartPalette, niceAxisMax } from "@/lib/exports/chart-palette";
 import { useIsDark } from "@/lib/useIsDark";
 
 interface Props {
@@ -252,7 +252,7 @@ function HudBar({ chart, gid, theme, setHover }: { chart: ChartData; gid: string
   const pl = 50, pr = 8, pt = 20, pb = 26;
   const cW = VIEW_W - pl - pr;
   const cH = VIEW_H - pt - pb;
-  const max = Math.max(...values, 1);
+  const max = niceAxisMax(Math.max(...values, 1));
   const gap = cW / Math.max(labels.length, 1);
   const bW = Math.min(32, gap * 0.56);
   const meta = chart.datasets[0]?.meta;
@@ -286,9 +286,14 @@ function HudLineArea({ chart, gid, theme, setHover, area }: { chart: ChartData; 
   const pl = area ? 48 : 44, pr = 10, pt = 12, pb = 24;
   const cW = VIEW_W - pl - pr;
   const cH = VIEW_H - pt - pb;
-  const max = Math.max(...series.flatMap((s) => s.values), 1) * 1.08;
+  const max = niceAxisMax(Math.max(...series.flatMap((s) => s.values), 1));
   const count = Math.max(labels.length, ...series.map((s) => s.values.length), 1);
   const labelAt = (i: number) => labels[i] ?? `P${i + 1}`;
+  // Hover responde pela coluna inteira: todas as séries naquele x, e não só a
+  // que está sob o cursor.
+  const columnRows = (i: number) => series.map((s, k) => ({
+    label: s.label, value: s.values[i] ?? 0, color: theme.palette[k % theme.palette.length],
+  }));
 
   return (
     <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block h-auto w-full" role="img" aria-label={chart.title ?? (area ? "Gráfico de área" : "Gráfico de linha")}>
@@ -322,7 +327,7 @@ function HudLineArea({ chart, gid, theme, setHover, area }: { chart: ChartData; 
             {theme.isDark && <path d={d} fill="none" stroke={color} strokeWidth={area ? 4 : 5} opacity={area ? 0.2 : 0.16} filter={`url(#${gid}-glow)`} strokeLinecap="round" />}
             <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             {points.map((p, i) => (
-              <g key={`${s.label}-${i}`} onMouseEnter={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: p.label, rows: [{ label: s.label, value: p.value, color }], meta: s.meta?.[i] })} onMouseMove={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: p.label, rows: [{ label: s.label, value: p.value, color }], meta: s.meta?.[i] })} onMouseLeave={() => setHover(null)}>
+              <g key={`${s.label}-${i}`} onMouseEnter={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: p.label, rows: columnRows(i), meta: s.meta?.[i] })} onMouseMove={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: p.label, rows: columnRows(i), meta: s.meta?.[i] })} onMouseLeave={() => setHover(null)}>
                 <circle cx={p.x} cy={p.y} r={area ? 3.5 : 4} fill={theme.dotBg} stroke={color} strokeWidth={area ? 1.5 : 1.8} />
                 <circle cx={p.x} cy={p.y} r={area ? 1.6 : 1.8} fill={color} />
               </g>
@@ -394,8 +399,8 @@ function HudScatter({ chart, gid, theme, setHover }: { chart: ChartData; gid: st
   const allX = series.flatMap((s) => s.points.map((p) => p.x));
   const allY = series.flatMap((s) => s.points.map((p) => p.y));
   const minX = Math.min(...allX, 0);
-  const maxX = Math.max(...allX, 1) * 1.1;
-  const maxY = Math.max(...allY, 1) * 1.15;
+  const maxX = niceAxisMax(Math.max(...allX, 1));
+  const maxY = niceAxisMax(Math.max(...allY, 1));
 
   return (
     <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block h-auto w-full" role="img" aria-label={chart.title ?? "Gráfico de dispersão"}>
