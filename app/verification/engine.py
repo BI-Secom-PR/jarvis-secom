@@ -63,8 +63,8 @@ PARSER_MAP: dict[str, str] = {
 
 # ── Constantes ─────────────────────────────────────────────────────────────────
 FUZZY_THRESHOLD  = 85     # % mínimo para aceitar match de veículo
-HEADER_ROW       = 8      # linha 1-indexed do cabeçalho no template
-DATA_START_ROW   = 9      # primeira linha de dados (1-indexed)
+HEADER_ROW       = 8      # linha 1-indexed do cabeçalho no template (fallback)
+DATA_START_ROW   = 9      # primeira linha de dados (1-indexed) (fallback)
 URL_MIN_IMPRESSOES = 100  # URLs abaixo disso são ruído — não vão para a IA
 URL_MAX_SAMPLE     = 1000 # teto absoluto de URLs enviadas à IA (Vercel-safe)
 
@@ -105,9 +105,24 @@ COL_URL_INFO           = 30
 
 # ── Detecção dinâmica de colunas por header ────────────────────────────────────
 
+def _find_header_row(ws) -> int:
+    """Localiza a linha do cabeçalho do consolidado ('Veículo' + 'Impressões'/
+    'Views') nas 20 primeiras linhas. O template tem 6 linhas de metadados no
+    topo (header na 8), mas consolidados exportados sem elas chegam com o
+    header na linha 2 — lendo a partir da 9 o engine não achava veículo nenhum
+    e todos caíam em "sem entrada no consolidado"."""
+    for r in range(1, 21):
+        vals = {str(v).strip().lower()
+                for v in (_cell_value(ws, r, c) for c in range(1, 36))
+                if v is not None}
+        if (vals & {"veículo", "veiculo"}) and (vals & {"impressões", "impressoes", "views"}):
+            return r
+    return HEADER_ROW
+
+
 def _detect_consolidado_cols(ws, adserver: str | None = None) -> dict:
     """
-    Lê o header (HEADER_ROW=8) e retorna posições reais das colunas,
+    Lê o header (linha localizada por _find_header_row) e retorna posições reais das colunas,
     permitindo que cada adserver use seu próprio layout de consolidado.
     Fallback para os valores hardcoded quando uma coluna não é encontrada.
 
@@ -119,6 +134,7 @@ def _detect_consolidado_cols(ws, adserver: str | None = None) -> dict:
     semântica quando há exatamente 1 coluna por grupo; havendo mais de uma,
     cada coluna vira sua própria chave (slug literal do header).
     """
+    header_row     = _find_header_row(ws)
     groups: dict[str, list[tuple[int, str]]] = defaultdict(list)
     devolutiva_bi  = COL_DEVOLUTIVA_BI
     url_info       = COL_URL_INFO
@@ -131,7 +147,7 @@ def _detect_consolidado_cols(ws, adserver: str | None = None) -> dict:
     col_views:        int | None = None
 
     for c in range(1, 36):
-        raw = _cell_value(ws, HEADER_ROW, c)
+        raw = _cell_value(ws, header_row, c)
         if raw is None:
             continue
         text = str(raw).strip()
@@ -169,6 +185,7 @@ def _detect_consolidado_cols(ws, adserver: str | None = None) -> dict:
                 indevidas[_slug_categoria(text)] = c
 
     return {
+        "header_row":      header_row,
         "indevidas":       indevidas if indevidas else dict(COL_INDEVIDAS),
         "devolutiva_bi":   devolutiva_bi,
         "url_info":        url_info,
@@ -266,7 +283,7 @@ def _read_consolidado(ws, adserver: str | None = None) -> tuple[list[dict], int]
     col_views        = detected["col_views"]       or COL_VIEWS
 
     rows = []
-    for row_idx in range(DATA_START_ROW, ws.max_row + 1):
+    for row_idx in range(detected["header_row"] + 1, ws.max_row + 1):
         veiculo = _cell_value(ws, row_idx, COL_VEICULO)
         if not veiculo or not str(veiculo).strip():
             continue

@@ -15,7 +15,7 @@ import openpyxl
 
 COL_VEICULO  = 1
 COL_URL_INFO = 30
-DATA_START   = 9
+DATA_START   = 1  # ponytail: varre tudo; match e por nome exato do veiculo na col A
 
 
 def write(xlsx_path: str, url_info: dict[str, str]) -> None:
