@@ -20,6 +20,8 @@ export interface ChartData {
   yLabel?: string;
   /** Optional palette override (e.g. semantic sentiment colors). */
   colors?: string[];
+  /** Empilha as séries em vez de agrupá-las (bar) ou sobrepô-las (area/line). */
+  stacked?: boolean;
 }
 
 export interface Message {

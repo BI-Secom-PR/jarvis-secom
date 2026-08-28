@@ -1,6 +1,10 @@
 "use client";
 
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+
+// useLayoutEffect avisa no servidor; o posicionamento do tooltip só acontece
+// depois de um hover, que é sempre no cliente.
+const useBeforePaint = typeof window === "undefined" ? useEffect : useLayoutEffect;
 import { ChartData, ScatterPoint } from "@/types/chat";
 import { getChartPalette, niceAxisMax } from "@/lib/exports/chart-palette";
 import { useIsDark } from "@/lib/useIsDark";
@@ -174,13 +178,34 @@ function GridLines({ pl, pr, pt, pb, max, theme, yTicks = true, xTicks = false }
 }
 
 function HudTooltip({ hover, theme }: { hover: HoverState | null; theme: HudTheme }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+  // O card tem overflow:hidden, então um tooltip que passa da borda é cortado.
+  // Mede a caixa de verdade — a largura depende do conteúdo de `meta`, que pode
+  // trazer nome de campanha — e vira para o outro lado do cursor quando não cabe.
+  useBeforePaint(() => {
+    const el = ref.current;
+    if (!hover || !el) return;
+    const host = el.offsetParent as HTMLElement | null;
+    const hostW = host?.clientWidth ?? 0;
+    const hostH = host?.clientHeight ?? 0;
+    const { width, height } = el.getBoundingClientRect();
+    let left = hover.x + 12;
+    if (left + width > hostW) left = hover.x - 12 - width;      // vira para a esquerda
+    left = Math.min(Math.max(left, 0), Math.max(hostW - width, 0));
+    const top = Math.min(Math.max(hover.y - 58, 0), Math.max(hostH - height, 0));
+    setPos((prev) => (prev && prev.left === left && prev.top === top ? prev : { left, top }));
+  }, [hover]);
+
   if (!hover) return null;
   return (
     <div
+      ref={ref}
       style={{
         position: "absolute",
-        left: `min(${hover.x + 12}px, calc(100% - 190px))`,
-        top: Math.max(hover.y - 58, 0),
+        left: pos?.left ?? hover.x + 12,
+        top: pos?.top ?? Math.max(hover.y - 58, 0),
         zIndex: 50,
         pointerEvents: "none",
         background: theme.isDark ? "#030d15" : "#ffffff",
@@ -188,6 +213,7 @@ function HudTooltip({ hover, theme }: { hover: HoverState | null; theme: HudThem
         borderRadius: 3,
         boxShadow: theme.isDark ? "0 0 0 1px rgba(34,211,238,.06),0 8px 32px rgba(0,0,0,.72)" : "0 4px 24px rgba(0,0,0,.12)",
         minWidth: 170,
+        maxWidth: 260,
         padding: "10px 12px",
         fontFamily: "monospace",
       }}
@@ -196,7 +222,7 @@ function HudTooltip({ hover, theme }: { hover: HoverState | null; theme: HudThem
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
         {hover.rows.map((row) => (
           <div key={`${row.label}-${row.value}`} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: row.color ?? theme.accent, boxShadow: theme.isDark ? `0 0 6px ${row.color ?? theme.accent}88` : "none" }} />
+            <span style={{ width: 6, height: 6, borderRadius: "50%", flex: "none", background: row.color ?? theme.accent, boxShadow: theme.isDark ? `0 0 6px ${row.color ?? theme.accent}88` : "none" }} />
             <span style={{ color: theme.dim }}>{row.label}</span>
             <span style={{ marginLeft: "auto", paddingLeft: 12, color: theme.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{typeof row.value === "number" ? formatFull(row.value) : row.value}</span>
           </div>
@@ -205,11 +231,11 @@ function HudTooltip({ hover, theme }: { hover: HoverState | null; theme: HudThem
       {hover.meta && Object.keys(hover.meta).length > 0 && (
         <>
           <hr style={{ border: "none", borderTop: `1px solid ${theme.axis}`, margin: "8px 0" }} />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "3px 12px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 12px" }}>
             {Object.entries(hover.meta).map(([k, v]) => (
               <React.Fragment key={k}>
-                <span style={{ color: theme.dim, fontSize: 10 }}>{k}</span>
-                <span style={{ color: theme.text, fontSize: 10, textAlign: "right" }}>{typeof v === "number" ? formatFull(v) : String(v)}</span>
+                <span style={{ color: theme.dim, fontSize: 10, whiteSpace: "nowrap" }}>{k}</span>
+                <span style={{ color: theme.text, fontSize: 10, textAlign: "right", overflowWrap: "anywhere" }}>{typeof v === "number" ? formatFull(v) : String(v)}</span>
               </React.Fragment>
             ))}
           </div>
@@ -248,31 +274,75 @@ function HudCorners({ theme }: { theme: HudTheme }) {
 
 function HudBar({ chart, gid, theme, setHover }: { chart: ChartData; gid: string; theme: HudTheme; setHover: (hover: HoverState | null) => void }) {
   const labels = chart.labels ?? [];
-  const values = asNumbers(chart.datasets[0]?.data);
+  // One dataset → one bar per label (the chat's shape, unchanged).
+  // Two or more → grouped bars, one per dataset, coloured by SERIES not by
+  // rank, so a filter that drops a category never repaints the survivors.
+  const grouped = chart.datasets.length > 1;
+  const series = chart.datasets.map((ds) => ({ label: ds.label, values: asNumbers(ds.data), meta: ds.meta }));
+  // Empilhado: uma barra por label, dividida pelas séries — a altura total
+  // continua sendo o total, e a escala é a do somatório da coluna.
+  const stacked = !!chart.stacked && grouped;
+  const sumTo = (i: number, upto: number) =>
+    series.slice(0, upto + 1).reduce((sum, s) => sum + (s.values[i] ?? 0), 0);
   const pl = 50, pr = 8, pt = 20, pb = 26;
   const cW = VIEW_W - pl - pr;
   const cH = VIEW_H - pt - pb;
-  const max = niceAxisMax(Math.max(...values, 1));
+  const max = niceAxisMax(stacked
+    ? Math.max(...labels.map((_, i) => sumTo(i, series.length - 1)), 1)
+    : Math.max(...series.flatMap((s) => s.values), 1));
   const gap = cW / Math.max(labels.length, 1);
-  const bW = Math.min(32, gap * 0.56);
-  const meta = chart.datasets[0]?.meta;
+  // 2px of surface between neighbouring bars keeps the groups legible
+  const bW = grouped && !stacked
+    ? Math.max(2, (gap * 0.72 - 2 * (series.length - 1)) / series.length)
+    : Math.min(32, gap * 0.56);
+  const groupW = grouped && !stacked ? bW * series.length + 2 * (series.length - 1) : bW;
 
   return (
     <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block h-auto w-full" role="img" aria-label={chart.title ?? "Gráfico de barras"}>
       <SvgDefs gid={gid} theme={theme} />
       <GridLines pl={pl} pr={pr} pt={pt} pb={pb} max={max} theme={theme} />
       {labels.map((label, i) => {
-        const value = values[i] ?? 0;
-        const color = theme.palette[i % theme.palette.length];
-        const h = max ? (value / max) * cH : 0;
-        const x = pl + i * gap + (gap - bW) / 2;
-        const y = pt + cH - h;
+        const gx = pl + i * gap + (gap - groupW) / 2;
         return (
-          <g key={`${label}-${i}`} onMouseEnter={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: String(label), rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color }], meta: meta?.[i] })} onMouseMove={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: String(label), rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color }], meta: meta?.[i] })} onMouseLeave={() => setHover(null)}>
-            <rect x={x} y={y} width={bW} height={h} rx="1" fill={`url(#${gid}-bar-${i % theme.palette.length})`} filter={theme.isDark ? `url(#${gid}-soft-glow)` : undefined} />
-            <line x1={x} y1={y + 0.7} x2={x + bW} y2={y + 0.7} stroke={color} strokeWidth="2" opacity={theme.isDark ? 0.88 : 0.65} />
-            {value > 0 && <text x={x + bW / 2} y={y - 4} textAnchor="middle" fill={theme.isDark ? color : theme.text} fontSize="9" fontWeight="700" fontFamily="monospace">{formatCompact(value)}</text>}
-            <text x={x + bW / 2} y={VIEW_H - pb + 12} textAnchor="middle" fill={theme.dim} fontSize="8.5" fontFamily="monospace" letterSpacing=".04em">{shortLabel(String(label), 4)}</text>
+          <g key={`${label}-${i}`}>
+            {series.map((s, si) => {
+              const value = s.values[i] ?? 0;
+              const ci = grouped ? si : i;
+              const color = theme.palette[ci % theme.palette.length];
+              const h = max ? (value / max) * cH : 0;
+              const x = stacked ? gx : gx + si * (bW + 2);
+              const y = stacked ? pt + cH - (sumTo(i, si) / max) * cH : pt + cH - h;
+              const hover = (e: React.MouseEvent) => setHover({
+                x: e.nativeEvent.offsetX,
+                y: e.nativeEvent.offsetY,
+                title: String(label),
+                rows: grouped
+                  ? [
+                      ...series.map((s2, k) => ({
+                        label: s2.label,
+                        value: s2.values[i] ?? 0,
+                        color: theme.palette[k % theme.palette.length],
+                      })),
+                      ...(stacked ? [{ label: "Total", value: sumTo(i, series.length - 1), color: theme.accent }] : []),
+                    ]
+                  : [{ label: s.label ?? "Valor", value, color }],
+                meta: s.meta?.[i],
+              });
+              return (
+                <g key={si} onMouseEnter={hover} onMouseMove={hover} onMouseLeave={() => setHover(null)}>
+                  {/* empilhado usa cor chapada: o gradiente some no rodapé de cada
+                      segmento e deixaria a fatia de baixo aparecer por dentro */}
+                  <rect x={x} y={y} width={bW} height={h} rx="1"
+                    fill={stacked ? color : `url(#${gid}-bar-${ci % theme.palette.length})`}
+                    fillOpacity={stacked ? (theme.isDark ? 0.72 : 0.55) : undefined}
+                    filter={theme.isDark && !stacked ? `url(#${gid}-soft-glow)` : undefined} />
+                  <line x1={x} y1={y + 0.7} x2={x + bW} y2={y + 0.7} stroke={color} strokeWidth="2" opacity={theme.isDark ? 0.88 : 0.65} />
+                  {/* a value on every grouped bar is unreadable — the tooltip carries them */}
+                  {!grouped && value > 0 && <text x={x + bW / 2} y={y - 4} textAnchor="middle" fill={theme.isDark ? color : theme.text} fontSize="9" fontWeight="700" fontFamily="monospace">{formatCompact(value)}</text>}
+                </g>
+              );
+            })}
+            <text x={gx + groupW / 2} y={VIEW_H - pb + 12} textAnchor="middle" fill={theme.dim} fontSize="8.5" fontFamily="monospace" letterSpacing=".04em">{shortLabel(String(label), grouped ? 5 : 4)}</text>
           </g>
         );
       })}
@@ -286,14 +356,24 @@ function HudLineArea({ chart, gid, theme, setHover, area }: { chart: ChartData; 
   const pl = area ? 48 : 44, pr = 10, pt = 12, pb = 24;
   const cW = VIEW_W - pl - pr;
   const cH = VIEW_H - pt - pb;
-  const max = niceAxisMax(Math.max(...series.flatMap((s) => s.values), 1));
   const count = Math.max(labels.length, ...series.map((s) => s.values.length), 1);
+  // Empilhado: cada série plota na soma acumulada até ela, e a escala é a do
+  // somatório da coluna — o topo da pilha é o total, que é o número que o
+  // gráfico mostrava antes de discriminar.
+  const stacked = !!chart.stacked && series.length > 1;
+  const sumTo = (i: number, upto: number) =>
+    series.slice(0, upto + 1).reduce((sum, s) => sum + (s.values[i] ?? 0), 0);
+  const max = niceAxisMax(stacked
+    ? Math.max(...Array.from({ length: count }, (_, i) => sumTo(i, series.length - 1)), 1)
+    : Math.max(...series.flatMap((s) => s.values), 1));
   const labelAt = (i: number) => labels[i] ?? `P${i + 1}`;
-  // Hover responde pela coluna inteira: todas as séries naquele x, e não só a
-  // que está sob o cursor.
-  const columnRows = (i: number) => series.map((s, k) => ({
-    label: s.label, value: s.values[i] ?? 0, color: theme.palette[k % theme.palette.length],
-  }));
+  // Hover responde pela coluna inteira: todas as séries naquele x. Só empilhado
+  // ganha a linha "Total" — sem pilha não existe soma que signifique alguma coisa
+  // (alcance + impressões não é um número).
+  const columnRows = (i: number) => [
+    ...series.map((s, k) => ({ label: s.label, value: s.values[i] ?? 0, color: theme.palette[k % theme.palette.length] })),
+    ...(stacked ? [{ label: "Total", value: sumTo(i, series.length - 1), color: theme.accent }] : []),
+  ];
 
   return (
     <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block h-auto w-full" role="img" aria-label={chart.title ?? (area ? "Gráfico de área" : "Gráfico de linha")}>
@@ -314,16 +394,26 @@ function HudLineArea({ chart, gid, theme, setHover, area }: { chart: ChartData; 
         const color = theme.palette[si % theme.palette.length];
         const points: SeriesPoint[] = s.values.map((value, i) => ({
           x: count === 1 ? pl + cW / 2 : pl + i * (cW / (count - 1)),
-          y: pt + cH - (value / max) * cH,
+          y: pt + cH - ((stacked ? sumTo(i, si) : value) / max) * cH,
           value,
           label: labelAt(i),
         }));
         if (!points.length) return null;
         const d = pathCurve(points);
         const fillId = `${gid}-area-${si % theme.palette.length}`;
+        const closed = `${d} L${points[points.length - 1].x},${pt + cH} L${points[0].x},${pt + cH} Z`;
         return (
           <g key={s.label}>
-            {(area || chart.type === "line") && <path d={`${d} L${points[points.length - 1].x},${pt + cH} L${points[0].x},${pt + cH} Z`} fill={`url(#${fillId})`} stroke="none" />}
+            {stacked ? (
+              // As séries são desenhadas de cima para baixo (o loop já vem
+              // invertido), então cada faixa visível é a banda entre duas curvas.
+              // O fundo opaco vai antes da cor: sem ele a faixa de baixo herdaria
+              // o alfa de todas as de cima e sairia com a cor errada.
+              <>
+                <path d={closed} fill={theme.bg} stroke="none" />
+                <path d={closed} fill={color} fillOpacity={theme.isDark ? 0.5 : 0.34} stroke="none" />
+              </>
+            ) : (area || chart.type === "line") && <path d={closed} fill={`url(#${fillId})`} stroke="none" />}
             {theme.isDark && <path d={d} fill="none" stroke={color} strokeWidth={area ? 4 : 5} opacity={area ? 0.2 : 0.16} filter={`url(#${gid}-glow)`} strokeLinecap="round" />}
             <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             {points.map((p, i) => (
@@ -440,6 +530,9 @@ function HudScatter({ chart, gid, theme, setHover }: { chart: ChartData; gid: st
 function BrazilChoropleth({ chart, gid, theme, setHover }: { chart: ChartData; gid: string; theme: HudTheme; setHover: (hover: HoverState | null) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [paths, setPaths] = useState<{ uf: string; d: string; cx: number; cy: number }[]>([]);
+  // viewBox recortado no bounding box do mapa — o Brasil é quase quadrado e
+  // afogava num viewBox 2:1 fixo. A legenda vai por cima, no canto oceânico.
+  const [box, setBox] = useState({ x: 0, y: 0, w: VIEW_W, h: VIEW_W });
   const labels = chart.labels ?? [];
   const values = asNumbers(chart.datasets[0]?.data);
   const valueMap: Record<string, number> = {};
@@ -457,8 +550,10 @@ function BrazilChoropleth({ chart, gid, theme, setHover }: { chart: ChartData; g
       fetch("/brazil-states.geojson").then((r) => r.json()),
       import("d3-geo"),
     ]).then(([geo, d3]) => {
-      const projection = d3.geoMercator().fitSize([VIEW_W, VIEW_H], geo);
+      const projection = d3.geoMercator().fitSize([VIEW_W, VIEW_W], geo);
       const pathGen = d3.geoPath(projection);
+      const [[x0, y0], [x1, y1]] = pathGen.bounds(geo as Parameters<typeof pathGen.bounds>[0]);
+      setBox({ x: x0 - 3, y: y0 - 3, w: x1 - x0 + 6, h: y1 - y0 + 6 });
       const result = (geo.features as GeoFeature[]).map((f) => {
         const centroid = pathGen.centroid(f as Parameters<typeof pathGen>[0]);
         return {
@@ -478,7 +573,7 @@ function BrazilChoropleth({ chart, gid, theme, setHover }: { chart: ChartData; g
 
   return (
     <div ref={containerRef}>
-      <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block h-auto w-full" role="img" aria-label={chart.title ?? "Mapa do Brasil"}>
+      <svg viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`} preserveAspectRatio="xMidYMid meet" className="mx-auto block h-auto w-full max-h-[340px]" role="img" aria-label={chart.title ?? "Mapa do Brasil"}>
         <SvgDefs gid={gid} theme={theme} />
         {paths.map(({ uf, d, cx, cy }) => {
           const value = valueMap[uf.toUpperCase()] ?? 0;
@@ -488,13 +583,13 @@ function BrazilChoropleth({ chart, gid, theme, setHover }: { chart: ChartData; g
           return (
             <g key={uf} onMouseEnter={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: uf, rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color: theme.accent }], meta: metaMap[uf.toUpperCase()] })} onMouseMove={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: uf, rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color: theme.accent }], meta: metaMap[uf.toUpperCase()] })} onMouseLeave={() => setHover(null)}>
               <path d={d} fill={theme.accent} fillOpacity={fillOpacity} stroke={theme.accent} strokeOpacity={strokeOpacity} strokeWidth={theme.isDark && ratio > 0.6 ? 0.9 : 0.6} filter={theme.isDark && ratio > 0.5 ? `url(#${gid}-soft-glow)` : undefined} />
-              {value > 0 && ratio > 0.32 && Number.isFinite(cx) && Number.isFinite(cy) && <text x={cx} y={cy + 3} textAnchor="middle" fill={theme.accent} fillOpacity={0.45 + ratio * 0.5} fontSize="8" fontFamily="monospace" fontWeight="700">{uf}</text>}
+              {value > 0 && ratio > 0.32 && Number.isFinite(cx) && Number.isFinite(cy) && <text x={cx} y={cy + 4} textAnchor="middle" fill={theme.accent} fillOpacity={0.45 + ratio * 0.5} fontSize="11" fontFamily="monospace" fontWeight="700">{uf}</text>}
             </g>
           );
         })}
-        <rect x={VIEW_W - 62} y={VIEW_H - 14} width="58" height="5" fill={`url(#${gid}-geo-legend)`} rx="2" />
-        <text x={VIEW_W - 62} y={VIEW_H - 17} fill={theme.dim} fontSize="7.5" fontFamily="monospace">BAIXO</text>
-        <text x={VIEW_W - 4} y={VIEW_H - 17} textAnchor="end" fill={theme.dim} fontSize="7.5" fontFamily="monospace">ALTO</text>
+        <rect x={box.x + box.w - 76} y={box.y + box.h - 8} width="72" height="5" fill={`url(#${gid}-geo-legend)`} rx="2" />
+        <text x={box.x + box.w - 76} y={box.y + box.h - 11} fill={theme.dim} fontSize="9" fontFamily="monospace">BAIXO</text>
+        <text x={box.x + box.w - 4} y={box.y + box.h - 11} textAnchor="end" fill={theme.dim} fontSize="9" fontFamily="monospace">ALTO</text>
       </svg>
     </div>
   );

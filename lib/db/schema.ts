@@ -82,6 +82,14 @@ export const sqlExamples = pgTable('sql_examples', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+// Configuração global editável pela tela (hoje: as regras de grupo de campanha do
+// dashboard). Chave/valor porque o próximo ajuste editável não merece outra tabela.
+export const appSettings = pgTable('app_settings', {
+  key:       text('key').primaryKey(),
+  value:     text('value').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export type User               = typeof users.$inferSelect
 export type Session            = typeof sessions.$inferSelect
 export type ChatSession        = typeof chatSessions.$inferSelect
@@ -89,3 +97,4 @@ export type ChatMessage        = typeof chatMessages.$inferSelect
 export type FileExport         = typeof fileExports.$inferSelect
 export type SqlExample         = typeof sqlExamples.$inferSelect
 export type PasskeyCredential  = typeof passkeyCredentials.$inferSelect
+export type AppSetting         = typeof appSettings.$inferSelect

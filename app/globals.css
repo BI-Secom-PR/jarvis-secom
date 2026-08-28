@@ -126,6 +126,7 @@
   --hud-violet:      light-dark(#4f46e5, #818cf8);
   --hud-violet-soft: light-dark(rgba(79, 70, 229, 0.45), rgba(129, 140, 248, 0.5));
   --hud-red:       light-dark(#d92d20, #ff4133);
+  --hud-red-soft:  light-dark(rgba(217, 45, 32, 0.45), rgba(255, 65, 51, 0.5));
   --font-hud:      var(--font-michroma), 'Michroma', system-ui, sans-serif;
 
   /* Backgrounds & surfaces — deep void / blueprint paper */
@@ -532,6 +533,12 @@
 @utility hud-panel-violet {
   --hud-accent: var(--hud-violet);
   --hud-accent-soft: var(--hud-violet-soft);
+}
+
+/* Red variant — dashboard HUD. */
+@utility hud-panel-red {
+  --hud-accent: var(--hud-red);
+  --hud-accent-soft: var(--hud-red-soft);
 }
 
 /* Retune the send orb to arc-reactor cyan inside the HUD theme. Plain rule
