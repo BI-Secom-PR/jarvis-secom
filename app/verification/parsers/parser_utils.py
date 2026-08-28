@@ -184,31 +184,57 @@ def vehicle_from_filename(filepath: str) -> str:
     return candidate or stem
 
 
-class StratifiedReservoir:
+class UrlAggregator:
     """
-    Reservoir sampling estratificado para o pool de URLs.
+    Soma impressões por (veículo, categoria, url) enquanto as linhas são lidas.
 
-    Um reservoir global único deixa estratos raros (ex.: as poucas linhas cpv>0
-    de um veículo CPV num arquivo dominado por linhas cpm de outros veículos)
-    serem afogados pelo volume. Mantendo um reservoir independente por estrato
-    — (veículo, categoria, métrica) — linhas raras sobrevivem garantidamente
-    enquanto estratos gigantes continuam limitados a `cap` itens.
+    Substitui o reservoir sampling que existia aqui. O engine seleciona as URLs
+    por *share*: uma URL entra na auditoria se sozinha representa X% do total de
+    impressões do seu grupo (veículo, categoria). Isso exige o total real do
+    grupo e a impressão real de cada URL — uma amostra aleatória não consegue
+    dar nenhum dos dois. Medido nos 29 verifs SENSE: o reservoir de 10k/arquivo
+    mostrava 256.604 de 3.478.850 linhas (7,4%).
+
+    Agregar também é o que torna o volume tratável: as mesmas 3,48M linhas
+    colapsam em 1,49M chaves distintas, e o engine já deduplicava por esta
+    mesma chave depois — agora não precisa.
+
+    URLs de esquema app:// são descartadas: não são páginas auditáveis (a IA
+    não tem o que ler nelas) e dominam o topo dos grupos — 9 delas carregam
+    40,5M impressões nos arquivos SENSE.
     """
 
-    def __init__(self, cap: int = 500):
-        self.cap = cap
-        self._pools: dict[tuple, list[dict]] = {}
-        self._counts: dict[tuple, int] = {}
+    # ponytail: teto de segurança contra um verif patológico, não uma regra de
+    # negócio — o maior veículo real (R7 PORTAL) dá 209.470 chaves ≈ 45MB.
+    # Se estourar, a agregação para de aceitar chaves novas mas continua somando
+    # nas existentes. Subir se algum adserver legítimo bater no limite.
+    MAX_DISTINCT = 500_000
 
-    def add(self, key: tuple, entry: dict) -> None:
-        pool = self._pools.setdefault(key, [])
-        self._counts[key] = self._counts.get(key, 0) + 1
-        if len(pool) < self.cap:
-            pool.append(entry)
-        else:
-            idx = random.randint(0, self._counts[key] - 1)
-            if idx < self.cap:
-                pool[idx] = entry
+    def __init__(self) -> None:
+        self._items: dict[tuple[str, str, str], dict] = {}
+        self.dropped = 0
+
+    def add(self, veiculo: str, categoria: str, url: str,
+            impressoes: int, cpm: int | None = None, cpv: int | None = None) -> None:
+        if not url or url.startswith("app://"):
+            return
+        key = (veiculo, categoria, url)
+        entry = self._items.get(key)
+        if entry is None:
+            if len(self._items) >= self.MAX_DISTINCT:
+                self.dropped += 1
+                return
+            entry = {"url": url, "categoria": categoria, "veiculo": veiculo, "impressoes": 0}
+            if cpm is not None:
+                entry["cpm"] = 0
+            if cpv is not None:
+                entry["cpv"] = 0
+            self._items[key] = entry
+        entry["impressoes"] += impressoes or 0
+        if cpm is not None:
+            entry["cpm"] = (entry.get("cpm") or 0) + cpm
+        if cpv is not None:
+            entry["cpv"] = (entry.get("cpv") or 0) + cpv
 
     def items(self) -> list[dict]:
-        return [e for pool in self._pools.values() for e in pool]
+        return list(self._items.values())

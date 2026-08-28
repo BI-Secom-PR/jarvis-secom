@@ -25,7 +25,7 @@ from pathlib import Path
 import openpyxl
 
 import fastxlsx
-from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename, StratifiedReservoir
+from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename, UrlAggregator
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -339,7 +339,7 @@ def _parse_verif_flat(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, l
     cpm_total_by_vehicle: dict[str, int] = defaultdict(int)
     veiculos_entregue: dict[str, int] = defaultdict(int)
     veiculos_total:    dict[str, int] = defaultdict(int)
-    reservoir = StratifiedReservoir(cap=500)
+    url_agg = UrlAggregator()
     pool_count = 0
 
     for row in ws.iter_rows(min_row=2, values_only=True):
@@ -403,11 +403,9 @@ def _parse_verif_flat(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, l
 
         if url and total_val > 0:
             pool_count += 1
-            entry = {"url": url, "categoria": categoria, "veiculo": veiculo,
-                     "impressoes": total_val, "cpm": v_cpm, "cpv": v_cpv}
-            reservoir.add((veiculo, cat_str.lower(), v_cpv > 0), entry)
+            url_agg.add(veiculo, categoria, url, total_val, cpm=v_cpm, cpv=v_cpv)
 
-    return indev, veiculos_entregue, reservoir.items(), pool_count, cpv_indev, cpv_total_by_vehicle, veiculos_total, sem_url, cpm_indev, cpm_total_by_vehicle
+    return indev, veiculos_entregue, url_agg.items(), pool_count, cpv_indev, cpv_total_by_vehicle, veiculos_total, sem_url, cpm_indev, cpm_total_by_vehicle
 
 
 def _parse_verif_multitab(wb, data_ini, data_fim, praca=None) -> tuple[dict, dict, list, int, dict, dict, dict, dict]:
@@ -424,7 +422,7 @@ def _parse_verif_multitab(wb, data_ini, data_fim, praca=None) -> tuple[dict, dic
     nonvis_indev: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     veiculos_entregue: dict[str, int] = defaultdict(int)
     veiculos_total:    dict[str, int] = defaultdict(int)
-    reservoir = StratifiedReservoir(cap=500)
+    url_agg = UrlAggregator()
     pool_count = 0
     found_header = False
 
@@ -508,16 +506,14 @@ def _parse_verif_multitab(wb, data_ini, data_fim, praca=None) -> tuple[dict, dic
 
             if url and total_val > 0:
                 pool_count += 1
-                entry = {"url": url, "categoria": categoria, "veiculo": veiculo,
-                         "impressoes": total_val, "cpm": v_imp, "cpv": v_vis}
-                reservoir.add((veiculo, cat_str.lower(), v_vis > 0), entry)
+                url_agg.add(veiculo, categoria, url, total_val, cpm=v_imp, cpv=v_vis)
 
     if not found_header:
         raise ValueError(
             "Header com 'Categoria' e 'Veículo' não encontrado em nenhuma sheet"
         )
 
-    return indev, veiculos_entregue, reservoir.items(), pool_count, vis_indev, veiculos_total, sem_url, nonvis_indev
+    return indev, veiculos_entregue, url_agg.items(), pool_count, vis_indev, veiculos_total, sem_url, nonvis_indev
 
 
 def parse_verif(

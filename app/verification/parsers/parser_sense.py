@@ -20,7 +20,6 @@ Filtros data/praça: só se as colunas existirem (SENSE verif atual não tem).
 """
 
 import json
-import random
 import re
 import sys
 from collections import defaultdict
@@ -29,7 +28,7 @@ from pathlib import Path
 
 import fastxlsx
 
-from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename
+from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename, UrlAggregator
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -502,9 +501,7 @@ def parse_verif(
     veiculos_indevidas_sem_url: dict[str, dict] = defaultdict(dict)
     veiculos_entregue:  dict[str, int]  = defaultdict(int)
     veiculos_total:     dict[str, int]  = defaultdict(int)
-    MAX_POOL = 10000
-    url_pool: list[dict] = []
-    pool_count = 0
+    url_agg = UrlAggregator()
 
     for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
         row = list(row)
@@ -545,18 +542,9 @@ def parse_verif(
         veiculos_total[veiculo] += impressoes
 
         if url and cat_str:
-            pool_count += 1
-            entry = {"url": url, "categoria": categoria, "veiculo": veiculo, "impressoes": impressoes}
-            if is_views_metric:
-                entry["cpv"] = impressoes
-            else:
-                entry["cpm"] = impressoes
-            if len(url_pool) < MAX_POOL:
-                url_pool.append(entry)
-            else:
-                idx = random.randint(0, pool_count - 1)
-                if idx < MAX_POOL:
-                    url_pool[idx] = entry
+            url_agg.add(veiculo, categoria, url, impressoes,
+                        cpv=impressoes if is_views_metric else None,
+                        cpm=None if is_views_metric else impressoes)
 
     wb.close()
 
@@ -575,7 +563,7 @@ def parse_verif(
             "viewability":       None,
             "indevidas":         dict(veiculos_indevidas[veiculo]),
             "indevidas_sem_url": dict(veiculos_indevidas_sem_url[veiculo]),
-            "url_sample":        url_pool if not results else [],
+            "url_sample":        url_agg.items() if not results else [],
             "formato_detectado": "sense_verif_views" if is_views_metric else "sense_verif",
         })
 

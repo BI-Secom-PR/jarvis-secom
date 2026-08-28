@@ -15,7 +15,6 @@ Verification:
 """
 
 import json
-import random
 import sys
 from collections import defaultdict
 from datetime import date
@@ -23,6 +22,7 @@ from pathlib import Path
 
 from parser_utils import (
     col_index, to_int, cli_date, load_workbook_fast, parse_comprovante_cm360,
+    UrlAggregator,
 )
 
 
@@ -82,9 +82,7 @@ def parse_verif(
 
     veiculos_indevidas: dict[str, dict] = defaultdict(dict)
     veiculos_entregue:  dict[str, int]  = defaultdict(int)
-    MAX_POOL = 10000
-    url_pool: list[dict] = []
-    pool_count = 0
+    url_agg = UrlAggregator()
 
     for row in ws.iter_rows(min_row=3, values_only=True):
         if all(v is None for v in row):
@@ -104,14 +102,7 @@ def parse_verif(
         veiculos_entregue[veiculo] += impressoes
 
         if url:
-            pool_count += 1
-            entry = {"url": url, "categoria": categoria, "veiculo": veiculo, "impressoes": impressoes}
-            if len(url_pool) < MAX_POOL:
-                url_pool.append(entry)
-            else:
-                idx = random.randint(0, pool_count - 1)
-                if idx < MAX_POOL:
-                    url_pool[idx] = entry
+            url_agg.add(veiculo, categoria, url, impressoes)
 
     wb.close()
 
@@ -126,7 +117,7 @@ def parse_verif(
             "viewables":         None,
             "viewability":       None,
             "indevidas":         dict(veiculos_indevidas[veiculo]),
-            "url_sample":        url_pool if not results else [],
+            "url_sample":        url_agg.items() if not results else [],
             "formato_detectado": "dgbrasil_verif",
         })
 

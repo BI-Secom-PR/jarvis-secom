@@ -146,13 +146,43 @@ Cada adserver pode usar um layout diferente de colunas no consolidado (posiçõe
 Ver seção **SENSE — multi-shape** acima (Always_on vs Junho; detecção dinâmica de indevidas).
 
 ## Amostragem de URLs para AI check
-- Parsers devolvem o pool completo de URLs indevidas (reservoir ≤ 10000 por arquivo)
-- `engine.py` agrupa por categoria e amostra **30% por categoria indevida** (mín. 1), cap global 200
-- `route.ts` envia ao Ollama `gemma4:31b-cloud` em paralelo (máx 50 URLs, batches de 10)
-- Retorna `url_check_anomalies: [{url, categoria, reason}]` para a UI
+
+**Seleção — regra de share (`engine.py`).** Uma URL vai para a IA se sozinha
+representa `URL_SHARE_PCT`% (padrão **2%**) das impressões do seu grupo
+`(veículo, categoria)`, no máximo `URL_MAX_POR_GRUPO` (15) por grupo. Grupo sem
+ninguém acima do corte rende a URL de maior alcance — nunca fica vazio.
+
+- Agrupar **por veículo e categoria**, não só por categoria: senão um veículo
+  dominante ocupa a cota inteira e os pequenos ficam sem auditoria nenhuma.
+- **Share e não corte absoluto de impressões:** um corte fixo cega as categorias
+  pequenas, que é onde a auditoria vale. `SEEDTAG/Pornografia` tem 150 URLs
+  distintas e nenhuma passa de 184 impressões — são cifras de sertanejo
+  classificadas como pornografia, exatamente o falso positivo a achar.
+- Parsers agregam com `UrlAggregator` (`parser_utils.py`): soma impressões por
+  `(veículo, categoria, url)` durante a leitura e descarta esquema `app://`
+  (não auditável). Substituiu o reservoir de 10k/arquivo, que mostrava só 7,4%
+  das linhas e impedia qualquer contagem de distintas.
+- **Não duplo-amostrar**: parsers agregam, nunca amostram.
+
+**Execução — lotes dirigidos pelo browser.** A amostra não cabe nos 300s de uma
+função só (medido: 3.514 URLs nos 29 verifs SENSE ≈ 12 lotes ≈ 13-49 min).
+
+1. `POST /api/verification/run` → SSE `engine_start`→`engine_done`→`done`, com
+   `url_sample` e `url_categorias` no resultado. **Não** audita URL.
+2. `POST /api/verification/url-check` (`lib/urlCheck.ts`) → audita o que couber
+   em `URL_CHECK_BUDGET_MS` (200s) e devolve `{rows, checked, failed}`. O
+   cliente avança por `checked`, não pelo tamanho do lote que mandou.
+3. `POST /api/verification/url-write` → pct por veículo, anomalias, col 30.
+
+- Ollama `gemma4:31b-cloud`, batches de 10 URLs, concorrência 4 (acima disso o
+  cloud responde *"too many concurrent requests"*), teto de 75s por chamada.
+- Retorna `url_check_anomalies: [{url, categoria, reason}]` para a UI.
 - Categoria `safeframe` é tratada como limitação técnica (não conteúdo indevido) — o prompt da IA instrui a classificá-la sempre como CORRETA
+- URL raiz classificada como `Home` é resolvida por regra, sem gastar chamada.
 - Usa `OLLAMA_BASE_URL` — se ausente, URL check é silenciosamente pulado
-- **Não duplo-amostrar**: parsers nunca fazem sub-amostragem própria
+
+Checks: `python3 verification/test_url_sampling.py` (regra de seleção) e
+`npx tsx lib/urlCheck.test.ts` (o `checked` dos lotes não pula URL)
 
 ## Detecção de header nos parsers de verif
 - `_find_verif_header` exige `"categoria"` + variant de `"veículo"` na mesma linha (até row 25)

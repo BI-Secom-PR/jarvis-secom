@@ -154,7 +154,7 @@ def _run_engine(body: dict) -> dict:
             data_ini=data_ini,
             data_fim=data_fim,
             output_path=output_path,
-            url_sample_pct=body.get("url_sample_pct", 10),
+            url_share_pct=body.get("url_share_pct", 2.0),
             view_rules=view_rules,
             praca=body.get("praca") or None,
         )

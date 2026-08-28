@@ -13,14 +13,13 @@ Verification:
 """
 
 import json
-import random
 import sys
 from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
 
-from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename, load_workbook_fast
+from parser_utils import col_index, parse_date, to_float, to_int, cli_date, vehicle_from_filename, load_workbook_fast, UrlAggregator
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
 
@@ -276,9 +275,7 @@ def parse_verif(
     veiculos_entregue:  dict[tuple, int]  = defaultdict(int)
     veiculos_total:     dict[tuple, int]  = defaultdict(int)
 
-    MAX_POOL = 10000
-    url_pool: list[dict] = []
-    pool_count = 0
+    url_agg = UrlAggregator()
 
     for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
         if all(v is None for v in row):
@@ -330,14 +327,7 @@ def parse_verif(
             continue
 
         if url and cat_str:
-            pool_count += 1
-            entry = {"url": url, "categoria": categoria, "veiculo": veiculo, "impressoes": impressoes}
-            if len(url_pool) < MAX_POOL:
-                url_pool.append(entry)
-            else:
-                idx = random.randint(0, pool_count - 1)
-                if idx < MAX_POOL:
-                    url_pool[idx] = entry
+            url_agg.add(veiculo, categoria, url, impressoes)
 
     wb.close()
 
@@ -355,7 +345,7 @@ def parse_verif(
             "viewability":       None,
             "indevidas":         dict(veiculos_indevidas[key]),
             "indevidas_sem_url": dict(veiculos_indevidas_sem_url[key]),
-            "url_sample":        url_pool if not results else [],
+            "url_sample":        url_agg.items() if not results else [],
             "formato_detectado": "00px_verif",
         })
 
