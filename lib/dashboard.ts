@@ -1,3 +1,5 @@
+import type { Pool } from 'mysql2/promise';
+
 // Shared pieces of the DASHBOARD: filter WHERE builder, the metric whitelist,
 // age-bucket normalization and the region_name → UF map.
 //
@@ -17,6 +19,10 @@ export type DashboardFilters = {
   platform?: string[];
   ad?: string[];
   objective?: string[];
+  /** Tipos de compra escolhidos (CPM/CPC/CPV/CPE) — ver BUYING_TYPE_SQL. */
+  buyingType?: string[];
+  /** Os `campaign_id` que esses tipos cobrem — é o que vai para o WHERE. */
+  buyingCampaignIds?: string[];
   /** Eixos temáticos do Framework v4 (códigos, ex. 'ECO'). Só existem nas views classificadas. */
   tema?: string[];
 };
@@ -38,6 +44,13 @@ export function buildWhere(f: DashboardFilters): { sql: string; params: unknown[
   // (rótulo obsoleto) e tem de zerar — `IN ()` é erro de sintaxe no MySQL, daí o 1=0.
   if (f.campaignNames) {
     if (f.campaignNames.length) { conds.push('campaign_name IN (?)'); params.push(f.campaignNames); }
+    else conds.push('1=0');
+  }
+  // Tipo de compra também vira lista de ids resolvida (ver withBuyingCampaigns): o
+  // CASE não pode ser aplicado por linha porque cada tabela guarda um vocabulário
+  // diferente de `objective` para a mesma campanha. Vazio = nenhum id no tipo.
+  if (f.buyingCampaignIds) {
+    if (f.buyingCampaignIds.length) { conds.push('campaign_id IN (?)'); params.push(f.buyingCampaignIds); }
     else conds.push('1=0');
   }
   inList('platform', f.platform);
@@ -180,6 +193,18 @@ export const PLATFORM_LABEL: Record<string, string> = {
 };
 export const platformLabel = (p: string) => PLATFORM_LABEL[p] ?? p;
 
+// `network` é a sub-rede dentro da plataforma: no Meta é o publisher_platform
+// (facebook/instagram/…), no Google o network_type (YOUTUBE/SEARCH/…), e string
+// vazia em todas as outras — conferido ao vivo em 2026-08-28.
+export const NETWORK_LABEL: Record<string, string> = {
+  facebook: 'Facebook', instagram: 'Instagram', audience_network: 'Audience Network',
+  messenger: 'Messenger', threads: 'Threads', unknown: 'n/d',
+  YOUTUBE: 'YouTube', YOUTUBE_WATCH: 'YouTube', YOUTUBE_BUMPER: 'YouTube Bumper',
+  SEARCH: 'Busca', SEARCH_PARTNERS: 'Parceiros de busca', DISPLAY: 'Display',
+};
+/** Plataforma sem sub-rede mostra um traço, não uma célula vazia. */
+export const networkLabel = (n: string) => NETWORK_LABEL[n] ?? (n || '—');
+
 // ── Granularidade da série temporal ───────────────────────────────────────
 export type Granularity = 'dia' | 'semana' | 'mes';
 export function isGranularity(v: unknown): v is Granularity {
@@ -195,3 +220,43 @@ export const GRAIN_SQL: Record<Granularity, string> = {
 /** Linhas sem entrega nenhuma (plataforma reportou a campanha, mas zerada)
     poluem as tabelas — o dashboard só mostra quem teve algum valor. */
 export const HAS_DELIVERY = `cost > 0 OR impressions > 0 OR video_views > 0`;
+
+// ── Tipo de compra ────────────────────────────────────────────────────────
+// Não existe coluna no gold layer: é derivado do `objective`, com a mesma ordem
+// do CASE do Oracle. O mapa é MAIOR que o de lá porque aqui o `objective` guarda
+// o vocabulário cru de cada plataforma — o CASE original (ENGAGEMENT/AWARENESS/
+// TRAFFIC/VIDEO…) deixava 72% das impressões sem tipo, já que os dois maiores
+// valores da base são `TARGET_CPV` (Google) e `THRUPLAY` (Meta). Conferido ao vivo
+// em 2026-08-31: com os termos abaixo sobram 2,3% sem tipo (DIGITAL/Audio/DAI do
+// globoads e `objective` nulo).
+export const BUYING_TYPE_SQL = `CASE
+  WHEN UPPER(objective) REGEXP 'ENGAGEMENT|INCREASE FANS' THEN 'CPE'
+  WHEN UPPER(objective) REGEXP 'AWARENESS|REACH|IMPRESSION|CPM' THEN 'CPM'
+  WHEN UPPER(objective) REGEXP 'INTERACTION|TRAFFIC|CLICK|CONSIDERATION|VISIT|CONVERSION|LANDING_PAGE|CPA' THEN 'CPC'
+  WHEN UPPER(objective) REGEXP 'VIDEO|THRUPLAY|CPV' THEN 'CPV'
+  ELSE ''
+END`;
+
+/** Rótulo → `campaign_id[]`, como `withCampaignNames` faz com os grupos.
+ *
+ *  O tipo sai SEMPRE da tabela de campanhas e as outras abas filtram pelos ids que
+ *  ele resolve. Aplicar o CASE por linha em cada tabela daria resposta diferente por
+ *  aba: a mesma campanha do Meta é `THRUPLAY` em gold_platforms_campaigns e
+ *  `OUTCOME_ENGAGEMENT` em gold_platforms_regions (3,3 bi de impressões trocando de
+ *  CPV para CPE só de mudar de aba). Campanha com objetivos misturados entre os
+ *  anúncios entra em mais de um tipo — inteira, é o preço de as abas concordarem. */
+export async function withBuyingCampaigns<T extends DashboardFilters>(
+  pool: Pool,
+  f: T,
+  table: string,
+): Promise<T> {
+  if (!f.buyingType?.length) return f;
+  const w = buildWhere({ from: f.from, to: f.to });
+  const [rows] = await pool.query(
+    `SELECT DISTINCT campaign_id FROM ${table}
+      WHERE ${w.sql} AND campaign_id IS NOT NULL AND (${HAS_DELIVERY})
+        AND ${BUYING_TYPE_SQL} IN (?)`,
+    [...w.params, f.buyingType]
+  );
+  return { ...f, buyingCampaignIds: (rows as { campaign_id: unknown }[]).map((r) => String(r.campaign_id)) };
+}

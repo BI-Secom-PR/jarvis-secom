@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getPool, isTransientDbError, resetPool } from '@/lib/mysql';
-import { buildWhere, fromTable, HAS_DELIVERY, type DashboardFilters } from '@/lib/dashboard';
+import { BUYING_TYPE_SQL, buildWhere, fromTable, HAS_DELIVERY, withBuyingCampaigns, type DashboardFilters } from '@/lib/dashboard';
 import { groupOf, loadCampaignRules, rulesHash, withCampaignNames } from '@/lib/campaignGroups';
 
 export const dynamic = 'force-dynamic';
@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
     platform: q.getAll('platform'),
     ad: q.getAll('ad'),
     objective: q.getAll('objective'),
+    buyingType: q.getAll('buyingType'),
     tema: q.getAll('tema'),
   };
   try {
@@ -35,19 +36,21 @@ export async function GET(req: NextRequest) {
     if (hit && Date.now() - hit.loadedAt < CACHE_TTL_MS) return NextResponse.json(hit.data);
 
     const pool = getPool();
-    // `campaign` chega como rótulo(s) de grupo — traduz para os nomes crus antes dos WHEREs.
-    const fr = await withCampaignNames(pool, f, fromTable('gold_platforms_campaigns', f));
+    // `campaign` chega como rótulo(s) de grupo e `buyingType` como tipo de compra —
+    // traduz os dois para nomes/ids crus antes dos WHEREs (ver lib/dashboard).
+    // Os WHEREs abaixo herdam `tema`, e `eixo` só existe na view — sem trocar a tabela
+    // junto, cada um deles vira "Unknown column 'eixo'" e o painel de filtros inteiro
+    // esvazia. Trocando, o tema também estreita as listas, como todo o resto.
+    const T = fromTable('gold_platforms_campaigns', f);
+    const fr = await withBuyingCampaigns(pool, await withCampaignNames(pool, f, T), T);
     // Faceted: each list is constrained by every filter EXCEPT its own dimension,
     // so picking a platform narrows the campaign list but not the platform list.
     const wCamp = buildWhere({ ...fr, campaigns: undefined, campaignNames: undefined, ad: undefined });
     const wPlat = buildWhere({ ...fr, platform: undefined });
     const wAd = buildWhere({ ...fr, ad: undefined });
     const wObj = buildWhere({ ...fr, objective: undefined });
+    const wBuy = buildWhere({ ...fr, buyingType: undefined, buyingCampaignIds: undefined });
     const wTema = buildWhere({ ...fr, tema: undefined });
-    // Os quatro WHEREs acima herdam `tema`, e `eixo` só existe na view — sem trocar a
-    // tabela junto, cada um deles vira "Unknown column 'eixo'" e o painel de filtros
-    // inteiro esvazia. Trocando, o tema também estreita as listas, como todo o resto.
-    const T = fromTable('gold_platforms_campaigns', f);
 
     // TODA lista é filtrada por entrega, não só a de temas: o gold layer guarda linha
     // zerada para campanha que a plataforma reportou sem entregar nada, e sem o gate os
@@ -57,9 +60,16 @@ export async function GET(req: NextRequest) {
 
     // Two waves: platforms/objectives are trivial, campaigns/ads are the
     // heavier DISTINCT scans. Caps peak connections the same way sentimentos does.
-    const [platforms, objectives, temas] = await Promise.all([
+    const [platforms, objectives, buyingTypes, temas] = await Promise.all([
       pool.query(`SELECT DISTINCT platform FROM ${T} WHERE ${wPlat.sql} ${DELIVERED} ORDER BY platform`, wPlat.params),
       pool.query(`SELECT DISTINCT objective FROM ${T} WHERE ${wObj.sql} ${DELIVERED} AND objective IS NOT NULL AND objective != '' ORDER BY objective`, wObj.params),
+      // Tipo de compra é expressão, não coluna: o alias não vale no WHERE, então o
+      // "sem tipo" sai no HAVING. A lista só oferece tipo que entregou na janela.
+      pool.query(
+        `SELECT ${BUYING_TYPE_SQL} AS bt FROM ${T} WHERE ${wBuy.sql} ${DELIVERED}
+          GROUP BY bt HAVING bt != '' ORDER BY bt`,
+        wBuy.params
+      ),
       // Única query que sempre roda contra a view — é a fonte da lista de temas.
       // O gate de entrega é o que importa: a classificação está defasada (agosto/2026
       // zerado), então sem ele o select ofereceria 14 temas que só devolvem dashboard
@@ -78,6 +88,7 @@ export async function GET(req: NextRequest) {
     const data = {
       platforms: (platforms[0] as { platform: string }[]).map((r) => r.platform),
       objectives: (objectives[0] as { objective: string }[]).map((r) => r.objective),
+      buyingTypes: (buyingTypes[0] as { bt: string }[]).map((r) => r.bt),
       temas: (temas[0] as { eixo: string; eixo_label: string | null }[]).map((r) => ({
         code: r.eixo, label: r.eixo_label ?? r.eixo,
       })),

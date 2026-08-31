@@ -10,7 +10,7 @@ import HudCorners from "./HudCorners";
 import SearchableSelect from "./SearchableSelect";
 import ThemeToggle from "./ThemeToggle";
 import { postJson } from "@/lib/fetchUtils";
-import { AGE_ORDER, ENGAGEMENT_PARTS, GENDERS, GENDER_LABEL, METRICS, platformLabel, type EngagementPartKey, type MetricKey } from "@/lib/dashboard";
+import { AGE_ORDER, ENGAGEMENT_PARTS, GENDERS, GENDER_LABEL, METRICS, networkLabel, platformLabel, type EngagementPartKey, type MetricKey } from "@/lib/dashboard";
 import type { ChartData } from "@/types/chat";
 
 type Tab = "campanhas" | "demografia" | "regiao";
@@ -19,7 +19,7 @@ type EngMode = "total" | "partes";
 
 type Totals = { cost: number; impressions: number; reach: number; clicks: number; videoViews: number; engagement: number }
   & Record<EngagementPartKey, number>;
-type Row = Totals & { platform: string; nome: string;
+type Row = Totals & { platform: string; network: string; nome: string;
   p25: number; p50: number; p75: number; p95: number; p100: number; completions: number };
 
 type Payload = {
@@ -37,6 +37,7 @@ type Payload = {
 type FiltersData = {
   platforms: string[];
   objectives: string[];
+  buyingTypes: string[];
   temas: { code: string; label: string }[];
   campaigns: string[];
   ads: { campaign: string | null; ad: string }[];
@@ -63,6 +64,19 @@ const dash = "—";
  *  carregaria duas séries e duas colunas cravadas em zero. */
 const activeParts = (rows: Totals[]) => ENGAGEMENT_PARTS.filter((p) => rows.some((r) => r[p.key] > 0));
 const isoDaysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+
+/** Colunas somáveis da tabela — razão (CPM, CTR…) se recalcula do total, não se soma. */
+const SUMMABLE: (keyof Totals | "p25" | "p50" | "p75" | "p95" | "p100" | "completions")[] = [
+  "cost", "impressions", "reach", "clicks", "videoViews", "engagement",
+  ...ENGAGEMENT_PARTS.map((p) => p.key),
+  "p25", "p50", "p75", "p95", "p100", "completions",
+];
+const zeroRow = (): Row => ({
+  platform: "", network: "", nome: "",
+  cost: 0, impressions: 0, reach: 0, clicks: 0, videoViews: 0, engagement: 0,
+  p25: 0, p50: 0, p75: 0, p95: 0, p100: 0, completions: 0,
+  ...(Object.fromEntries(ENGAGEMENT_PARTS.map((p) => [p.key, 0])) as Record<EngagementPartKey, number>),
+});
 
 /** Value of a metric over one aggregate row — mirrors METRICS on the server. */
 function metricValue(t: Totals, m: MetricKey): number {
@@ -103,6 +117,9 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
   const [platforms, setPlatforms] = useState<string[]>([]);
   const [ads, setAds] = useState<string[]>([]);
   const [objectives, setObjectives] = useState<string[]>([]);
+  // Tipo de compra (CPM/CPC/CPV/CPE) é derivado do objetivo no servidor — ver
+  // BUYING_TYPE_SQL em lib/dashboard.
+  const [buyingTypes, setBuyingTypes] = useState<string[]>([]);
   const [temas, setTemas] = useState<string[]>([]);
 
   const [tab, setTab] = useState<Tab>("campanhas");
@@ -110,6 +127,8 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
   const [gran, setGran] = useState<Gran>("dia");
   const [tmode, setTmode] = useState<"campanha" | "anuncio">("campanha");
   const [engMode, setEngMode] = useState<EngMode>("total");
+  // Quebra a tabela por sub-rede: Meta vira Facebook/Instagram, Google vira YouTube/Busca.
+  const [byNetwork, setByNetwork] = useState(false);
 
   // Editor de regras de grupo (só admin). `rulesVersion` força o refetch dos filtros
   // depois de salvar — o dropdown É o preview das regras.
@@ -131,17 +150,18 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
       for (const v of campaigns) qs.append("campaign", v);
       for (const v of platforms) qs.append("platform", v);
       for (const v of objectives) qs.append("objective", v);
+      for (const v of buyingTypes) qs.append("buyingType", v);
       for (const v of temas) qs.append("tema", v);
       try {
         const res = await fetch(`/api/dashboard/filters?${qs}`, { signal: ctrl.signal });
         if (!res.ok) throw new Error();
         setFiltersData(await res.json());
       } catch {
-        if (!ctrl.signal.aborted) setFiltersData({ platforms: [], objectives: [], temas: [], campaigns: [], ads: [] });
+        if (!ctrl.signal.aborted) setFiltersData({ platforms: [], objectives: [], buyingTypes: [], temas: [], campaigns: [], ads: [] });
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [from, to, campaigns, platforms, objectives, temas, rulesVersion]);
+  }, [from, to, campaigns, platforms, objectives, buyingTypes, temas, rulesVersion]);
 
   // ── Dados da aba ativa ──
   useEffect(() => {
@@ -150,7 +170,8 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
     const t = setTimeout(async () => {
       try {
         const res = await postJson("/api/dashboard/data",
-          { from, to, campaign: campaigns, platform: platforms, ad: ads, objective: objectives, tema: temas, tab, gran },
+          { from, to, campaign: campaigns, platform: platforms, ad: ads, objective: objectives,
+            buyingType: buyingTypes, tema: temas, tab, gran, network: byNetwork },
           { signal: ctrl.signal });
         const json = (await res.json()) as Payload;
         if (ctrl.signal.aborted) return;
@@ -166,7 +187,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [from, to, campaigns, platforms, ads, objectives, temas, tab, gran]);
+  }, [from, to, campaigns, platforms, ads, objectives, buyingTypes, temas, tab, gran, byNetwork]);
 
   const adOptions = useMemo(
     () => (filtersData?.ads ?? [])
@@ -473,7 +494,8 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
   useEffect(() => {
     if (!insightsInput) { setAiInsights(null); setAiLoading(false); return; }
     const payload = { tab, metric, periodo: { from, to },
-      filtros: { campaign: campaigns, platform: platforms, ad: ads, objective: objectives, tema: temas },
+      filtros: { campaign: campaigns, platform: platforms, ad: ads, objective: objectives,
+        buyingType: buyingTypes, tema: temas },
       resumo: insightsInput };
     const key = JSON.stringify(payload);
     const cached = aiCache.current.get(key);
@@ -497,7 +519,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
     }, 400);
     return () => { clearTimeout(t); ctrl.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(insightsInput), tab, metric, from, to, campaigns, platforms, ads, objectives, temas]);
+  }, [JSON.stringify(insightsInput), tab, metric, from, to, campaigns, platforms, ads, objectives, buyingTypes, temas]);
 
   // ── Estilos herdados do SentimentosContainer ──
   const selectClass =
@@ -524,6 +546,12 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
 
   const tableRows = tmode === "campanha" ? (data?.campanhas ?? []) : (data?.anuncios ?? []);
   const tableParts = engMode === "partes" ? activeParts(tableRows) : [];
+  // Linha de total: soma das linhas MOSTRADAS (a tabela é cortada nas 50 maiores),
+  // com as razões recalculadas dos somatórios — média de médias não é o CPM.
+  const tableTotal = tableRows.reduce((a, r) => {
+    for (const k of SUMMABLE) a[k] += r[k];
+    return a;
+  }, zeroRow());
   const regiaoParts = engMode === "partes" && metric === "engajamento" ? activeParts(regiaoRows) : [];
 
   return (
@@ -536,7 +564,8 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
         <DashboardExportModal
           onClose={() => setExportOpen(false)}
           initial={tab === "campanhas" ? "campanhas" : tab}
-          filters={{ from, to, campaign: campaigns, platform: platforms, ad: ads, objective: objectives, tema: temas }}
+          filters={{ from, to, campaign: campaigns, platform: platforms, ad: ads, objective: objectives,
+            buyingType: buyingTypes, tema: temas }}
         />
       )}
 
@@ -600,6 +629,12 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                 <SearchableSelect multiple className={selectClass} value={objectives}
                   options={filtersData?.objectives ?? []}
                   emptyLabel="Todos os objetivos" onChange={setObjectives} />
+                {/* Tipo de compra sai do objetivo, mas por campanha inteira (o servidor
+                    resolve para campaign_id), senão a mesma campanha do Meta cairia em
+                    tipos diferentes em Campanhas e em Região. */}
+                <SearchableSelect multiple className={selectClass} value={buyingTypes}
+                  options={filtersData?.buyingTypes ?? []}
+                  emptyLabel="Todos os tipos de compra" onChange={setBuyingTypes} />
                 {/* A classificação criativa está defasada (o job `creative_classifier` do repo
                     mysql parou), então em janelas recentes a lista vem vazia — o hint diz o
                     porquê em vez de deixar um dropdown vazio parecendo quebrado. Tema que sai
@@ -706,6 +741,10 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                   <div className="flex gap-2">
                     <button className={pill(tmode === "campanha")} onClick={() => setTmode("campanha")}>Por campanha</button>
                     <button className={pill(tmode === "anuncio")} onClick={() => setTmode("anuncio")}>Por anúncio</button>
+                    <button className={pill(byNetwork)} onClick={() => setByNetwork((v) => !v)}
+                      title="Quebrar cada linha pela sub-rede: Meta em Facebook/Instagram, Google em YouTube/Busca">
+                      Rede
+                    </button>
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -713,6 +752,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                     <thead>
                       <tr className="text-left text-[10px] font-hud uppercase tracking-[0.16em] text-ink-3 border-b border-separator">
                         <th className="px-4 md:px-6 py-2.5">Plataforma</th>
+                        {byNetwork && <th className="px-3 py-2.5">Rede</th>}
                         <th className="px-3 py-2.5 min-w-[260px]">{tmode === "campanha" ? "Campanha" : "Anúncio"}</th>
                         <th className="px-3 py-2.5 text-right">Investimento</th>
                         <th className="px-3 py-2.5 text-right">Impressões</th>
@@ -747,6 +787,9 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                               <span className="text-ink-3 text-[12px]">{platformLabel(r.platform)}</span>
                             </span>
                           </td>
+                          {byNetwork && (
+                            <td className="px-3 py-3 text-ink-2 text-[12px] whitespace-nowrap">{networkLabel(r.network)}</td>
+                          )}
                           <td className="px-3 py-3 text-ink max-w-[320px]" title={r.nome}>
                             {r.nome || <span className="text-ink-3">sem nome</span>}
                           </td>
@@ -776,15 +819,49 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                         </tr>
                       ))}
                       {!tableRows.length && (
-                        <tr><td colSpan={20 + tableParts.length} className="px-6 py-8 text-center text-ink-3">
+                        <tr><td colSpan={20 + tableParts.length + (byNetwork ? 1 : 0)} className="px-6 py-8 text-center text-ink-3">
                           {loading ? "Carregando…" : "Nenhum resultado para os filtros atuais."}
                         </td></tr>
                       )}
                     </tbody>
+                    {/* Total das linhas que estão na tela; razões recalculadas dos
+                        somatórios, nunca a média das razões de cada linha. */}
+                    {tableRows.length > 0 && (
+                      <tfoot className="sticky bottom-0 bg-surface-opaque">
+                        <tr className="border-t border-separator font-semibold text-ink">
+                          <td className="px-4 md:px-6 py-3 font-hud text-[10px] uppercase tracking-[0.16em]"
+                              colSpan={byNetwork ? 3 : 2}>
+                            Total · {nf(tableRows.length)} {tableRows.length === 1 ? "linha" : "linhas"}
+                          </td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{brl(tableTotal.cost)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{nf(tableTotal.impressions)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{brl(div(tableTotal.cost, tableTotal.impressions) * 1000)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{nf(tableTotal.clicks)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{tableTotal.clicks ? brl(div(tableTotal.cost, tableTotal.clicks)) : dash}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{pct(div(tableTotal.clicks, tableTotal.impressions) * 100)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{nf(tableTotal.engagement)}</td>
+                          {tableParts.map((p) => (
+                            <td key={p.key} className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{tableTotal[p.key] ? nf(tableTotal[p.key]) : dash}</td>
+                          ))}
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{tableTotal.engagement ? brl(div(tableTotal.cost, tableTotal.engagement)) : dash}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{pct(div(tableTotal.engagement, tableTotal.impressions) * 100)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{nf(tableTotal.videoViews)}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{tableTotal.videoViews ? brl(div(tableTotal.cost, tableTotal.videoViews)) : dash}</td>
+                          <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{pct(div(tableTotal.videoViews, tableTotal.impressions) * 100)}</td>
+                          {(["p25", "p50", "p75", "p95", "p100", "completions"] as const).map((k) => (
+                            <td key={k} className={`px-3 py-3 text-right tabular-nums whitespace-nowrap${k === "completions" ? " pr-4 md:pr-6" : ""}`}>
+                              {tableTotal[k] ? nf(tableTotal[k]) : dash}
+                            </td>
+                          ))}
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
                 <div className="px-4 md:px-6 py-3 text-[11px] text-ink-3 border-t border-separator">
-                  {`Os ${Math.min(tableRows.length, data?.limit ?? 50)} maiores por investimento, de ${nf(tmode === "campanha" ? (totals?.campaigns ?? 0) : (totals?.ads ?? 0))}. Engajamento = curtidas + comentários + compartilhamentos + reações + salvos. Quartis e “completa” são contagens: 25–100% vêm de Meta, TikTok, GloboAds, Pinterest e Amazon, 95% só da Meta, e “completa” só de Kwai e LinkedIn — um traço significa que a plataforma não reporta.`}
+                  {`${byNetwork
+                    ? `${nf(tableRows.length)} linhas (${tmode === "campanha" ? "campanha" : "anúncio"} × rede), as maiores por investimento`
+                    : `Os ${Math.min(tableRows.length, data?.limit ?? 50)} maiores por investimento`}, de ${nf(tmode === "campanha" ? (totals?.campaigns ?? 0) : (totals?.ads ?? 0))} ${tmode === "campanha" ? "campanhas" : "anúncios"}. Engajamento = curtidas + comentários + compartilhamentos + reações + salvos. Quartis e “completa” são contagens: 25–100% vêm de Meta, TikTok, GloboAds, Pinterest e Amazon, 95% só da Meta, e “completa” só de Kwai e LinkedIn — um traço significa que a plataforma não reporta.`}
                 </div>
               </section>
             </>

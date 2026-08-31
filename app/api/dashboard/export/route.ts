@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth';
 import { getPool, isTransientDbError, resetPool } from '@/lib/mysql';
 import {
   buildWhere, METRIC_SELECT, VIDEO_SELECT, AGE_BUCKET_SQL,
-  UF_BY_NAME, HAS_DELIVERY, fromTable, platformLabel, GENDER_LABEL,
+  UF_BY_NAME, HAS_DELIVERY, fromTable, platformLabel, GENDER_LABEL, withBuyingCampaigns,
   type DashboardFilters,
 } from '@/lib/dashboard';
 import { withCampaignNames } from '@/lib/campaignGroups';
@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
     platform: strs(body.platform),
     ad: strs(body.ad),
     objective: strs(body.objective),
+    buyingType: strs(body.buyingType),
     tema: strs(body.tema),
   };
 
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
   // já está defasada, e o dado responde por si.
   if (body.probe === true) {
     try {
-      const w = buildWhere(await withCampaignNames(pool, f, T_CAMP));
+      const w = buildWhere(await withBuyingCampaigns(pool, await withCampaignNames(pool, f, T_CAMP), T_CAMP));
       const [camp, demo, reg] = await Promise.all([
         pool.query(`SELECT ${METRIC_SELECT}, ${VIDEO_SELECT} FROM ${T_CAMP} WHERE ${w.sql}`, w.params),
         pool.query(`SELECT ${METRIC_SELECT} FROM ${T_AGE} WHERE ${w.sql}`, w.params),
@@ -108,7 +109,7 @@ export async function POST(req: NextRequest) {
   };
 
   try {
-    const w = buildWhere(await withCampaignNames(pool, f, T_CAMP));
+    const w = buildWhere(await withBuyingCampaigns(pool, await withCampaignNames(pool, f, T_CAMP), T_CAMP));
 
     // Mesmas queries do dashboard (app/api/dashboard/data/route.ts), sem o LIMIT da tela.
     const SEL_CAMP = `${METRIC_SELECT}, ${VIDEO_SELECT}`;

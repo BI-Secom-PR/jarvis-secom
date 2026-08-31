@@ -4,7 +4,7 @@ import { getPool, isTransientDbError, resetPool } from '@/lib/mysql';
 import {
   buildWhere, previousWindow, METRIC_SELECT, VIDEO_SELECT,
   AGE_BUCKET_SQL, GRAIN_SQL, isGranularity, UF_BY_NAME, HAS_DELIVERY, fromTable,
-  ENGAGEMENT_PARTS,
+  ENGAGEMENT_PARTS, withBuyingCampaigns,
   type DashboardFilters, type Granularity, type EngagementPartKey,
 } from '@/lib/dashboard';
 import { withCampaignNames } from '@/lib/campaignGroups';
@@ -51,10 +51,13 @@ export async function POST(req: NextRequest) {
     platform: strs(body.platform),
     ad: strs(body.ad),
     objective: strs(body.objective),
+    buyingType: strs(body.buyingType),
     tema: strs(body.tema),
   };
   const tab = body.tab === 'demografia' || body.tab === 'regiao' ? body.tab : 'campanhas';
   const gran: Granularity = isGranularity(body.gran) ? body.gran : 'dia';
+  // Quebra a tabela por sub-rede (Meta → facebook/instagram, Google → YOUTUBE/SEARCH).
+  const byNetwork = body.network === true;
 
   const pool = getPool();
   // Só troca de tabela quando há tema selecionado (ver fromTable em lib/dashboard).
@@ -63,10 +66,13 @@ export async function POST(req: NextRequest) {
   const T_REG = fromTable('gold_platforms_regions', f);
 
   try {
-    // `campaign` chega como rótulo(s) de grupo (ver lib/campaignGroups); o WHERE precisa
-    // dos campaign_name crus que ele cobre. Resolvido sempre pela tabela de campanhas,
-    // que é onde os nomes vivem — as de região/demografia repetem os mesmos.
-    const w = buildWhere(await withCampaignNames(pool, f, T_CAMP));
+    // `campaign` chega como rótulo(s) de grupo (ver lib/campaignGroups) e `buyingType`
+    // como tipo de compra; o WHERE precisa dos campaign_name/campaign_id crus que eles
+    // cobrem. Resolvidos sempre pela tabela de campanhas, que é onde os nomes vivem e
+    // onde o tipo de compra é canônico — as de região/demografia repetem os mesmos.
+    const resolve = async (ff: DashboardFilters) =>
+      withBuyingCampaigns(pool, await withCampaignNames(pool, ff, T_CAMP), T_CAMP);
+    const w = buildWhere(await resolve(f));
 
     if (tab === 'demografia') {
       // The crossed table is the only place age and gender coexist —
@@ -102,12 +108,10 @@ export async function POST(req: NextRequest) {
 
     // ── Campanhas ────────────────────────────────────────────────────────
     const prev = previousWindow(f);
-    // A janela anterior resolve o grupo de novo, na SUA janela: os nomes crus que um
-    // grupo cobre mudam de mês para mês (PI e ID novos), e sem re-resolver o delta
+    // A janela anterior resolve grupo e tipo de novo, na SUA janela: os nomes/ids que
+    // eles cobrem mudam de mês para mês (PI e ID novos), e sem re-resolver o delta
     // compararia "campanha X" com "tudo".
-    const wPrev = prev
-      ? buildWhere(await withCampaignNames(pool, { ...f, from: prev.from, to: prev.to }, T_CAMP))
-      : null;
+    const wPrev = prev ? buildWhere(await resolve({ ...f, from: prev.from, to: prev.to })) : null;
 
     // Two waves so the pool never sees more than three of these at once
     // (connectionLimit is 10 and the filters route shares it).
@@ -129,21 +133,17 @@ export async function POST(req: NextRequest) {
       ),
     ]);
 
+    // Com a rede ligada, cada linha da tabela se divide pelas sub-redes daquela
+    // plataforma; sem ela, `network` some do SELECT e do GROUP BY.
+    const net = byNetwork ? 'network, ' : '';
+    const tableSql = (dim: string) =>
+      `SELECT ${net}platform, ${dim}, ${METRIC_SELECT}, ${VIDEO_SELECT}
+         FROM ${T_CAMP} WHERE ${w.sql}
+        GROUP BY ${net}platform, ${dim} HAVING ${HAS_DELIVERY}
+        ORDER BY SUM(cost) DESC LIMIT ${TABLE_LIMIT}`;
     const [campRes, adRes] = await Promise.all([
-      pool.query(
-        `SELECT platform, campaign_name, ${METRIC_SELECT}, ${VIDEO_SELECT}
-           FROM ${T_CAMP} WHERE ${w.sql}
-          GROUP BY platform, campaign_name HAVING ${HAS_DELIVERY}
-          ORDER BY SUM(cost) DESC LIMIT ${TABLE_LIMIT}`,
-        w.params
-      ),
-      pool.query(
-        `SELECT platform, ad_name, ${METRIC_SELECT}, ${VIDEO_SELECT}
-           FROM ${T_CAMP} WHERE ${w.sql}
-          GROUP BY platform, ad_name HAVING ${HAS_DELIVERY}
-          ORDER BY SUM(cost) DESC LIMIT ${TABLE_LIMIT}`,
-        w.params
-      ),
+      pool.query(tableSql('campaign_name'), w.params),
+      pool.query(tableSql('ad_name'), w.params),
     ]);
 
     const totalsRow = (totalsRes[0] as Record<string, unknown>[])[0];
@@ -154,10 +154,12 @@ export async function POST(req: NextRequest) {
       previous: prevRow ? totalsOf(prevRow) : null,
       daily: (dailyRes[0] as Record<string, unknown>[]).map((r) => ({ date: iso(r.bucket), ...totalsOf(r) })),
       campanhas: (campRes[0] as Record<string, unknown>[]).map((r) => ({
-        platform: String(r.platform), nome: String(r.campaign_name ?? ''), ...totalsOf(r), ...videoOf(r),
+        platform: String(r.platform), network: String(r.network ?? ''),
+        nome: String(r.campaign_name ?? ''), ...totalsOf(r), ...videoOf(r),
       })),
       anuncios: (adRes[0] as Record<string, unknown>[]).map((r) => ({
-        platform: String(r.platform), nome: String(r.ad_name ?? ''), ...totalsOf(r), ...videoOf(r),
+        platform: String(r.platform), network: String(r.network ?? ''),
+        nome: String(r.ad_name ?? ''), ...totalsOf(r), ...videoOf(r),
       })),
       limit: TABLE_LIMIT,
     });
