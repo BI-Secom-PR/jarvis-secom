@@ -114,8 +114,9 @@ COLUNAS EXCLUSIVAS DE gold_age_gender_classified (ambas presentes simultaneament
     tiktok: 'FEMALE','MALE','NONE'
   Colunas presentes: impressions, clicks, reach, engagements, conversions,
                      likes, comments, shares, video_views, video_p25/p50/p75/p100
-  Colunas AUSENTES (vs gold_campaigns_classified): reactions, saves, link_clicks, video_2s, video_30s,
+  Colunas AUSENTES (vs gold_campaigns_classified): link_clicks, video_2s, video_30s,
                                                    video_p95, video_completions
+  (reactions e saves EXISTEM nesta view — a lista antiga estava errada.)
   Use esta view para análises cruzadas como "mulheres de 25-34 anos" — agrupe pela dimensão desejada.
 
 VALORES EXATOS DA COLUNA platform:
@@ -154,30 +155,28 @@ KPIs COMUNS:
   CPA  = SUM(cost)/NULLIF(SUM(conversions),0)
 
 ENGAJAMENTO REAL — REGRA OBRIGATÓRIA:
-  Sempre que a pergunta envolver engajamento (taxa de engajamento, engajamentos, CPE,
-  "qual campanha/peça engajou mais", "melhor engajamento"), prefira "engajamento real"
-  em vez da coluna engagements.
-
-  Expressão SQL por contexto:
-  ① Somente Meta:
+  A coluna engagements NÃO é usável (as plataformas preenchem com definições
+  incompatíveis; na mesma janela já deu 40 mi contra 380 k de interações reais).
+  Sempre:
        SUM(likes + comments + shares + reactions + saves)  AS engajamentos_reais
+  Vale em campaigns, regions e age_gender. Nunca SUM(engagements), nem CASE
+  que caia nela. Parts zeradas na plataforma somam 0 — isso é correto.
 
-  ② Multiplataforma com Meta inclusa:
-       SUM(CASE WHEN platform = 'meta'
-                THEN likes + comments + shares + reactions + saves
-                ELSE engagements END)                       AS engajamentos_reais
+  Taxa: SUM(likes+comments+shares+reactions+saves)/NULLIF(SUM(impressions),0)*100
+  CPE:  SUM(cost)/NULLIF(SUM(likes+comments+shares+reactions+saves),0)
 
-  ③ Sem Meta (tiktok, google, etc.):
-       SUM(engagements)                                     AS engajamentos_reais
-
-  Taxa de engajamento real:
-       SUM(engajamentos_reais)/NULLIF(SUM(impressions),0)*100  AS taxa_engaj_real
-
-  CPE real:
-       SUM(cost)/NULLIF(SUM(engajamentos_reais),0)             AS cpe_real
-
-  ⚠ reactions e saves só existem em gold_campaigns_classified; em regions/age_gender
-    use a expressão ③ (SUM(engagements)) como fallback.
+HIGIENE ANALÍTICA — sempre, não só no relatório:
+  • Razão = SUM(a)/SUM(b). Nunca AVG de taxa diária (CTR, VTR, CPM).
+  • Mix vs rate: ao comparar períodos, traga volume E eficiência (impressões E CPM/CTR).
+    Volume sozinho não é “melhorou”. Gasto subindo mais que impressões = CPM pior.
+  • Anomalia ≠ tendência: base anterior ≈ 0 ou Δ > 1.000% é mudança de cobertura
+    (plataforma passou a reportar reach), não crescimento de audiência.
+    Frequência = SUM(impressions)/NULLIF(SUM(reach),0).
+  • Zero em clique/view/reach/quartil = a plataforma não reporta, não é fracasso.
+    Típico: Amazon, GloboAds, Google CPV sem clique; Google/Kwai/Amazon sem reach.
+  • Share de resultado vs share de gasto (GROUP BY platform): quem concentra clique
+    ou view com pouco custo. Não narre último lugar em volume.
+  • KPI segue o objective. Não compare CPC de campanha CPV com CPC de tráfego.
   VCR  = SUM(video_p100)/NULLIF(SUM(impressions),0)*100
   CPV  = SUM(cost)/NULLIF(SUM(video_views),0)  [kwai/linkedin: usar video_completions]
   VTR  = SUM(video_views)/NULLIF(SUM(impressions),0)*100  [kwai: video_completions]
@@ -338,6 +337,17 @@ GROUP BY campaign_name, platform
 ORDER BY fim DESC
 LIMIT 30;
 
+-- 7b. Mix vs rate: janela atual vs anterior de mesmo comprimento
+-- NÃO use UNION (o guard bloqueia UNION SELECT). Um SELECT com CASE.
+SELECT CASE WHEN date BETWEEN '<ini>' AND '<fim>' THEN 'atual' ELSE 'anterior' END AS janela,
+       SUM(impressions) AS impressoes, SUM(cost) AS investimento, SUM(clicks) AS cliques,
+       SUM(cost)/NULLIF(SUM(impressions),0)*1000 AS cpm,
+       SUM(clicks)/NULLIF(SUM(impressions),0)*100 AS ctr
+FROM gold_campaigns_classified
+WHERE campaign_name LIKE '%NOME%'
+  AND date BETWEEN DATE_SUB('<ini>', INTERVAL DATEDIFF('<fim>','<ini>')+1 DAY) AND '<fim>'
+GROUP BY janela;
+
 ─── EXEMPLOS FRAMEWORK v4 (view gold_campaigns_classified) ───
 
 -- 8. Eixo × Visual: "Para SAÚDE, funciona melhor BENEFICIÁRIO ou DADOS?" (só vídeos)
@@ -357,7 +367,7 @@ ORDER BY vtr DESC;
 SELECT tom,
        COUNT(DISTINCT ad_name)                      AS pecas,
        SUM(clicks)/NULLIF(SUM(impressions),0)*100   AS ctr,
-       SUM(cost)/NULLIF(SUM(engagements),0)         AS cpe
+       SUM(cost)/NULLIF(SUM(likes + comments + shares + reactions + saves),0)         AS cpe
 FROM gold_campaigns_classified
 WHERE eixo = 'ECO' AND formato = 'VIDEO' AND tom IS NOT NULL
   AND date >= '2026-04-01'
@@ -405,7 +415,7 @@ ORDER BY FIELD(segundagem,'6S','15S','30S','60S','90S','L');
 SELECT tom,
        COUNT(DISTINCT ad_name)                     AS pecas,
        SUM(clicks)/NULLIF(SUM(impressions),0)*100  AS ctr,
-       SUM(cost)/NULLIF(SUM(engagements),0)        AS cpe
+       SUM(cost)/NULLIF(SUM(likes + comments + shares + reactions + saves),0)        AS cpe
 FROM gold_campaigns_classified
 WHERE formato = 'CARROSSEL' AND tom IS NOT NULL
   AND date >= '2026-04-01'
@@ -461,21 +471,19 @@ ORDER BY vtr DESC;
 -- 18. Programa × Geo-alvo: "Bolsa Família engaja mais em qual segmentação geográfica?"
 SELECT target_geo,
        COUNT(DISTINCT ad_name)                                                         AS pecas,
-       SUM(CASE WHEN platform = 'meta'
-                THEN likes + comments + shares + reactions + saves
-                ELSE engagements END)/NULLIF(SUM(impressions),0)*100                  AS taxa_engaj_real
+       SUM(likes + comments + shares + reactions + saves)/NULLIF(SUM(impressions),0)*100 AS taxa_engaj_real
 FROM gold_campaigns_classified
 WHERE programa = 'BF' AND target_geo IS NOT NULL
   AND date >= '2026-04-01'
 GROUP BY target_geo
 HAVING SUM(impressions) >= 10000
-ORDER BY taxa_engaj DESC;
+ORDER BY taxa_engaj_real DESC;
 
 -- 19. Porta-voz × Dark/Feed: "Influenciador funciona melhor como dark post ou impulsionado?"
 SELECT porta_voz, dark_feed,
        COUNT(DISTINCT ad_name)                          AS pecas,
        SUM(video_views)/NULLIF(SUM(impressions),0)*100  AS vtr,
-       SUM(cost)/NULLIF(SUM(engagements),0)             AS cpe
+       SUM(cost)/NULLIF(SUM(likes + comments + shares + reactions + saves),0)             AS cpe
 FROM gold_campaigns_classified
 WHERE porta_voz IN ('INFLU','OFF') AND dark_feed IS NOT NULL AND formato = 'VIDEO'
   AND date >= '2026-04-01'
@@ -519,7 +527,7 @@ ORDER BY mes;
 SELECT eixo,
        COUNT(DISTINCT ad_name)                     AS pecas,
        SUM(clicks)/NULLIF(SUM(impressions),0)*100  AS ctr,
-       SUM(cost)/NULLIF(SUM(engagements),0)        AS cpe
+       SUM(cost)/NULLIF(SUM(likes + comments + shares + reactions + saves),0)        AS cpe
 FROM gold_campaigns_classified
 WHERE programa = 'E61' AND formato = 'VIDEO' AND eixo IS NOT NULL
   AND date >= '2026-04-01'
@@ -772,6 +780,9 @@ NÃO usar esta skill apenas se o usuário pedir explicitamente "relatório", "pa
 PROCESSO — quando acionada:
 1. DETECTE: faça SELECT DISTINCT platform, objective para identificar o perfil da campanha
 2. CALCULE os KPIs relevantes para a plataforma + objetivo (CPV, VTR, VTRc, CPM, CPC, CTR)
+2b. Se a pergunta for evolução / "como foi essa semana" / vs período anterior: rode o
+    exemplo 7b (janela atual UNION janela anterior de mesmo comprimento) e narre mix vs rate.
+    Se houver 2+ plataformas, GROUP BY platform com share de gasto e de cliques/views.
 3. COMPARE com as médias SECOM acima — classifique cada KPI:
    • "acima da média" = CPV/CPC/CPM menor OU CTR/VTR/VTRc/VTR maior que o benchmark
    • "na média" = dentro de ±20% do benchmark
@@ -876,7 +887,7 @@ PASSO 2 — NÚMEROS GERAIS
   SELECT
     SUM(impressions)                                AS impressoes,
     SUM(video_views)                                AS visualizacoes,
-    SUM(engagements)                                AS engajamentos,
+    SUM(likes + comments + shares + reactions + saves) AS engajamentos,
     SUM(cost)/NULLIF(SUM(video_views),0)            AS cpv,
     SUM(video_views)/NULLIF(SUM(impressions),0)*100 AS vtr,
     SUM(cost)                                       AS investimento
@@ -894,7 +905,7 @@ PASSO 3 — DETALHAMENTO POR PLATAFORMA
              THEN video_completions
              ELSE video_views END)                       AS thruplays,
     SUM(clicks)                                          AS cliques,
-    SUM(engagements)                                     AS engajamentos,
+    SUM(likes + comments + shares + reactions + saves)   AS engajamentos,
     SUM(cost)/NULLIF(
       SUM(CASE WHEN platform IN ('kwai','linkedin')
                THEN video_completions ELSE video_views END),0) AS cpv,

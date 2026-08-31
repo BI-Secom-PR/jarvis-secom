@@ -11,6 +11,7 @@ import SearchableSelect from "./SearchableSelect";
 import ThemeToggle from "./ThemeToggle";
 import { postJson } from "@/lib/fetchUtils";
 import { AGE_ORDER, ENGAGEMENT_PARTS, GENDERS, GENDER_LABEL, METRICS, networkLabel, platformLabel, type EngagementPartKey, type MetricKey } from "@/lib/dashboard";
+import { buildAchados, kpiDeltaLabel } from "@/lib/dashboardInsights";
 import type { ChartData } from "@/types/chat";
 
 type Tab = "campanhas" | "demografia" | "regiao";
@@ -218,13 +219,12 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
       { label: "Engajamento", value: nf(totals.engagement), key: "engagement" },
     ];
     return defs.map((d) => {
-      const before = prev?.[d.key] ?? 0;
       const now = totals[d.key];
-      const delta = before ? ((now - before) / before) * 100 : null;
+      const delta = kpiDeltaLabel(now, prev ? prev[d.key] : null);
       return {
         ...d,
-        delta: delta === null ? "—" : `${delta >= 0 ? "▲" : "▼"} ${delta >= 0 ? "+" : ""}${nf(delta, 1)}%`,
-        deltaColor: delta === null ? "var(--ink-3)" : delta >= 0 ? "var(--success)" : "var(--danger)",
+        delta: delta.text,
+        deltaColor: delta.color === "up" ? "var(--success)" : delta.color === "down" ? "var(--danger)" : "var(--ink-3)",
         spark: daily.map((r) => r[d.key]),
       };
     });
@@ -376,116 +376,14 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
     };
   }, [regiaoRows, metric]);
 
-  // ── Observações: calculadas dos próprios números, sem chamar o modelo ──
-  const observacoes = useMemo(() => {
-    const out: string[] = [];
-    const rows = data?.campanhas ?? [];
-    if (tab === "campanhas" && totals && rows.length) {
-      // A leitura acompanha o pill de métrica ativo, não impressões fixas.
-      const totalMetric = metricValue(totals, metric);
-      const best = [...rows].sort((a, b) => metricValue(b, metric) - metricValue(a, metric))[0];
-      if (best && totalMetric) {
-        // Share só faz sentido em métrica somável — CTR é taxa, compara-se com a média.
-        const comparacao = METRICS[metric].kind === "pct"
-          ? `contra ${fmtMetric(totalMetric, metric)} de média do recorte`
-          : `${pct(div(metricValue(best, metric), totalMetric) * 100, 0)} do recorte`;
-        out.push(`${best.nome.slice(0, 60)} (${platformLabel(best.platform)}) lidera em ${METRICS[metric].label.toLowerCase()}: ${fmtMetric(metricValue(best, metric), metric)}, ${comparacao}.`);
-      }
-      // Custo unitário da métrica ativa (CPM quando ela é impressão/alcance, CPC em cliques, etc.).
-      const porMil = metric === "impressoes" || metric === "alcance" || metric === "investimento";
-      const unit = (r: Row) => div(r.cost, metricValue(r, metric)) * (porMil ? 1000 : 1);
-      const nomeUnit = porMil ? "CPM" : `custo por ${METRICS[metric].label.toLowerCase().replace(/ões$/, "ão").replace(/s$/, "")}`;
-      const relevantes = rows.filter((r) => r.impressions > 10_000 && metricValue(r, metric) > 0 && r.cost > 0);
-      const cheapest = [...relevantes].sort((a, b) => unit(a) - unit(b))[0];
-      const dearest = [...relevantes].sort((a, b) => unit(b) - unit(a))[0];
-      if (METRICS[metric].kind !== "pct" && cheapest && dearest && cheapest !== dearest) {
-        out.push(`O ${nomeUnit} vai de ${brl(unit(cheapest))} (${platformLabel(cheapest.platform)}) a ${brl(unit(dearest))} (${platformLabel(dearest.platform)}) entre as campanhas com mais de 10 mil impressões.`);
-      }
-      if (porMil && totals.reach && totals.impressions) {
-        out.push(`Frequência média de ${nf(div(totals.impressions, totals.reach), 2)} — cada pessoa alcançada viu o anúncio esse número de vezes.`);
-      }
-      if (totals.impressions && !totals.engagement) {
-        out.push(`Nenhuma interação social no recorte: as plataformas presentes não reportam curtidas, comentários ou compartilhamentos.`);
-      }
-    }
-    if (tab === "demografia") {
-      const rowsD = data?.demografia ?? [];
-      const total = rowsD.reduce((s, r) => s + metricValue(r, metric), 0);
-      for (const g of GENDERS) {
-        const v = rowsD.filter((r) => r.gender === g).reduce((s, r) => s + metricValue(r, metric), 0);
-        if (total && v / total > 0.5) out.push(`${GENDER_LABEL[g]} responde por ${pct(div(v, total) * 100, 1)} de ${METRICS[metric].label.toLowerCase()} — mais da metade do recorte.`);
-      }
-      const byFaixa = AGE_ORDER.map((f) => ({ f, v: rowsD.filter((r) => r.faixa === f).reduce((s, r) => s + metricValue(r, metric), 0) }));
-      const topF = [...byFaixa].sort((a, b) => b.v - a.v)[0];
-      if (topF && total) out.push(`A maior faixa isolada é ${topF.f}, com ${pct(div(topF.v, total) * 100, 1)} do total.`);
-      const nd = byFaixa.find((x) => x.f === "n/d");
-      if (nd && total && nd.v / total > 0.05) out.push(`${pct(div(nd.v, total) * 100, 1)} da entrega chega sem faixa etária identificada.`);
-    }
-    if (tab === "regiao" && regiaoRows.length) {
-      const total = regiaoRows.reduce((s, r) => s + r.value, 0);
-      const top = regiaoRows[0];
-      if (top && total) out.push(`${top.estado} lidera com ${pct(div(top.value, total) * 100, 1)} do total.`);
-      const NE = ["BA", "CE", "PE", "MA", "PB", "AL", "PI", "RN", "SE"];
-      const ne = regiaoRows.filter((r) => NE.includes(r.uf)).reduce((s, r) => s + r.value, 0);
-      if (total) out.push(`O Nordeste somado responde por ${pct(div(ne, total) * 100, 1)}, distribuído em ${regiaoRows.filter((r) => NE.includes(r.uf)).length} UFs.`);
-      const bottom = regiaoRows.slice(-5);
-      if (total && bottom.length === 5) out.push(`As cinco UFs com menor entrega (${bottom.map((r) => r.uf).join(", ")}) somam ${pct(div(bottom.reduce((s, r) => s + r.value, 0), total) * 100, 1)}.`);
-    }
-    return out.slice(0, 4);
-  }, [tab, totals, data?.campanhas, data?.demografia, regiaoRows, metric]);
-
-  // ── Leitura por IA: payload = só o que já está na tela, ordenado pela métrica ativa ──
-  const insightsInput = useMemo(() => {
-    const r0 = (v: number) => Math.round(v);
-    const topBy = (rows: Row[]) =>
-      [...rows]
-        .sort((a, b) => metricValue(b, metric) - metricValue(a, metric))
-        .slice(0, 10)
-        .map((r) => ({
-          nome: r.nome.slice(0, 70),
-          plataforma: platformLabel(r.platform),
-          [METRICS[metric].label]: r0(metricValue(r, metric)),
-          investimento: r0(r.cost),
-          impressoes: r0(r.impressions),
-          cliques: r0(r.clicks),
-          visualizacoes: r0(r.videoViews),
-          engajamento: r0(r.engagement),
-        }));
-
-    if (tab === "campanhas") {
-      if (!totals || !(data?.campanhas ?? []).length) return null;
-      return {
-        totais: { ...totals, cost: r0(totals.cost) },
-        periodoAnterior: data?.previous ?? null,
-        campanhas: topBy(data?.campanhas ?? []),
-        anuncios: topBy(data?.anuncios ?? []),
-        serie: (data?.daily ?? []).map((d) => ({ data: d.date, valor: r0(metricValue(d, metric)) })),
-      };
-    }
-    if (tab === "demografia") {
-      const rows = data?.demografia ?? [];
-      if (!rows.length) return null;
-      return {
-        demografia: rows.map((r) => ({
-          faixa: r.faixa, genero: GENDER_LABEL[r.gender] ?? r.gender,
-          valor: r0(metricValue(r, metric)), investimento: r0(r.cost), impressoes: r0(r.impressions),
-        })),
-      };
-    }
-    if (!regiaoRows.length) return null;
-    // Custo/impressões por UF entram junto, senão o modelo não tem como calcular CPM/CPC/CTR.
-    const porUf = new Map((data?.regioes ?? []).map((r) => [r.uf ?? "", r]));
-    return {
-      regioes: regiaoRows.map((r) => {
-        const t = porUf.get(r.uf);
-        return {
-          uf: r.uf, estado: r.estado, valor: r0(r.value),
-          investimento: r0(t?.cost ?? 0), impressoes: r0(t?.impressions ?? 0),
-          cliques: r0(t?.clicks ?? 0), engajamento: r0(t?.engagement ?? 0),
-        };
-      }),
-    };
-  }, [tab, metric, totals, data?.campanhas, data?.anuncios, data?.daily, data?.previous, data?.demografia, data?.regioes, regiaoRows]);
+  // Achados pré-computados: a IA só redige; se ela cair, estas frases vão para a tela.
+  const achados = useMemo(() => buildAchados({
+    tab, metric, totals, previous: data?.previous ?? null,
+    campanhas: data?.campanhas, demografia: data?.demografia,
+    regioes: regiaoRows,
+  }), [tab, metric, totals, data?.previous, data?.campanhas, data?.demografia, regiaoRows]);
+  const observacoes = useMemo(() => achados.map((a) => a.frase), [achados]);
+  const insightsInput = useMemo(() => (achados.length ? { achados } : null), [achados]);
 
   const [aiInsights, setAiInsights] = useState<string[] | null>(null);
   const [aiLoading, setAiLoading] = useState(false);

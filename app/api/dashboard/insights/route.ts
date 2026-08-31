@@ -15,43 +15,29 @@ const ollamaClient = new Ollama({
     : {},
 });
 
-const MAX_RESUMO = 12_000;
-
-/** Eficiência que faz sentido citar para cada métrica — o modelo não escolhe sozinho. */
-const EFICIENCIA: Record<MetricKey, string> = {
-  investimento: 'participação no gasto e CPM (custo por mil impressões)',
-  impressoes: 'CPM (custo por mil impressões)',
-  alcance: 'CPM e frequência (impressões ÷ alcance)',
-  cliques: 'CPC (custo ÷ cliques) e CTR (cliques ÷ impressões)',
-  visualizacoes: 'CPV (custo ÷ visualizações) e VTR (visualizações ÷ impressões)',
-  engajamento: 'custo por interação e taxa de engajamento sobre impressões',
-  ctr: 'a própria taxa comparada à média do recorte',
-};
+const MAX_RESUMO = 8_000;
 
 const ESCOPO: Record<string, string> = {
-  campanhas: 'campanhas e anúncios (com a plataforma de cada um)',
+  campanhas: 'campanhas e plataformas',
   demografia: 'faixas etárias e gêneros',
   regiao: 'unidades federativas',
 };
 
 function buildSystem(tab: string, metric: MetricKey): string {
   const label = METRICS[metric].label;
-  return `Você é analista de mídia da SECOM lendo um recorte já filtrado do dashboard.
+  return `Você é analista de mídia da SECOM. Os achados já foram calculados — você SÓ redige.
 
-A MÉTRICA ATIVA É "${label}". Toda frase analisa ${label} sobre ${ESCOPO[tab]}.
-- A PRIMEIRA frase é obrigatoriamente quem lidera ${label} — com o valor e a eficiência: ${EFICIENCIA[metric]}.
-- As demais apontam o que performa melhor ou pior em ${label}, quem destoa, e a variação contra o período anterior quando ele vier no payload.
-- NUNCA cite CPM se a métrica ativa não for Impressões, Alcance ou Investimento.
-
-Regras dos dados:
-- Engajamento = curtidas + comentários + compartilhamentos + reações + salvos. Ignore qualquer outra definição.
-- Valores monetários em reais (BRL).
-- Zero em visualizações/quartis significa que a plataforma não reporta, não que ninguém assistiu — não trate como fracasso.
-- Use SOMENTE números presentes nos dados recebidos. Não invente campanha, plataforma, período ou valor.
-- Se um número não estiver nos dados, simplesmente não fale dele. Nunca escreva que algo "não foi fornecido", nem cite payload, JSON ou campos.
+Métrica ativa: ${label}. Escopo: ${ESCOPO[tab]}.
+- Reescreva cada achado em UMA frase fluente. Pode fundir no máximo dois achados vizinhos.
+- NÃO altere números, nomes, sinais (+/−) nem o sentido.
+- NÃO invente campanha, plataforma, período ou valor.
+- NÃO descreva último lugar em volume ("menor entrega", "menor volume").
+- Anomalia (cobertura/base) NÃO é tendência de crescimento.
+- mix_vs_rate vem antes do líder. recomendacao, se houver, fecha.
+- Nunca escreva que algo "não foi fornecido", nem cite payload, JSON, tipo do achado ou campos.
 
 Formato: responda APENAS com JSON {"insights": ["frase 1", "frase 2", "frase 3"]}.
-De 3 a 4 frases, português do Brasil, cada uma com no máximo 200 caracteres, sem markdown, sem bullets, sem títulos.`;
+De 3 a 4 frases, português do Brasil, cada uma com no máximo 220 caracteres, sem markdown, sem bullets, sem títulos.`;
 }
 
 export async function POST(req: NextRequest) {
