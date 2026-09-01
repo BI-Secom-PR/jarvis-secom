@@ -550,7 +550,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                   <label className="flex items-center gap-1.5 text-[12px] text-ink-3">
                     até <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className={dateClass} />
                   </label>
-                  {[7, 30, 90].map((d) => (
+                  {[7, 14, 30, 90].map((d) => (
                     <button key={d} className={pill(from === isoDaysAgo(d) && to === isoDaysAgo(0))}
                       onClick={() => { setFrom(isoDaysAgo(d)); setTo(isoDaysAgo(0)); }}>
                       {d} dias

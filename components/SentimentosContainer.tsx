@@ -19,6 +19,7 @@ const SENT_COLORS: Record<string, string> = {
   "Sem classificação": "#5b6474",
 };
 const SENT_ORDER = ["Positivo", "Negativo", "Neutro", "Sem classificação"];
+const isoDaysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
 const TREND_TITLES: Record<"day" | "week" | "month", string> = {
   day: "Evolução diária por sentimento",
   week: "Evolução semanal por sentimento",
@@ -152,10 +153,8 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
   const [platform, setPlatform] = useState("");
   const [sentiment, setSentiment] = useState("");
   // default window: last 14 days
-  const [from, setFrom] = useState(() =>
-    new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10)
-  );
-  const [to, setTo] = useState("");
+  const [from, setFrom] = useState(() => isoDaysAgo(14));
+  const [to, setTo] = useState(() => isoDaysAgo(0));
   const [aiText, setAiText] = useState("");
   const [aiFilter, setAiFilter] = useState<{ where: string; descricao: string } | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -398,6 +397,10 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
     "bg-fill border border-separator rounded-lg px-3 py-2 text-[13px] text-ink focus:outline-none focus:border-accent-border appearance-none cursor-pointer w-full min-w-0 truncate";
   const dateClass =
     "bg-fill border border-separator rounded-lg px-3 py-2 text-[13px] text-ink focus:outline-none focus:border-accent-border cursor-pointer";
+  const pill = (on: boolean) =>
+    `px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${
+      on ? "bg-accent-soft border-accent-border text-accent-text" : "bg-fill border-separator text-ink-3 hover:text-ink"
+    }`;
 
   return (
     <div className="h-dvh w-full flex flex-col overflow-hidden relative hud-theme hud-void-bg">
@@ -498,6 +501,15 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
                       className={dateClass}
                     />
                   </label>
+                  {[7, 14, 30, 90].map((d) => (
+                    <button
+                      key={d}
+                      className={pill(from === isoDaysAgo(d) && to === isoDaysAgo(0))}
+                      onClick={() => { setFrom(isoDaysAgo(d)); setTo(isoDaysAgo(0)); setPage(0); }}
+                    >
+                      {d} dias
+                    </button>
+                  ))}
                   {(from || to) && (
                     <button
                       onClick={() => { setFrom(""); setTo(""); setPage(0); }}
