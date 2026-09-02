@@ -111,9 +111,12 @@ export type EngagementPartKey = (typeof ENGAGEMENT_PARTS)[number]['key'];
 export const REAL_ENGAGEMENT = `SUM(${ENGAGEMENT_PARTS.map((p) => p.key).join(' + ')})`;
 
 export type MetricKey =
-  | 'investimento' | 'impressoes' | 'alcance' | 'cliques' | 'visualizacoes' | 'engajamento' | 'ctr';
+  | 'investimento' | 'impressoes' | 'alcance' | 'cliques' | 'visualizacoes' | 'engajamento' | 'ctr'
+  | 'cpc' | 'cpv' | 'cpe' | 'vtr' | 'tx_eng';
 
-type MetricDef = { label: string; sql: string; kind: 'currency' | 'count' | 'pct' };
+// `sql` é histórico e opcional — nada consome (o SELECT é o METRIC_SELECT fixo e as
+// razões se calculam no cliente, ver metricValue). Métricas derivadas nem o têm.
+type MetricDef = { label: string; sql?: string; kind: 'currency' | 'count' | 'pct' };
 
 export const METRICS: Record<MetricKey, MetricDef> = {
   investimento:  { label: 'Investimento',  sql: 'SUM(cost)',          kind: 'currency' },
@@ -123,6 +126,12 @@ export const METRICS: Record<MetricKey, MetricDef> = {
   visualizacoes: { label: 'Visualizações', sql: 'SUM(video_views)',   kind: 'count' },
   engajamento:   { label: 'Engajamento',   sql: REAL_ENGAGEMENT,      kind: 'count' },
   ctr:           { label: 'CTR',           sql: 'SUM(clicks) / NULLIF(SUM(impressions), 0) * 100', kind: 'pct' },
+  // Derivadas: cost/clicks, cost/video_views, cost/engagement, video_views/impressions, engagement/impressions.
+  cpc:           { label: 'CPC',           kind: 'currency' },
+  cpv:           { label: 'CPV',           kind: 'currency' },
+  cpe:           { label: 'CPE',           kind: 'currency' },
+  vtr:           { label: 'VTR',           kind: 'pct' },
+  tx_eng:        { label: 'Tx. Eng.',      kind: 'pct' },
 };
 
 export function isMetricKey(v: unknown): v is MetricKey {

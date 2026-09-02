@@ -38,6 +38,7 @@ const compact = (v: number) => {
   return nf(Math.round(v));
 };
 
+/** Mirrors metricValue in components/DashboardContainer — razão sem denominador → NaN. */
 export function metricValue(t: TotalsLite, m: MetricKey): number {
   switch (m) {
     case 'investimento': return t.cost;
@@ -47,8 +48,32 @@ export function metricValue(t: TotalsLite, m: MetricKey): number {
     case 'visualizacoes': return t.videoViews;
     case 'engajamento': return t.engagement;
     case 'ctr': return div(t.clicks, t.impressions) * 100;
+    case 'cpc': return t.clicks ? t.cost / t.clicks : NaN;
+    case 'cpv': return t.videoViews ? t.cost / t.videoViews : NaN;
+    case 'cpe': return t.engagement ? t.cost / t.engagement : NaN;
+    case 'vtr': return t.impressions ? (t.videoViews / t.impressions) * 100 : NaN;
+    case 'tx_eng': return t.impressions ? (t.engagement / t.impressions) * 100 : NaN;
   }
 }
+
+/** Métrica de uma fatia de sub-linhas: razão soma numerador e denominador antes de dividir. */
+function aggMetric(rows: TotalsLite[], m: MetricKey): number {
+  if (METRICS[m].kind === 'count') return rows.reduce((s, r) => s + metricValue(r, m), 0);
+  const t = rows.reduce(
+    (a, r) => ({
+      cost: a.cost + r.cost, impressions: a.impressions + r.impressions, reach: a.reach + r.reach,
+      clicks: a.clicks + r.clicks, videoViews: a.videoViews + r.videoViews, engagement: a.engagement + r.engagement,
+    }),
+    { cost: 0, impressions: 0, reach: 0, clicks: 0, videoViews: 0, engagement: 0 },
+  );
+  return metricValue(t, m);
+}
+
+const fmtM = (v: number, m: MetricKey) =>
+  !Number.isFinite(v) ? '—'
+    : METRICS[m].kind === 'currency' ? brl(v)
+    : METRICS[m].kind === 'pct' ? pct(v, 2)
+    : compact(v);
 
 /** Trecho entre o 1º e o 2º "|" — mesma regra de fallback dos grupos. */
 export function shortCampaignName(nome: string): string {
@@ -75,8 +100,13 @@ const cpmOf = (t: TotalsLite) => div(t.cost, t.impressions) * 1000;
 const ctrOf = (t: TotalsLite) => div(t.clicks, t.impressions) * 100;
 const deltaPct = (now: number, before: number) => (before ? ((now - before) / before) * 100 : null);
 
+const VOLUME_METRICS: MetricKey[] = [
+  'impressoes', 'alcance', 'investimento', 'cliques', 'visualizacoes', 'engajamento',
+];
+
 function unitOf(t: TotalsLite, m: MetricKey): { label: string; value: number } | null {
-  if (m === 'ctr') return null;
+  // Métrica que já é razão (ctr/cpc/cpv/cpe/vtr/tx_eng) não tem "unit economics" companheira.
+  if (!VOLUME_METRICS.includes(m)) return null;
   if (m === 'impressoes' || m === 'alcance' || m === 'investimento')
     return t.impressions ? { label: 'CPM', value: cpmOf(t) } : null;
   const v = metricValue(t, m);
@@ -175,17 +205,30 @@ function campanhaAchados(
   }
 
   const totalM = metricValue(totals, metric);
-  const best = [...rows].sort((a, b) => metricValue(b, metric) - metricValue(a, metric))[0];
-  if (best && totalM) {
-    const unit = unitOf(best, metric);
-    const comparacao = METRICS[metric].kind === 'pct'
-      ? `contra ${nf(totalM, 2)}% de média do recorte`
-      : `${pct(div(metricValue(best, metric), totalM) * 100)} do recorte`;
-    const extra = unit ? `, ${unit.label} ${brl(unit.value)}` : '';
-    out.push({
-      tipo: 'lider',
-      frase: `${shortCampaignName(best.nome)} (${platformLabel(best.platform)}) lidera em ${label}: ${METRICS[metric].kind === 'pct' ? pct(metricValue(best, metric), 2) : compact(metricValue(best, metric))} (${comparacao})${extra}.`,
-    });
+  if (METRICS[metric].kind === 'count') {
+    const best = [...rows].sort((a, b) => metricValue(b, metric) - metricValue(a, metric))[0];
+    if (best && totalM) {
+      const unit = unitOf(best, metric);
+      const extra = unit ? `, ${unit.label} ${brl(unit.value)}` : '';
+      out.push({
+        tipo: 'lider',
+        frase: `${shortCampaignName(best.nome)} (${platformLabel(best.platform)}) lidera em ${label}: ${compact(metricValue(best, metric))} (${pct(div(metricValue(best, metric), totalM) * 100)} do recorte)${extra}.`,
+      });
+    }
+  } else {
+    // Razão: menor é melhor para custo-por-X (currency), maior para taxa (pct).
+    const menorMelhor = METRICS[metric].kind === 'currency';
+    const ranked = relevantes
+      .map((r) => ({ r, v: metricValue(r, metric) }))
+      .filter((x) => Number.isFinite(x.v))
+      .sort((a, b) => (menorMelhor ? a.v - b.v : b.v - a.v));
+    if (ranked.length >= 2 && Number.isFinite(totalM)) {
+      const b = ranked[0]!;
+      out.push({
+        tipo: 'lider',
+        frase: `${b.r.nome} tem o ${menorMelhor ? 'menor' : 'maior'} ${label} do recorte: ${fmtM(b.v, metric)} (média ${fmtM(totalM, metric)}).`,
+      });
+    }
   }
 
   if (relevantes.length >= 2 && totals.clicks > 0) {
@@ -266,8 +309,37 @@ function campanhaAchados(
 function demoAchados(rows: DemoRow[], metric: MetricKey): Achado[] {
   if (!rows.length) return [];
   const out: Achado[] = [];
-  const total = rows.reduce((s, r) => s + metricValue(r, metric), 0);
   const label = METRICS[metric].label.toLowerCase();
+
+  // Métrica de razão: "X% do total" não faz sentido — só magnitude por fatia.
+  if (METRICS[metric].kind !== 'count') {
+    const known = (v: DemoRow) => v.faixa !== 'n/d';
+    const faixas = AGE_ORDER.filter((f) => f !== 'n/d')
+      .map((f) => ({ f, v: aggMetric(rows.filter((r) => r.faixa === f && known(r)), metric) }))
+      .filter((x) => Number.isFinite(x.v))
+      .sort((a, b) => b.v - a.v);
+    if (faixas.length >= 2) {
+      const hi = faixas[0]!, lo = faixas[faixas.length - 1]!;
+      out.push({
+        tipo: 'lider',
+        frase: `${label} varia por faixa: ${hi.f} tem o maior (${fmtM(hi.v, metric)}) e ${lo.f} o menor (${fmtM(lo.v, metric)}).`,
+      });
+    }
+    const byG = GENDERS
+      .map((g) => ({ g, v: aggMetric(rows.filter((r) => r.gender === g), metric) }))
+      .filter((x) => Number.isFinite(x.v))
+      .sort((a, b) => b.v - a.v);
+    if (byG.length >= 2 && byG[0]!.v > byG[byG.length - 1]!.v * 1.15) {
+      const hi = byG[0]!;
+      out.push({
+        tipo: 'outlier',
+        frase: `Por gênero, ${GENDER_LABEL[hi.g] ?? hi.g} puxa o ${label} mais alto (${fmtM(hi.v, metric)}).`,
+      });
+    }
+    return out;
+  }
+
+  const total = rows.reduce((s, r) => s + metricValue(r, metric), 0);
   for (const g of GENDERS) {
     const v = rows.filter((r) => r.gender === g).reduce((s, r) => s + metricValue(r, metric), 0);
     if (total && v / total > 0.5) {
@@ -300,6 +372,24 @@ function demoAchados(rows: DemoRow[], metric: MetricKey): Achado[] {
 function geoAchados(rows: GeoRow[], metric: MetricKey): Achado[] {
   if (!rows.length) return [];
   const out: Achado[] = [];
+  const label = METRICS[metric].label.toLowerCase();
+
+  // Métrica de razão: por UF cada linha já é um agregado — magnitude, não "% do total".
+  if (METRICS[metric].kind !== 'count') {
+    const ranked = rows
+      .map((r) => ({ r, v: metricValue(r, metric) }))
+      .filter((x) => Number.isFinite(x.v))
+      .sort((a, b) => b.v - a.v);
+    if (ranked.length >= 2) {
+      const hi = ranked[0]!, lo = ranked[ranked.length - 1]!;
+      out.push({
+        tipo: 'lider',
+        frase: `${hi.r.estado} tem o maior ${label} (${fmtM(hi.v, metric)}) e ${lo.r.estado} o menor (${fmtM(lo.v, metric)}), entre ${ranked.length} UFs.`,
+      });
+    }
+    return out;
+  }
+
   const sorted = [...rows].sort((a, b) => metricValue(b, metric) - metricValue(a, metric));
   const total = sorted.reduce((s, r) => s + metricValue(r, metric), 0);
   const top = sorted[0];

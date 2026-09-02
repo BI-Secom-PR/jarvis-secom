@@ -44,7 +44,7 @@ type FiltersData = {
   ads: { campaign: string | null; ad: string }[];
 };
 
-const METRIC_KEYS: MetricKey[] = ["alcance", "impressoes", "cliques", "visualizacoes", "engajamento", "investimento", "ctr"];
+const METRIC_KEYS: MetricKey[] = ["alcance", "impressoes", "cliques", "visualizacoes", "engajamento", "investimento", "ctr", "cpc", "cpv", "cpe", "vtr", "tx_eng"];
 
 const nf = (v: number, d = 0) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const brl = (v: number) => `R$ ${nf(v, 2)}`;
@@ -59,6 +59,10 @@ const compact = (v: number) => {
   return nf(v);
 };
 const div = (a: number, b: number) => (b ? a / b : 0);
+/** Razão com denominador zero volta NaN de metricValue; onde um gráfico precisa de
+ *  número (sort, choropleth, larguras) o não-finito vira 0. A tabela usa fmtMetric,
+ *  que mostra traço. */
+const finite = (v: number) => (Number.isFinite(v) ? v : 0);
 const dash = "—";
 /** Componentes com algum valor na janela filtrada. Reações só vêm do Facebook e
  *  salvos de Facebook + Pinterest — sem esse filtro a maioria dos recortes
@@ -79,7 +83,9 @@ const zeroRow = (): Row => ({
   ...(Object.fromEntries(ENGAGEMENT_PARTS.map((p) => [p.key, 0])) as Record<EngagementPartKey, number>),
 });
 
-/** Value of a metric over one aggregate row — mirrors METRICS on the server. */
+/** Value of a metric over one aggregate row — mirrors metricValue in lib/dashboardInsights.
+ *  Razões com denominador zero devolvem NaN (um "R$ 0,00" de CPV numa fatia sem view é
+ *  ruído): fmtMetric e o scatter tratam o não-finito como traço / ponto omitido. */
 function metricValue(t: Totals, m: MetricKey): number {
   switch (m) {
     case "investimento": return t.cost;
@@ -89,10 +95,32 @@ function metricValue(t: Totals, m: MetricKey): number {
     case "visualizacoes": return t.videoViews;
     case "engajamento": return t.engagement;
     case "ctr": return div(t.clicks, t.impressions) * 100;
+    case "cpc": return t.clicks ? t.cost / t.clicks : NaN;
+    case "cpv": return t.videoViews ? t.cost / t.videoViews : NaN;
+    case "cpe": return t.engagement ? t.cost / t.engagement : NaN;
+    case "vtr": return t.impressions ? (t.videoViews / t.impressions) * 100 : NaN;
+    case "tx_eng": return t.impressions ? (t.engagement / t.impressions) * 100 : NaN;
   }
 }
+/** Métrica de uma fatia com várias sub-linhas. Para razão (kind != count) soma
+ *  numerador e denominador ANTES de dividir — nunca a média das razões. */
+function aggMetric(rows: Totals[], m: MetricKey): number {
+  if (METRICS[m].kind === "count") return rows.reduce((s, r) => s + metricValue(r, m), 0);
+  const t = rows.reduce(
+    (a, r) => {
+      a.cost += r.cost; a.impressions += r.impressions; a.reach += r.reach;
+      a.clicks += r.clicks; a.videoViews += r.videoViews; a.engagement += r.engagement;
+      return a;
+    },
+    { cost: 0, impressions: 0, reach: 0, clicks: 0, videoViews: 0, engagement: 0 },
+  );
+  return metricValue(t as Totals, m);
+}
 const fmtMetric = (v: number, m: MetricKey) =>
-  METRICS[m].kind === "currency" ? brl(v) : METRICS[m].kind === "pct" ? pct(v) : nf(Math.round(v));
+  !Number.isFinite(v) ? dash
+    : METRICS[m].kind === "currency" ? brl(v)
+    : METRICS[m].kind === "pct" ? pct(v)
+    : nf(Math.round(v));
 
 /** 72×24 sparkline for a KPI tile. */
 function Spark({ values }: { values: number[] }) {
@@ -329,7 +357,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
         label: GENDER_LABEL[g],
         data: faixas.map((f) => {
           const r = rows.find((x) => x.faixa === f && x.gender === g);
-          return r ? metricValue(r, metric) : 0;
+          return finite(r ? metricValue(r, metric) : 0);
         }),
       })),
     };
@@ -338,15 +366,8 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
   const genderChart = useMemo<ChartData | null>(() => {
     const rows = data?.demografia ?? [];
     if (!rows.length) return null;
-    const byGender = GENDERS.map((g) => {
-      const slice = rows.filter((r) => r.gender === g);
-      if (metric === "ctr") {
-        const c = slice.reduce((s, r) => s + r.clicks, 0);
-        const i = slice.reduce((s, r) => s + r.impressions, 0);
-        return div(c, i) * 100;
-      }
-      return slice.reduce((s, r) => s + metricValue(r, metric), 0);
-    });
+    // Fatia sem denominador (razão → NaN) entra na pizza como 0: some, não quebra o path.
+    const byGender = GENDERS.map((g) => finite(aggMetric(rows.filter((r) => r.gender === g), metric)));
     return {
       type: "pie",
       title: `${METRICS[metric].label} por gênero`,
@@ -359,7 +380,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
     const rows = (data?.regioes ?? []).filter((r) => r.uf);
     return rows
       .map((r) => ({ ...r, uf: r.uf as string, value: metricValue(r, metric) }))
-      .sort((a, b) => b.value - a.value);
+      .sort((a, b) => finite(b.value) - finite(a.value));
   }, [data?.regioes, metric]);
 
   const geoChart = useMemo<ChartData | null>(() => {
@@ -370,7 +391,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
       labels: regiaoRows.map((r) => r.uf),
       datasets: [{
         label: METRICS[metric].label,
-        data: regiaoRows.map((r) => r.value),
+        data: regiaoRows.map((r) => finite(r.value)),
         meta: regiaoRows.map((r) => ({ Estado: r.estado, [METRICS[metric].label]: fmtMetric(r.value, metric) })),
       }],
     };
@@ -804,13 +825,15 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                           {regiaoParts.map((p) => (
                             <th key={p.key} className="px-3 py-2.5 text-right">{p.label}</th>
                           ))}
-                          <th className="px-3 py-2.5 pr-4 md:pr-6 w-[150px]">Participação</th>
+                          <th className="px-3 py-2.5 pr-4 md:pr-6 w-[150px]">{METRICS[metric].kind === "count" ? "Participação" : "Relativo"}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {regiaoRows.map((r) => {
-                          const total = regiaoRows.reduce((s, x) => s + x.value, 0);
-                          const max = regiaoRows[0]?.value || 1;
+                          const isShare = METRICS[metric].kind === "count";
+                          const total = regiaoRows.reduce((s, x) => s + finite(x.value), 0);
+                          const max = finite(regiaoRows[0]?.value) || 1;
+                          const v = finite(r.value);
                           return (
                             <tr key={r.uf} className="border-b border-separator/60 hover:bg-fill/40">
                               <td className="px-4 md:px-6 py-2.5 font-semibold text-accent-text">{r.uf}</td>
@@ -823,10 +846,10 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                                 <span className="flex items-center gap-2">
                                   <span className="flex-1 h-1.5 rounded-full bg-fill overflow-hidden block">
                                     <span className="block h-full rounded-full"
-                                          style={{ width: `${(r.value / max) * 100}%`, background: "var(--hud-cyan)" }} />
+                                          style={{ width: `${(v / max) * 100}%`, background: "var(--hud-cyan)" }} />
                                   </span>
                                   <span className="text-[11px] text-ink-3 tabular-nums w-10 text-right">
-                                    {pct(div(r.value, total) * 100, 1)}
+                                    {isShare ? pct(div(v, total) * 100, 1) : dash}
                                   </span>
                                 </span>
                               </td>
