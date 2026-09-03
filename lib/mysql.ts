@@ -6,7 +6,8 @@ import type { ConnectionOptions as TlsConnectionOptions } from 'node:tls';
 // authenticated (rejectUnauthorized:true) instead of just encrypted — closes MITM
 // credential capture. Public by design, safe to commit.
 // NOTE: OCI regenerates this CA (e.g. maintenance/restart — last seen 2026-09-03);
-// symptom is "certificate signature failure" in chat. Re-pin with:
+// symptom is "certificate signature failure". Prefer MYSQL_CA env (Vercel) so prod
+// can rotate without a code change; this PEM is the fallback. Refresh with:
 //   echo | openssl s_client -starttls mysql -connect $MYSQL_HOST:3306 -showcerts
 // SHA256 fingerprint: 64:6D:C4:55:94:03:08:0C:D3:8C:ED:88:36:EB:13:C3:AC:2E:03:E6:9A:C6:8A:47:13:AE:D3:06:89:40:A4:0F
 const OCI_MYSQL_CA = `-----BEGIN CERTIFICATE-----
@@ -29,6 +30,13 @@ c734j2e1CNsLFtjVwE+2c8XOwvAGp/HN05Fp7bQrGo6h8c4KVPwJ2LxZoMqPqPC2
 HCQNzrfUpgrUHj2I4agcnCd28uQ6I620mlEg6GY=
 -----END CERTIFICATE-----`;
 
+function mysqlCa(): string {
+  const fromEnv = process.env.MYSQL_CA?.trim();
+  if (fromEnv) return fromEnv.replace(/\n/g, '
+');
+  return OCI_MYSQL_CA;
+}
+
 let pool: mysql.Pool | null = null;
 let rwPool: mysql.Pool | null = null;
 let poolResetAt = 0;
@@ -40,7 +48,7 @@ let rwPoolResetAt = 0;
 // tls.connect at runtime, but its SslOptions type omits checkServerIdentity —
 // hence the TLS type + cast.
 const sslOptions: TlsConnectionOptions = {
-  ca: OCI_MYSQL_CA,
+  ca: mysqlCa(),
   rejectUnauthorized: true,
   checkServerIdentity: () => undefined,
 };
