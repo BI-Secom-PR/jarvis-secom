@@ -8,6 +8,11 @@ export default function LoginForm() {
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
 
+  // Explicit "entrar com chave de acesso" button (conditional UI is silent and
+  // never shows when the browser has no autofill support)
+  const [pkSupported, setPkSupported] = useState(false)
+  const [pkLoading, setPkLoading]     = useState(false)
+
   // Post-login passkey enrollment prompt
   const [showEnrollPrompt, setShowEnrollPrompt] = useState(false)
   const [enrolling, setEnrolling]               = useState(false)
@@ -25,7 +30,8 @@ export default function LoginForm() {
 
     async function initConditionalPasskey() {
       try {
-        const { browserSupportsWebAuthnAutofill, startAuthentication } = await import('@simplewebauthn/browser')
+        const { browserSupportsWebAuthn, browserSupportsWebAuthnAutofill, startAuthentication } = await import('@simplewebauthn/browser')
+        if (browserSupportsWebAuthn()) setPkSupported(true)
         if (!(await browserSupportsWebAuthnAutofill())) return
 
         // Get a discoverable-credential challenge (no email → allowCredentials: [])
@@ -50,19 +56,7 @@ export default function LoginForm() {
 
         if (cancelled) return
 
-        const finishRes = await fetch('/api/auth/passkey/login/finish', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ credential, challengeToken }),
-        })
-        const data = await finishRes.json()
-        if (!finishRes.ok) {
-          setError(data.error ?? 'Autenticação com passkey falhou.')
-          return
-        }
-
-        const ALLOWED = ['/', '/waiting']
-        window.location.href = (data.redirect && ALLOWED.includes(data.redirect)) ? data.redirect : '/'
+        await finishPasskeyLogin(credential, challengeToken)
       } catch (err: unknown) {
         // NotAllowedError = user cancelled or abort — silent
         if (err instanceof Error && err.name !== 'NotAllowedError' && err.name !== 'AbortError') {
@@ -78,6 +72,53 @@ export default function LoginForm() {
       abortCtrlRef.current?.abort()
     }
   }, [])
+
+  // Shared tail of both passkey paths (autofill and the explicit button)
+  async function finishPasskeyLogin(credential: unknown, challengeToken: string | null) {
+    const res  = await fetch('/api/auth/passkey/login/finish', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ credential, challengeToken }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setError(data.error ?? 'Autenticação com passkey falhou.')
+      return
+    }
+
+    const ALLOWED = ['/', '/waiting']
+    window.location.href = (data.redirect && ALLOWED.includes(data.redirect)) ? data.redirect : '/'
+  }
+
+  // Explicit button: modal passkey prompt. With an e-mail typed the server
+  // narrows to that user's credentials; empty falls back to discoverable ones.
+  async function handlePasskeyLogin() {
+    setPkLoading(true)
+    setError('')
+    try {
+      const startRes = await fetch('/api/auth/passkey/login/start', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(email ? { email } : {}),
+      })
+      const start = await startRes.json()
+      if (!startRes.ok) throw new Error(start.error ?? 'Não foi possível iniciar a chave de acesso.')
+
+      // startAuthentication aborts the pending conditional-UI ceremony itself
+      const { startAuthentication } = await import('@simplewebauthn/browser')
+      const credential = await startAuthentication({ optionsJSON: start.options })
+
+      await finishPasskeyLogin(credential, start.challengeToken)
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'NotAllowedError') {
+        setError('Operação cancelada.')
+      } else {
+        setError(err instanceof Error ? err.message : 'Erro ao entrar com chave de acesso.')
+      }
+    } finally {
+      setPkLoading(false)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -215,11 +256,26 @@ export default function LoginForm() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || pkLoading}
           className="w-full bg-accent text-accent-ink rounded-xl py-3 text-sm font-medium hover:opacity-90 active:opacity-80 transition-opacity disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
           {loading ? 'Entrando...' : 'Entrar'}
         </button>
+
+        {pkSupported && (
+          <button
+            type="button"
+            onClick={handlePasskeyLogin}
+            disabled={loading || pkLoading}
+            className="w-full flex items-center justify-center gap-2 border-[0.5px] border-separator rounded-xl py-3 text-sm text-ink-3 hover:text-ink hover:border-separator-strong transition-colors disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="8" cy="8" r="4" />
+              <path d="M11 11l9 9m-3 0 3-3m-6-3 2.5 2.5M4 21c0-3.3 1.8-5 4-5" />
+            </svg>
+            {pkLoading ? 'Aguardando...' : 'Entrar com chave de acesso'}
+          </button>
+        )}
       </form>
 
       <p className="text-center text-xs text-ink-4 mt-6">
