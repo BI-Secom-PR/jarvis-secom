@@ -19,8 +19,8 @@
   "dependencies": {
     "@ai-sdk/google": "^3.0.43",
     "@google/genai": "^1.45.0",
-    "@simplewebauthn/browser": "^13.3.0",
-    "@simplewebauthn/server": "^13.3.1",
+    "@simplewebauthn/browser": "^14.0.0",
+    "@simplewebauthn/server": "^14.0.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/dompurify": "^3.0.5",
     "ai": "^6.0.116",
@@ -32,7 +32,7 @@
     "html-to-image": "^1.11.13",
     "jose": "^6.2.3",
     "mysql2": "^3.24.3",
-    "next": "16.2.11",
+    "next": "16.3.4",
     "ollama": "^0.6.3",
     "postgres": "^3.4.8",
     "react": "19.2.3",
@@ -44,7 +44,7 @@
   "overrides": {
     "protobufjs": "^7.6.5",
     "brace-expansion": "^1.1.18",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.4",
     "readdir-glob": {
       "minimatch": {
         "brace-expansion": "^2.1.2"
