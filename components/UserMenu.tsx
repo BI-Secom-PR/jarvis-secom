@@ -67,6 +67,12 @@ export default function UserMenu({ user }: { user: SessionUser }) {
             Usuários
           </a>
         )}
+        <a
+          href="/perfil"
+          className="text-xs text-ink-4 hover:text-ink-2 transition-colors py-3 -my-3"
+        >
+          Perfil
+        </a>
         <button
           onClick={openModal}
           className="text-xs text-ink-3 max-w-30 truncate hover:text-ink-2 transition-colors cursor-pointer py-3 -my-3"
@@ -133,6 +139,17 @@ export default function UserMenu({ user }: { user: SessionUser }) {
                 </svg>
               </a>
             )}
+
+            <a
+              href="/perfil"
+              className="flex items-center justify-between py-3.5 px-1 text-sm text-ink-2 hover:text-ink transition-colors"
+              onClick={() => setMenuOpen(false)}
+            >
+              <span>Perfil</span>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </a>
 
             <button
               onClick={() => { setMenuOpen(false); openModal(); }}

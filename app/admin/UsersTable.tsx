@@ -37,24 +37,30 @@ export default function UsersTable({
   const [editState, setEditState] = useState<EditState | null>(null)
   const [saving, setSaving]     = useState(false)
   const [editError, setEditError] = useState('')
+  const [actionError, setActionError] = useState('')
+
+  // Surfaces the server's error instead of leaving the toggle silently inert
+  async function patchUser(id: string, patch: Record<string, unknown>) {
+    const res  = await patchJson(`/api/admin/users/${id}`, patch)
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setActionError(data.error ?? 'Não foi possível salvar a alteração.')
+      return null
+    }
+    setActionError('')
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...data } : u))
+    return data
+  }
 
   async function toggleEnabled(id: string, enable: boolean) {
     setToggling(id)
-    const res = await patchJson(`/api/admin/users/${id}`, { enabled: enable })
-    if (res.ok) {
-      const updated = await res.json()
-      setUsers(prev => prev.map(u => u.id === id ? { ...u, enabled: updated.enabled } : u))
-    }
+    await patchUser(id, { enabled: enable })
     setToggling(null)
   }
 
   async function togglePasskeyAllowed(id: string, allow: boolean) {
     setTogglingPasskey(id)
-    const res = await patchJson(`/api/admin/users/${id}`, { passkeyAllowed: allow })
-    if (res.ok) {
-      const updated = await res.json()
-      setUsers(prev => prev.map(u => u.id === id ? { ...u, passkeyAllowed: updated.passkeyAllowed } : u))
-    }
+    await patchUser(id, { passkeyAllowed: allow })
     setTogglingPasskey(null)
   }
 
@@ -118,6 +124,10 @@ export default function UsersTable({
           </button>
         </div>
       </div>
+
+      {actionError && (
+        <p className="text-danger text-sm mb-4">{actionError}</p>
+      )}
 
       <div className="bg-surface backdrop-blur-[60px] border-[0.5px] border-separator rounded-[24px] overflow-hidden">
         <table className="w-full">

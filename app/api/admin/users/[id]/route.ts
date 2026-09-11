@@ -26,11 +26,6 @@ export async function PATCH(
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
-  // Admin cannot modify themselves (to prevent self-lockout)
-  if (id === admin.id) {
-    return NextResponse.json({ error: 'Você não pode alterar sua própria conta.' }, { status: 400 })
-  }
-
   const body = await req.json().catch(() => null)
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
@@ -39,6 +34,15 @@ export async function PATCH(
 
   const { enabled, passkeyAllowed, name, email, role, password } = parsed.data
   const enabledChanged = enabled !== undefined
+
+  // Admin cannot modify their own account (prevents self-lockout). passkeyAllowed
+  // is the exception: it grants nothing but the right to enroll an authenticator
+  // the admin already holds, so it cannot lock anyone out — and blocking it left
+  // a lone admin with no way to turn their own passkey permission off and on.
+  const onlyPasskey = [enabled, name, email, role, password].every(v => v === undefined)
+  if (id === admin.id && !onlyPasskey) {
+    return NextResponse.json({ error: 'Você não pode alterar sua própria conta.' }, { status: 400 })
+  }
 
   // Check email uniqueness if changing email
   if (email) {
