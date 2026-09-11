@@ -5,6 +5,7 @@ import { users, passkeyCredentials } from '@/lib/db/schema'
 import HudBackground from '@/components/HudBackground'
 import ThemeToggle from '@/components/ThemeToggle'
 import PasskeysPanel from './PasskeysPanel'
+import PasswordPanel from './PasswordPanel'
 
 export const metadata = { title: 'Perfil — Jarvis SECOM' }
 
@@ -35,6 +36,8 @@ export default async function PerfilPage() {
           <ThemeToggle />
         </div>
         <p className="font-hud text-[9px] uppercase tracking-[0.3em] text-ink-3 mb-8">{session.email}</p>
+
+        <PasswordPanel />
 
         <PasskeysPanel
           passkeys={passkeys.map(p => ({ ...p, createdAt: p.createdAt.toISOString() }))}
