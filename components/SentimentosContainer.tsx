@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import HudBackground from "./HudBackground";
 import HudCorners from "./HudCorners";
@@ -164,6 +164,9 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
   const [error, setError] = useState<string | null>(null);
   const [topMode, setTopMode] = useState<"Negativo" | "Positivo">("Negativo");
   const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>("month");
+  const trendGranularityRef = useRef(trendGranularity);
+  trendGranularityRef.current = trendGranularity;
+  const [trendLoading, setTrendLoading] = useState(false);
   // The lightbox holds the whole carousel, so ampliação can walk the cards too.
   const [preview, setPreview] = useState<{ urls: string[]; i: number } | null>(null);
   const [previewFrame, setPreviewFrame] = useState<{ w: number; h: number } | null>(null);
@@ -232,7 +235,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
       try {
         const res = await postJson(
           "/api/sentimentos/data",
-          { campaign, ad, platform, sentiment, from, to, aiWhere: aiFilter?.where, page, trendGranularity },
+          { campaign, ad, platform, sentiment, from, to, aiWhere: aiFilter?.where, page, trendGranularity: trendGranularityRef.current },
           { signal: ac.signal }
         );
         const json = await res.json();
@@ -250,7 +253,41 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
       window.clearTimeout(t);
       ac.abort();
     };
-  }, [campaign, ad, platform, sentiment, from, to, aiFilter, page, trendGranularity]);
+  }, [campaign, ad, platform, sentiment, from, to, aiFilter, page]);
+
+  // Granularity toggle only re-fetches the trend chart's bucket — KPI tiles,
+  // comments, byPlatform and topAds stay put (they don't depend on it).
+  // Diffs against the previous value (not a run counter) so React Strict
+  // Mode's dev-only double-invoke of the mount effect can't fire a spurious fetch.
+  const prevTrendGranularity = useRef(trendGranularity);
+  useEffect(() => {
+    if (trendGranularity === prevTrendGranularity.current) return;
+    prevTrendGranularity.current = trendGranularity;
+    const ac = new AbortController();
+    const t = window.setTimeout(async () => {
+      setTrendLoading(true);
+      try {
+        const res = await postJson(
+          "/api/sentimentos/data",
+          { campaign, ad, platform, sentiment, from, to, aiWhere: aiFilter?.where, trendGranularity, trendOnly: true },
+          { signal: ac.signal }
+        );
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+        setData((prev) => (prev ? { ...prev, trend: json.trend } : prev));
+      } catch (e) {
+        if (ac.signal.aborted || (e instanceof DOMException && e.name === "AbortError")) return;
+        setError(e instanceof Error ? e.message : "Erro ao carregar dados");
+      } finally {
+        if (!ac.signal.aborted) setTrendLoading(false);
+      }
+    }, 250);
+    return () => {
+      window.clearTimeout(t);
+      ac.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trendGranularity]);
 
   // server already facets the ads list by the other filters
   const adOptions = useMemo(
@@ -363,23 +400,23 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
     const rows = platforms.map((p) => {
       const of = (s: string) => Number(data.byPlatform.find((r) => r.platform === p && r.sentiment === s)?.n ?? 0);
       const total = data.byPlatform.filter((r) => r.platform === p).reduce((s, r) => s + Number(r.n), 0);
-      return { p, total, neg: of("Negativo") };
+      return { p, total, n: of(topMode) };
     });
     return {
       type: "bar",
-      title: "% de comentários negativos por plataforma",
+      title: `% de comentários ${topMode.toLowerCase()}s por plataforma`,
       labels: rows.map((r) => platformLabel(r.p)),
       datasets: [{
-        label: "% negativos",
-        data: rows.map((r) => (r.total ? +((r.neg / r.total) * 100).toFixed(1) : 0)),
+        label: `% ${topMode.toLowerCase()}s`,
+        data: rows.map((r) => (r.total ? +((r.n / r.total) * 100).toFixed(1) : 0)),
         meta: rows.map((r) => ({
           Total: r.total.toLocaleString("pt-BR"),
-          Negativos: r.neg.toLocaleString("pt-BR"),
+          [topMode === "Negativo" ? "Negativos" : "Positivos"]: r.n.toLocaleString("pt-BR"),
         })),
       }],
-      colors: [SENT_COLORS.Negativo],
+      colors: [SENT_COLORS[topMode]],
     };
-  }, [data]);
+  }, [data, topMode]);
 
   const topAds: ChartData | null = useMemo(() => {
     const rows = topMode === "Negativo" ? data?.topNegative : data?.topPositive;
@@ -401,6 +438,11 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
     `px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${
       on ? "bg-accent-soft border-accent-border text-accent-text" : "bg-fill border-separator text-ink-3 hover:text-ink"
     }`;
+  const topModeToggle = (["Negativo", "Positivo"] as const).map((m) => (
+    <button key={m} onClick={() => setTopMode(m)} className={pill(topMode === m)}>
+      Mais {m === "Negativo" ? "negativos" : "positivos"}
+    </button>
+  ));
 
   return (
     <div className="h-dvh w-full flex flex-col overflow-hidden relative hud-theme hud-void-bg">
@@ -581,7 +623,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
                   {(["day", "week", "month"] as const).map((g) => (
                     <button
                       key={g}
-                      onClick={() => { setTrendGranularity(g); setPage(0); }}
+                      onClick={() => setTrendGranularity(g)}
                       className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${trendGranularity === g
                         ? "bg-accent-soft border-accent-border text-accent-text"
                         : "bg-fill border-separator text-ink-3 hover:text-ink"
@@ -591,27 +633,18 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
                     </button>
                   ))}
                 </div>
-                <ChartWidget chart={trend} fill />
+                <div className={`min-h-0 flex-1 transition-opacity ${trendLoading ? "opacity-50" : ""}`}>
+                  <ChartWidget chart={trend} fill />
+                </div>
               </div>
             )}
-            {byPlatform && <ChartWidget chart={byPlatform} fill />}
-            {topAds && (
-              <div className="flex flex-col gap-2 min-h-0">
-                <div className="flex gap-2 shrink-0">
-                  {(["Negativo", "Positivo"] as const).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => setTopMode(m)}
-                      className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${topMode === m
-                        ? "bg-accent-soft border-accent-border text-accent-text"
-                        : "bg-fill border-separator text-ink-3 hover:text-ink"
-                        }`}
-                    >
-                      Mais {m === "Negativo" ? "negativos" : "positivos"}
-                    </button>
-                  ))}
+            {(byPlatform || topAds) && (
+              <div className="lg:col-span-2 flex flex-col gap-2 min-h-0">
+                <div className="flex gap-2 shrink-0">{topModeToggle}</div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 auto-rows-fr gap-4">
+                  {byPlatform && <ChartWidget chart={byPlatform} fill />}
+                  {topAds && <ChartWidget chart={topAds} fill />}
                 </div>
-                <ChartWidget chart={topAds} fill />
               </div>
             )}
           </section>

@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: SentimentFilters & { page?: number; trendGranularity?: string };
+  let body: SentimentFilters & { page?: number; trendGranularity?: string; trendOnly?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -103,6 +103,16 @@ export async function POST(req: NextRequest) {
     const pool = getPool();
     const commentsSql = `SELECT id, image_url, creative_image_path, post_message, comment, author, like_count, created_time, sentiment, sentiment_source, audited_by, campaign_name, ad_name, platform
          ${from} ORDER BY created_time DESC LIMIT ${PAGE_SIZE} OFFSET ${page * PAGE_SIZE}`;
+
+    // Granularity toggle only changes the trend chart's bucket — the KPI tiles,
+    // comments, byPlatform and topAds already on screen are unaffected.
+    if (body.trendOnly) {
+      const trend = await pool.query(
+        `SELECT ${trendBucket.expr} period, sentiment, COUNT(*) n ${from}${trendCap} GROUP BY period, sentiment ORDER BY period`,
+        params
+      );
+      return NextResponse.json({ trend: trend[0] });
+    }
 
     // Every filter change resets page to 0 client-side, so page > 0 means the
     // aggregates already on screen are still valid — fetch only the next
