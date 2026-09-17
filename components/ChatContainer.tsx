@@ -137,6 +137,26 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
     await chatApi.updateSessionTitle(sid, text.slice(0, 60)).catch(() => {});
   }, []);
 
+  /**
+   * A finished voice turn, folded into the same state the text chat uses — so
+   * the next voice question has history to resolve against, and the turn shows
+   * up in the transcript and in Postgres.
+   */
+  const handleVoiceTurn = useCallback(
+    (userText: string, aiText: string) => {
+      const now = Date.now();
+      setMessages((prev) => [
+        ...prev,
+        { id: `${now}-u`, role: "user", text: userText },
+        { id: `${now}-a`, role: "ai", text: aiText },
+      ]);
+      saveMessage("USER", userText);
+      saveMessage("AI", aiText);
+      updateTitle(userText);
+    },
+    [saveMessage, updateTitle],
+  );
+
   const handleSend = useCallback(
     async (text: string) => {
       setMessages((prev) => [...prev, { id: Date.now().toString(), role: "user", text }]);
@@ -239,7 +259,15 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
       {/* Input */}
       <InputArea ref={inputRef} onSend={handleSend} disabled={isTyping} onVoiceClick={() => setVoiceOpen(true)} />
 
-      {voiceOpen && <VoiceMode onClose={() => setVoiceOpen(false)} model={selectedModel} />}
+      {voiceOpen && (
+        <VoiceMode
+          onClose={() => setVoiceOpen(false)}
+          model={selectedModel}
+          messages={messages}
+          chatSessionId={sessionIdRef.current}
+          onTurn={handleVoiceTurn}
+        />
+      )}
     </div>
   );
 }

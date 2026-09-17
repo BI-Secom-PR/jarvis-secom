@@ -7,6 +7,7 @@ import path from 'path';
 import os from 'os';
 import { createSignedDownloadUrl, removeFiles } from '@/lib/storage';
 import type { UrlSampleItem, UrlAnomalyItem, UrlCheckedRow } from '@/lib/urlCheck';
+import { sseResponse } from '@/lib/sse';
 
 export const maxDuration = 300;
 
@@ -20,7 +21,6 @@ function validateDate(label: string, val: string): string | null {
   return DATE_RE.test(val) ? null : `${label} deve estar no formato DD/MM/YYYY`;
 }
 
-type Send = (ev: object) => void;
 type VerificationResult = {
   veiculos: unknown;
   sem_comprovante: unknown;
@@ -75,32 +75,6 @@ function runEngine(args: string[]): Promise<string> {
     });
 
     proc.on('error', reject);
-  });
-}
-
-function sseResponse(work: (send: Send) => Promise<void>): Response {
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send: Send = (ev) =>
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(ev)}\n\n`));
-      try {
-        await work(send);
-      } catch (e) {
-        try {
-          send({ type: 'error', message: e instanceof Error ? e.message : String(e) });
-        } catch { /* controller may already be closed */ }
-      } finally {
-        controller.close();
-      }
-    },
-  });
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
   });
 }
 

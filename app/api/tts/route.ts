@@ -6,6 +6,13 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY!,
 });
 
+// The voice overlay now sends one sentence at a time, but a single request
+// must still be allowed to outlive the platform's 10-15s default.
+export const maxDuration = 60;
+
+/** One utterance, not a whole report — the client chunks before calling. */
+const MAX_TEXT = 2000;
+
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -14,6 +21,9 @@ export async function POST(req: NextRequest) {
     const { text } = await req.json();
     if (!text || typeof text !== 'string') {
       return NextResponse.json({ error: 'Missing text' }, { status: 400 });
+    }
+    if (text.length > MAX_TEXT) {
+      return NextResponse.json({ error: 'Text too long' }, { status: 400 });
     }
 
     const response = await ai.models.generateContent({
@@ -40,8 +50,9 @@ export async function POST(req: NextRequest) {
       mimeType: part.inlineData.mimeType ?? 'audio/L16;rate=24000',
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[tts] error:', msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    // Logged server-side only — the provider message used to be echoed to the
+    // client and printed verbatim in the overlay.
+    console.error('[tts] error:', err instanceof Error ? err.message : String(err));
+    return NextResponse.json({ error: 'TTS unavailable' }, { status: 500 });
   }
 }

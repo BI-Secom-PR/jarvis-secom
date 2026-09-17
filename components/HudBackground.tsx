@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useIsDark } from "@/lib/useIsDark";
+import { hudSignal } from "@/lib/hudSignal";
 
 /**
  * Iron-Man "command lattice" backdrop — a rotating neural sphere of linked
@@ -11,6 +12,10 @@ import { useIsDark } from "@/lib/useIsDark";
  *
  * Renders a fixed full-screen layer (z-0). `variant="subtle"` dims it and
  * thins the particle budget for use behind dense content (the chat list).
+ *
+ * `role="overlay"` marks the instance that a full-screen overlay owns (the
+ * voice mode): it keeps drawing while page-level instances idle, and it reacts
+ * to `hudSignal.amplitude` so the sphere pulses with the live audio.
  */
 
 type RGB = { r: number; g: number; b: number };
@@ -37,8 +42,10 @@ const PALETTES_LIGHT: RGB[] = [
 
 export default function HudBackground({
   variant = "full",
+  role = "page",
 }: {
   variant?: "full" | "subtle";
+  role?: "page" | "overlay";
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const orbRef = useRef<HTMLDivElement>(null);
@@ -66,6 +73,10 @@ export default function HudBackground({
     let colorIndex = 0;
     let nextColorIndex = 1;
     let transition = 0;
+
+    // Live audio level, refreshed once per frame from hudSignal. Read by
+    // Particle.project(), so it has to live in the effect closure.
+    let amp = 0;
 
     let rotationX = 0.00145;
     let rotationY = 0.00225;
@@ -127,8 +138,9 @@ export default function HudBackground({
         const scale = perspective / (perspective + this.z3d + cameraDistance);
         // Organic radial breathing: each particle drifts in/out along its own
         // radius, phase-shifted by its pulse. Applied at projection time only,
-        // so the 3D state never accumulates error.
-        const breathe = 1 + Math.sin(this.pulse) * 0.04;
+        // so the 3D state never accumulates error. `amp` swells the whole
+        // shell with the voice on top of that idle drift.
+        const breathe = (1 + Math.sin(this.pulse) * (0.04 + amp * 0.1)) * (1 + amp * 0.07);
         this.x = this.x3d * breathe * scale + width / 2;
         this.y = this.y3d * breathe * scale + height * sphereCenterY;
         this.scale = scale;
@@ -225,8 +237,18 @@ export default function HudBackground({
     let raf = 0;
 
     function drawScene() {
+      // While an overlay owns the HUD, page instances are fully covered —
+      // skip the work rather than animate unseen. Keeps exactly one canvas
+      // running the O(n²) link pass.
+      if (role === "page" && hudSignal.overlayOpen) {
+        raf = requestAnimationFrame(drawScene);
+        return;
+      }
+
       const width = window.innerWidth;
       const height = window.innerHeight;
+      // Reduced motion renders a single static frame, so it must not pulse.
+      amp = prefersReduced || role !== "overlay" ? 0 : hudSignal.amplitude;
       const color = currentColor();
       updateSpin();
       const ctx2 = ctx!;
@@ -236,7 +258,9 @@ export default function HudBackground({
       ctx2.fillRect(0, 0, width, height);
 
       // Drive the orb glow from the cycling color.
-      orbGlow!.style.background = `radial-gradient(circle, rgba(${color.r}, ${color.g}, ${color.b}, ${isDark ? 0.3 : 0.14}) 0%, rgba(${color.r}, ${color.g}, ${color.b}, ${isDark ? 0.13 : 0.06}) 32%, transparent 66%)`;
+      const glowIn = (isDark ? 0.3 : 0.14) + amp * 0.3;
+      const glowMid = (isDark ? 0.13 : 0.06) + amp * 0.16;
+      orbGlow!.style.background = `radial-gradient(circle, rgba(${color.r}, ${color.g}, ${color.b}, ${glowIn}) 0%, rgba(${color.r}, ${color.g}, ${color.b}, ${glowMid}) 32%, transparent 66%)`;
 
       particles.forEach((p) => {
         p.rotate();
@@ -299,8 +323,8 @@ export default function HudBackground({
         haloY,
         sphereRadius * 1.05,
       );
-      halo.addColorStop(0, rgba(color, 0.16, 30, 20, 10));
-      halo.addColorStop(0.42, rgba(color, 0.055));
+      halo.addColorStop(0, rgba(color, 0.16 + amp * 0.22, 30, 20, 10));
+      halo.addColorStop(0.42, rgba(color, 0.055 + amp * 0.08));
       halo.addColorStop(1, "rgba(0, 0, 0, 0)");
       ctx2.fillStyle = halo;
       ctx2.fillRect(0, 0, width, height);
@@ -338,7 +362,7 @@ export default function HudBackground({
       window.removeEventListener("orientationchange", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
     };
-  }, [variant, isDark]);
+  }, [variant, isDark, role]);
 
   return (
     <div

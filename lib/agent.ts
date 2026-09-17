@@ -1184,11 +1184,54 @@ export function getSystemPrompt(): string {
   return `${SYSTEM_PROMPT}\n\nDATA ATUAL: ${today} — Use este ano como referência para qualquer mês mencionado sem ano explícito (ex: "março" = março de ${today.slice(0, 4)}).`;
 }
 
+export const CHART_SENTINEL = "CHART_REQUEST:";
+
+/**
+ * Streaming counterpart of `parseChartRequest`. Since that strips the
+ * CHART_REQUEST sentinel out of the final text, the sentinel must not be
+ * streamed either: `push` emits text up to it and then stops, holding back a
+ * partial-sentinel tail so a marker split across two deltas is never leaked.
+ *
+ * **`flush()` is mandatory at end of stream.** The held-back tail is up to
+ * `CHART_SENTINEL.length - 1` characters, and without the flush every reply
+ * loses its last 13 characters — which truncated real answers mid-number.
+ */
+export function chartGate(emit: (text: string) => void): {
+  push: (delta: string) => void;
+  flush: () => void;
+} {
+  let buf = "";
+  let sent = 0;
+  let stopped = false;
+  return {
+    push(delta) {
+      if (stopped) return;
+      buf += delta;
+      const at = buf.indexOf(CHART_SENTINEL);
+      if (at !== -1) {
+        if (at > sent) emit(buf.slice(sent, at));
+        stopped = true;
+        return;
+      }
+      const safe = buf.length - (CHART_SENTINEL.length - 1);
+      if (safe > sent) {
+        emit(buf.slice(sent, safe));
+        sent = safe;
+      }
+    },
+    flush() {
+      if (stopped || sent >= buf.length) return;
+      emit(buf.slice(sent));
+      sent = buf.length;
+    },
+  };
+}
+
 export function parseChartRequest(text: string): {
   cleanText: string;
   chartData: ChartData | null;
 } {
-  const prefix = "CHART_REQUEST:";
+  const prefix = CHART_SENTINEL;
   const idx = text.indexOf(prefix);
   if (idx === -1) return { cleanText: text.trim(), chartData: null };
 
