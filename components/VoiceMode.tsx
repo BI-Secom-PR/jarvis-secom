@@ -38,6 +38,11 @@ const SpeechRecognitionCtor: (new () => SpeechRecognition) | null =
 const FFT_SIZE = 256;
 /** Don't speak a fragment shorter than this — one utterance per clause stutters. */
 const MIN_CHUNK = 60;
+const VAD_THRESHOLD = 0.15;
+/** Sustained-above-threshold time before the orb commits to "listening". */
+const VAD_TRIGGER_MS = 250;
+/** Sustained-below-threshold time before it releases back to "idle". */
+const VAD_RELEASE_MS = 600;
 /** How much conversation to carry, in turns. Matches what the text chat sends. */
 const HISTORY_TURNS = 12;
 
@@ -60,6 +65,37 @@ function pickVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis?.getVoices() ?? [];
   const pt = voices.filter((v) => v.lang?.toLowerCase().startsWith('pt-br'));
   return pt.find((v) => /luciana/i.test(v.name)) ?? pt.find((v) => v.localService) ?? pt[0] ?? null;
+}
+
+/** Exported for scripts/test-voice-echo.ts — not used elsewhere in the app. */
+export function normalizeWords(s: string): string[] {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/**
+ * True when `candidate` (a fresh recognition result) looks like the mic
+ * picking up Jarvis's own voice rather than a real interruption — the
+ * defense `echoCancellation` doesn't reliably provide for speechSynthesis
+ * output, which never passes through our AudioContext.
+ *
+ * ponytail: a word-overlap heuristic, not real audio correlation. Ceiling —
+ * a short genuine interruption that happens to reuse most of the words
+ * Jarvis just said can be misread as an echo. Escalate to Silero VAD
+ * (@ricky0123/vad-web) only if this proves too aggressive in live use.
+ */
+export function isEcho(candidate: string, spoken: string): boolean {
+  const cWords = normalizeWords(candidate);
+  if (cWords.length === 0) return false;
+  const spokenNorm = ' ' + normalizeWords(spoken).join(' ') + ' ';
+  if (spokenNorm.includes(' ' + cWords.join(' ') + ' ')) return true; // literal fragment
+  const matched = cWords.filter((w) => spokenNorm.includes(' ' + w + ' ')).length;
+  return matched / cWords.length > 0.6;
 }
 
 function makeAnalyser(ctx: AudioContext): AnalyserNode {
@@ -113,6 +149,16 @@ export default function VoiceMode({ onClose, model, messages, chatSessionId, onT
   const abortRef = useRef<AbortController | null>(null);
   const closedRef = useRef(false);
   const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  // Barge-in bookkeeping. sourcesRef holds Gemini-path buffer sources so a
+  // new turn can stop them; spokenTextRef is what isEcho compares against;
+  // turnEpochRef lets a superseded turn's `finally` recognize it is stale
+  // (started interrupting it, then a newer turn began) and skip its cleanup
+  // instead of stomping the new turn's state.
+  const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const spokenTextRef = useRef('');
+  const turnEpochRef = useRef(0);
+  // Hangover state for the idle/listening VAD debounce below.
+  const vadRef = useRef<{ above: boolean; since: number }>({ above: false, since: 0 });
   // speechSynthesis plays outside our AudioContext, so no analyser can see it.
   // Its onboundary event fires per word, which drives a decaying pulse instead
   // — word-synced rather than waveform-accurate.
@@ -156,6 +202,10 @@ export default function VoiceMode({ onClose, model, messages, chatSessionId, onT
     cancelAnimationFrame(rafRef.current);
     recognitionRef.current?.abort();
     streamRef.current?.getTracks().forEach((t) => t.stop());
+    activeSourcesRef.current.forEach((s) => {
+      try { s.stop(); } catch { /* already stopped */ }
+    });
+    activeSourcesRef.current.clear();
     audioCtxRef.current?.close().catch(() => {});
     window.speechSynthesis?.cancel();
     hudSignal.amplitude = 0;
@@ -184,9 +234,16 @@ export default function VoiceMode({ onClose, model, messages, chatSessionId, onT
       const amplitude = Math.min(sum / data.length / 80, 1);
       hudSignal.amplitude = amplitude;
 
+      // Hangover VAD: the orb only flips once the mic has been consistently
+      // above/below the threshold for a stretch, not on the first noisy frame.
+      const now = performance.now();
+      const above = amplitude > VAD_THRESHOLD;
+      if (above !== vadRef.current.above) vadRef.current = { above, since: now };
+      const elapsed = now - vadRef.current.since;
+
       const state = orbStateRef.current;
-      if (state === 'idle' && amplitude > 0.15) setOrbState('listening');
-      else if (state === 'listening' && amplitude <= 0.15) setOrbState('idle');
+      if (state === 'idle' && above && elapsed >= VAD_TRIGGER_MS) setOrbState('listening');
+      else if (state === 'listening' && !above && elapsed >= VAD_RELEASE_MS) setOrbState('idle');
     }
     rafRef.current = requestAnimationFrame(sampleAudio);
   }, []);
@@ -225,10 +282,14 @@ export default function VoiceMode({ onClose, model, messages, chatSessionId, onT
       ttsAnalyserRef.current = analyser;
       src.connect(analyser);
       analyser.connect(ctx.destination);
+      activeSourcesRef.current.add(src);
       src.start();
 
       return new Promise((resolve) => {
-        src.onended = () => resolve();
+        src.onended = () => {
+          activeSourcesRef.current.delete(src);
+          resolve();
+        };
       });
     },
     [decodePcm16],
@@ -256,12 +317,25 @@ export default function VoiceMode({ onClose, model, messages, chatSessionId, onT
 
   const handleVoiceQuery = useCallback(
     async (text: string) => {
-      if (busyRef.current) return;
+      // A turn already in flight is a barge-in target, not a reason to drop
+      // the new one: cancel whatever Jarvis is doing and take over. The mic
+      // is never stopped (see the startup effect) so this can fire mid-speech.
+      if (busyRef.current) {
+        abortRef.current?.abort();
+        window.speechSynthesis?.cancel();
+        activeSourcesRef.current.forEach((s) => {
+          try { s.stop(); } catch { /* already stopped */ }
+        });
+        activeSourcesRef.current.clear();
+      }
+      // Stamped so the turn this interrupts can tell, in its own `finally`,
+      // that a newer turn has already taken over and skip resetting state.
+      const myEpoch = ++turnEpochRef.current;
       busyRef.current = true;
+      spokenTextRef.current = '';
       setError('');
       setTranscript('');
       setOrbState('thinking');
-      recognitionRef.current?.stop();
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -308,6 +382,7 @@ export default function VoiceMode({ onClose, model, messages, chatSessionId, onT
             spoke = true;
             setOrbState('speaking');
           }
+          spokenTextRef.current += ' ' + sentence;
           await speakOne(sentence);
         }
         pumping = false;
@@ -397,6 +472,7 @@ export default function VoiceMode({ onClose, model, messages, chatSessionId, onT
           // A reply with no sentence boundary at all still has to be spoken.
           if (!spoke) {
             setOrbState('speaking');
+            spokenTextRef.current += ' ' + spokenFull;
             await speakOne(spokenFull);
           }
           // Hands the turn to ChatContainer: history for the next question,
@@ -408,15 +484,14 @@ export default function VoiceMode({ onClose, model, messages, chatSessionId, onT
           setError(`Erro: ${(err as Error).message}`);
         }
       } finally {
-        busyRef.current = false;
-        abortRef.current = null;
-        if (!closedRef.current) {
-          setOrbState('idle');
-          setTranscript('');
-          try {
-            recognitionRef.current?.start();
-          } catch {
-            /* already started */
+        // A newer turn (barge-in) already took over — its own finally owns
+        // the reset from here; applying ours too would stomp its state.
+        if (turnEpochRef.current === myEpoch) {
+          busyRef.current = false;
+          abortRef.current = null;
+          if (!closedRef.current) {
+            setOrbState('idle');
+            setTranscript('');
           }
         }
       }
@@ -460,20 +535,31 @@ export default function VoiceMode({ onClose, model, messages, chatSessionId, onT
         micAnalyserRef.current = micAnalyser;
         ttsAnalyserRef.current = makeAnalyser(ctx);
 
-        // 3. Set up SpeechRecognition
+        // 3. Set up SpeechRecognition. Never stopped between turns — that's
+        // what makes barge-in possible — so it has to keep running (and keep
+        // restarting on its own ~60s timeout) through 'thinking'/'speaking' too.
         const recognition = setupRecognition(
           (e: SpeechRecognitionEvent) => {
             const last = e.results[e.results.length - 1];
             const text = last[0].transcript;
-            if (!busyRef.current) setTranscript(text);
-            if (last.isFinal && text.trim()) queryRef.current(text.trim());
+            if (!last.isFinal) {
+              if (!busyRef.current) setTranscript(text);
+              return;
+            }
+            const trimmed = text.trim();
+            if (!trimmed) return;
+            // While Jarvis is talking, the mic can hear its own voice —
+            // discard results that look like that instead of treating them
+            // as a barge-in or a new question.
+            if (busyRef.current && isEcho(trimmed, spokenTextRef.current)) return;
+            queryRef.current(trimmed);
           },
           (e: SpeechRecognitionErrorEvent) => {
             if (e.error === 'no-speech' || e.error === 'aborted') return;
             setError(`Erro de reconhecimento: ${e.error}`);
           },
           () => {
-            if (!cancelled && !busyRef.current) {
+            if (!cancelled) {
               try { recognition.start(); } catch { /* already started */ }
             }
           },
