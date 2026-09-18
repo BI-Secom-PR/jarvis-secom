@@ -527,12 +527,126 @@ function HudScatter({ chart, gid, theme, setHover }: { chart: ChartData; gid: st
   );
 }
 
+interface ZoomXform { scale: number; tx: number; ty: number }
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 6;
+const clampNum = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
+
+function clampPan(state: ZoomXform, box: { x: number; y: number; w: number; h: number }): ZoomXform {
+  const { scale } = state;
+  const minTx = box.x - (box.x + box.w) * scale;
+  const maxTx = box.x + box.w - box.x * scale;
+  const minTy = box.y - (box.y + box.h) * scale;
+  const maxTy = box.y + box.h - box.y * scale;
+  return { scale, tx: clampNum(state.tx, minTx, maxTx), ty: clampNum(state.ty, minTy, maxTy) };
+}
+
 function BrazilChoropleth({ chart, gid, theme, setHover }: { chart: ChartData; gid: string; theme: HudTheme; setHover: (hover: HoverState | null) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const [paths, setPaths] = useState<{ uf: string; d: string; cx: number; cy: number }[]>([]);
   // viewBox recortado no bounding box do mapa — o Brasil é quase quadrado e
   // afogava num viewBox 2:1 fixo. A legenda vai por cima, no canto oceânico.
   const [box, setBox] = useState({ x: 0, y: 0, w: VIEW_W, h: VIEW_W });
+  // Zoom/pan: transform aplicado só ao <g> dos estados, não à legenda — pinça
+  // (2 ponteiros) e arrastar (1 ponteiro) via Pointer Events, sem lib nova.
+  const [xform, setXform] = useState<ZoomXform>({ scale: 1, tx: 0, ty: 0 });
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ dist0: number; scale0: number; origPivot: { x: number; y: number } } | null>(null);
+  const panRef = useRef<{ x: number; y: number } | null>(null);
+
+  const toViewBoxPoint = (clientX: number, clientY: number) => {
+    const svg = svgRef.current;
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return { x: 0, y: 0 };
+    const pt = svg.createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    const p = pt.matrixTransform(ctm.inverse());
+    return { x: p.x, y: p.y };
+  };
+
+  const zoomAtViewBoxPoint = (vb: { x: number; y: number }, targetScale: number) => {
+    setXform((prev) => {
+      const nextScale = clampNum(targetScale, ZOOM_MIN, ZOOM_MAX);
+      if (nextScale === prev.scale) return prev;
+      const origX = (vb.x - prev.tx) / prev.scale;
+      const origY = (vb.y - prev.ty) / prev.scale;
+      return clampPan({ scale: nextScale, tx: vb.x - nextScale * origX, ty: vb.y - nextScale * origY }, box);
+    });
+  };
+
+  const zoomCentered = (factor: number) => zoomAtViewBoxPoint({ x: box.x + box.w / 2, y: box.y + box.h / 2 }, xform.scale * factor);
+
+  const resetZoom = () => setXform({ scale: 1, tx: 0, ty: 0 });
+
+  // React attaches `onWheel` as a passive listener by default, so preventDefault()
+  // there is a silent no-op and the page scrolls instead of the map zooming.
+  // A native listener is the documented workaround.
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const onWheelNative = (e: WheelEvent) => {
+      e.preventDefault();
+      zoomAtViewBoxPoint(toViewBoxPoint(e.clientX, e.clientY), xform.scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+    };
+    el.addEventListener("wheel", onWheelNative, { passive: false });
+    return () => el.removeEventListener("wheel", onWheelNative);
+  }, [xform, box]);
+
+  const handleDoubleClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (xform.scale > 1) { resetZoom(); return; }
+    zoomAtViewBoxPoint(toViewBoxPoint(e.clientX, e.clientY), 2.5);
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const vbMid = toViewBoxPoint(mid.x, mid.y);
+      pinch.current = {
+        dist0: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+        scale0: xform.scale,
+        origPivot: { x: (vbMid.x - xform.tx) / xform.scale, y: (vbMid.y - xform.ty) / xform.scale },
+      };
+      panRef.current = null;
+    } else if (pointers.current.size === 1) {
+      panRef.current = toViewBoxPoint(e.clientX, e.clientY);
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 2 && pinch.current) {
+      const [a, b] = [...pointers.current.values()];
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      const targetVb = toViewBoxPoint(mid.x, mid.y);
+      const nextScale = clampNum(pinch.current.scale0 * (dist / pinch.current.dist0), ZOOM_MIN, ZOOM_MAX);
+      const { origPivot } = pinch.current;
+      setXform(clampPan({ scale: nextScale, tx: targetVb.x - nextScale * origPivot.x, ty: targetVb.y - nextScale * origPivot.y }, box));
+    } else if (pointers.current.size === 1 && panRef.current) {
+      const vb = toViewBoxPoint(e.clientX, e.clientY);
+      const dx = vb.x - panRef.current.x;
+      const dy = vb.y - panRef.current.y;
+      panRef.current = vb;
+      if (xform.scale > 1) setXform((prev) => clampPan({ scale: prev.scale, tx: prev.tx + dx, ty: prev.ty + dy }, box));
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size < 2) pinch.current = null;
+    if (pointers.current.size === 1) {
+      const [p] = [...pointers.current.values()];
+      panRef.current = toViewBoxPoint(p.x, p.y);
+    } else if (pointers.current.size === 0) {
+      panRef.current = null;
+    }
+  };
   const labels = chart.labels ?? [];
   const values = asNumbers(chart.datasets[0]?.data);
   const valueMap: Record<string, number> = {};
@@ -571,26 +685,62 @@ function BrazilChoropleth({ chart, gid, theme, setHover }: { chart: ChartData; g
     return <div className="flex h-[220px] items-center justify-center text-[12px] text-ink-3">Carregando mapa...</div>;
   }
 
+  const zoomBtn: React.CSSProperties = {
+    width: 22,
+    height: 22,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontFamily: "monospace",
+    fontSize: 13,
+    lineHeight: 1,
+    color: theme.accent,
+    background: theme.panel,
+    border: `1px solid ${theme.axis}`,
+    borderRadius: 3,
+    cursor: "pointer",
+  };
+
   return (
-    <div ref={containerRef}>
-      <svg viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`} preserveAspectRatio="xMidYMid meet" className="mx-auto block h-auto w-full max-h-[340px]" role="img" aria-label={chart.title ?? "Mapa do Brasil"}>
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <svg
+        ref={svgRef}
+        viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`}
+        preserveAspectRatio="xMidYMid meet"
+        className="mx-auto block h-auto w-full max-h-[340px]"
+        style={{ touchAction: xform.scale > 1 ? "none" : "pan-y", cursor: xform.scale > 1 ? "grab" : "default" }}
+        role="img"
+        aria-label={chart.title ?? "Mapa do Brasil"}
+        onDoubleClick={handleDoubleClick}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
         <SvgDefs gid={gid} theme={theme} />
-        {paths.map(({ uf, d, cx, cy }) => {
-          const value = valueMap[uf.toUpperCase()] ?? 0;
-          const ratio = max === min ? (value ? 1 : 0) : (value - min) / (max - min);
-          const fillOpacity = theme.isDark ? 0.05 + ratio * 0.78 : 0.07 + ratio * 0.65;
-          const strokeOpacity = theme.isDark ? 0.25 + ratio * 0.55 : 0.2 + ratio * 0.45;
-          return (
-            <g key={uf} onMouseEnter={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: uf, rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color: theme.accent }], meta: metaMap[uf.toUpperCase()] })} onMouseMove={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: uf, rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color: theme.accent }], meta: metaMap[uf.toUpperCase()] })} onMouseLeave={() => setHover(null)}>
-              <path d={d} fill={theme.accent} fillOpacity={fillOpacity} stroke={theme.accent} strokeOpacity={strokeOpacity} strokeWidth={theme.isDark && ratio > 0.6 ? 0.9 : 0.6} filter={theme.isDark && ratio > 0.5 ? `url(#${gid}-soft-glow)` : undefined} />
-              {value > 0 && ratio > 0.32 && Number.isFinite(cx) && Number.isFinite(cy) && <text x={cx} y={cy + 4} textAnchor="middle" fill={theme.accent} fillOpacity={0.45 + ratio * 0.5} fontSize="11" fontFamily="monospace" fontWeight="700">{uf}</text>}
-            </g>
-          );
-        })}
+        <g transform={`translate(${xform.tx} ${xform.ty}) scale(${xform.scale})`}>
+          {paths.map(({ uf, d, cx, cy }) => {
+            const value = valueMap[uf.toUpperCase()] ?? 0;
+            const ratio = max === min ? (value ? 1 : 0) : (value - min) / (max - min);
+            const fillOpacity = theme.isDark ? 0.05 + ratio * 0.78 : 0.07 + ratio * 0.65;
+            const strokeOpacity = theme.isDark ? 0.25 + ratio * 0.55 : 0.2 + ratio * 0.45;
+            return (
+              <g key={uf} onMouseEnter={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: uf, rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color: theme.accent }], meta: metaMap[uf.toUpperCase()] })} onMouseMove={(e) => setHover({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, title: uf, rows: [{ label: chart.datasets[0]?.label ?? "Valor", value, color: theme.accent }], meta: metaMap[uf.toUpperCase()] })} onMouseLeave={() => setHover(null)}>
+                <path d={d} fill={theme.accent} fillOpacity={fillOpacity} stroke={theme.accent} strokeOpacity={strokeOpacity} strokeWidth={(theme.isDark && ratio > 0.6 ? 0.9 : 0.6) / xform.scale} filter={theme.isDark && ratio > 0.5 ? `url(#${gid}-soft-glow)` : undefined} />
+                {value > 0 && ratio > 0.32 && Number.isFinite(cx) && Number.isFinite(cy) && <text x={cx} y={cy + 4} textAnchor="middle" fill={theme.accent} fillOpacity={0.45 + ratio * 0.5} fontSize="11" fontFamily="monospace" fontWeight="700">{uf}</text>}
+              </g>
+            );
+          })}
+        </g>
         <rect x={box.x + box.w - 76} y={box.y + box.h - 8} width="72" height="5" fill={`url(#${gid}-geo-legend)`} rx="2" />
         <text x={box.x + box.w - 76} y={box.y + box.h - 11} fill={theme.dim} fontSize="9" fontFamily="monospace">BAIXO</text>
         <text x={box.x + box.w - 4} y={box.y + box.h - 11} textAnchor="end" fill={theme.dim} fontSize="9" fontFamily="monospace">ALTO</text>
       </svg>
+      <div style={{ position: "absolute", top: 6, right: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+        <button type="button" style={zoomBtn} aria-label="Aumentar zoom" onClick={() => zoomCentered(1.5)}>+</button>
+        <button type="button" style={zoomBtn} aria-label="Diminuir zoom" onClick={() => zoomCentered(1 / 1.5)}>−</button>
+        {xform.scale !== 1 && <button type="button" style={zoomBtn} aria-label="Redefinir zoom" onClick={resetZoom}>⤾</button>}
+      </div>
     </div>
   );
 }
@@ -676,15 +826,20 @@ export default function ChartWidget({ chart, fill = false }: Props) {
         : "border-separator bg-fill text-ink-3 hover:bg-fill-2 hover:text-ink"
     }`;
 
+  // O mapa (geo) tem altura ditada pela sua própria proporção (Brasil é mais
+  // alto que largo) — esticá-lo com flex-1/h-full até a altura de um irmão no
+  // grid (ex.: a tabela de ranking) fazia o overflow:hidden cortar o Sul.
+  const isGeoFill = fill && chart.type === "geo";
+
   return (
     <div
-      className={fill ? "flex-1 min-h-0 h-full flex flex-col" : "mt-3"}
-      style={{ width: fill ? undefined : 630, maxWidth: "100%" }}
+      className={fill && !isGeoFill ? "flex-1 min-h-0 h-full flex flex-col" : isGeoFill ? "" : "mt-3"}
+      style={{ width: fill ? "100%" : 630, maxWidth: "100%" }}
     >
       <div
         ref={captureRef}
         style={{
-          ...(fill ? { flex: 1 } : {}),
+          ...(fill && !isGeoFill ? { flex: 1 } : {}),
           position: "relative",
           borderRadius: 2,
           border: `1px solid ${chartIsDark ? "rgba(34,211,238,.2)" : "rgba(14,90,130,.15)"}`,

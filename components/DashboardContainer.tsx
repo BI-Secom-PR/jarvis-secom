@@ -807,7 +807,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
             <>
               {/* Discriminado, o ranking ganha 5 colunas e não cabe em meia tela:
                   mapa e tabela passam a ocupar a largura inteira, um sob o outro. */}
-              <section className={`grid grid-cols-1 gap-4 ${regiaoParts.length ? "" : "lg:grid-cols-2"}`}>
+              <section className={`grid grid-cols-1 gap-4 items-start ${regiaoParts.length ? "" : "lg:grid-cols-2"}`}>
                 {geoChart && <ChartWidget chart={geoChart} fill />}
                 <div className={`${panel} overflow-hidden`}>
                   <div className="px-4 md:px-6 pt-5 pb-2">
