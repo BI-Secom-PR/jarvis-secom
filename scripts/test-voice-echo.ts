@@ -4,7 +4,7 @@
  * Run: npx tsx scripts/test-voice-echo.ts
  */
 import assert from 'node:assert';
-import { isEcho } from '../components/VoiceMode';
+import { isEcho, estimateSpeechMs } from '../components/VoiceMode';
 
 const SPOKEN =
   'O valor total investido na campanha de Atualização da Caderneta de Vacinação foi de R$ 297.702,56 no período.';
@@ -35,4 +35,17 @@ assert.strictEqual(isEcho('interrompendo agora', ''), false);
 //    classified as an echo — the documented heuristic ceiling, not a bug.
 assert.strictEqual(isEcho('vacinação', SPOKEN), true);
 
-console.log('OK — isEcho: 7 checks passed.');
+// ── estimateSpeechMs (the watchdog bound for a stuck speechSynthesis call) ──
+
+// 8. Never below the floor — a one-word reply must still get a bounded wait,
+//    not an instant timeout that cuts off real (if unlikely) fast speech.
+assert.strictEqual(estimateSpeechMs('Sim.'), 8000);
+assert.strictEqual(estimateSpeechMs(''), 8000);
+
+// 9. Scales with length past the floor, so a long reply gets a proportionally
+//    longer grace period instead of being cut off mid-sentence.
+const long = 'x'.repeat(200);
+assert.strictEqual(estimateSpeechMs(long), 200 * 120);
+assert(estimateSpeechMs(long) > estimateSpeechMs('Sim.'), 'longer text must get more time, not less');
+
+console.log('OK — isEcho + estimateSpeechMs: 9 checks passed.');

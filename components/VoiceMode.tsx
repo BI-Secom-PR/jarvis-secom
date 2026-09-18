@@ -60,6 +60,17 @@ interface TtsAudio {
   mimeType: string;
 }
 
+/**
+ * Watchdog bound for a single speechSynthesis utterance — generous enough
+ * that real speech never trips it (~8 chars/sec is a slow floor; typical
+ * speech is faster), tight enough to recover a hung utterance in seconds
+ * rather than leaving a turn stuck until the user's next question forces it.
+ * Exported for scripts/test-voice-echo.ts.
+ */
+export function estimateSpeechMs(text: string): number {
+  return Math.max(8000, text.length * 120);
+}
+
 /** Best available local pt-BR voice, or null before the list has loaded. */
 function pickVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis?.getVoices() ?? [];
@@ -298,10 +309,32 @@ export default function VoiceMode({ onClose, model, messages, chatSessionId, onT
   /**
    * The default voice path: instant, unmetered, offline. Resolves when the
    * sentence has finished being spoken, so the caller can queue the next one.
+   *
+   * Two real-browser failure modes this guards against, neither of which the
+   * mocked-synth tests exercise:
+   *  - Chrome silently pauses `speechSynthesis` after ~15s of continuous
+   *    speech unless nudged; `pause()`+`resume()` is the documented
+   *    workaround, applied here every few seconds while an utterance runs.
+   *  - `onend`/`onerror` occasionally never fire at all. Without a bound,
+   *    that hangs the turn forever: `busyRef` stays true, the reply is never
+   *    handed to `onTurn`, and the ONLY way out is the user's next question
+   *    triggering the barge-in path — which correctly discards a genuinely
+   *    interrupted turn, silently losing this one's Q&A from history. The
+   *    watchdog below means a stuck utterance resolves on its own instead.
    */
   const speakNative = useCallback((text: string): Promise<void> => {
-    if (!window.speechSynthesis) return Promise.resolve();
+    const synth = window.speechSynthesis;
+    if (!synth) return Promise.resolve();
     return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearInterval(keepAlive);
+        clearTimeout(watchdog);
+        resolve();
+      };
+
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = 'pt-BR';
       if (voiceRef.current) utter.voice = voiceRef.current;
@@ -309,9 +342,17 @@ export default function VoiceMode({ onClose, model, messages, chatSessionId, onT
       utter.onboundary = () => {
         speechPulseRef.current = 0.85;
       };
-      utter.onend = () => resolve();
-      utter.onerror = () => resolve();
-      window.speechSynthesis.speak(utter);
+      utter.onend = finish;
+      utter.onerror = finish;
+
+      const keepAlive = setInterval(() => {
+        if (synth.speaking) { synth.pause(); synth.resume(); }
+      }, 10000);
+      // ~8 chars/sec is a slow, generous speech-rate floor — real speech is
+      // faster, so this only ever fires when something has actually hung.
+      const watchdog = setTimeout(finish, estimateSpeechMs(text));
+
+      synth.speak(utter);
     });
   }, []);
 
