@@ -6,6 +6,7 @@ interface Props {
   onSend: (text: string) => void;
   disabled: boolean;
   onVoiceClick?: () => void;
+  onNewChat?: () => void;
 }
 
 export interface InputAreaHandle {
@@ -16,7 +17,7 @@ const isMac =
   typeof navigator !== 'undefined' &&
   /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
-const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend, disabled, onVoiceClick }, ref) {
+const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend, disabled, onVoiceClick, onNewChat }, ref) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useImperativeHandle(ref, () => ({
@@ -50,6 +51,16 @@ const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleNewChat = () => {
+    if (disabled || !onNewChat) return;
+    const el = textareaRef.current;
+    if (el) {
+      el.value = '';
+      autoResize();
+    }
+    onNewChat();
   };
 
   return (
@@ -99,6 +110,15 @@ const InputArea = forwardRef<InputAreaHandle, Props>(function InputArea({ onSend
           </svg>
         </button>
       </div>
+      <button
+        type="button"
+        onClick={handleNewChat}
+        disabled={disabled || !onNewChat}
+        className="md:hidden mt-2 flex w-full min-h-11 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-separator-strong bg-fill-2 font-hud text-[11px] uppercase tracking-[0.22em] text-ink active:bg-fill disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <span aria-hidden="true" className="text-[15px] leading-none" style={{ color: 'var(--hud-cyan)' }}>＋</span>
+        Nova conversa
+      </button>
       <p className="hidden md:block font-hud text-[9px] uppercase text-ink-4 text-center mt-2.5 tracking-[0.22em]">
         Enter enviar &nbsp;·&nbsp; Shift+Enter nova linha &nbsp;·&nbsp; {isMac ? 'ctrl+N' : 'Ctrl+N'} nova sessão
       </p>

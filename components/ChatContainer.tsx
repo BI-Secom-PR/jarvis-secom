@@ -55,6 +55,7 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
   const inputRef = useRef<InputAreaHandle>(null);
   const sessionIdRef = useRef<string | null>(null);
   const isFirstMsgRef = useRef(true);
+  const startingNewChatRef = useRef(false);
 
   const scrollBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -106,20 +107,30 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
     })();
   }, [createChatSession]);
 
+  const startNewChat = useCallback(async () => {
+    if (startingNewChatRef.current) return;
+    startingNewChatRef.current = true;
+    setMessages([]);
+    setIsTyping(false);
+    try {
+      await createChatSession();
+      inputRef.current?.focus();
+    } finally {
+      startingNewChatRef.current = false;
+    }
+  }, [createChatSession]);
+
   // Cmd+N (Mac) / Ctrl+N (Win/Linux) → new chat session
   useEffect(() => {
-    const handleKeyDown = async (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "n" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setMessages([]);
-        setIsTyping(false);
-        await createChatSession();
-        inputRef.current?.focus();
+        void startNewChat();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [createChatSession]);
+  }, [startNewChat]);
 
   const saveMessage = useCallback(
     async (role: "USER" | "AI", content: string, chartData?: unknown) => {
@@ -257,7 +268,13 @@ export default function ChatContainer({ user }: { user: SessionUser }) {
       </div>
 
       {/* Input */}
-      <InputArea ref={inputRef} onSend={handleSend} disabled={isTyping} onVoiceClick={() => setVoiceOpen(true)} />
+      <InputArea
+        ref={inputRef}
+        onSend={handleSend}
+        disabled={isTyping}
+        onVoiceClick={() => setVoiceOpen(true)}
+        onNewChat={() => void startNewChat()}
+      />
 
       {voiceOpen && (
         <VoiceMode
