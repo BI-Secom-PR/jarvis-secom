@@ -26,13 +26,13 @@
     "ai": "^6.0.116",
     "bcryptjs": "^3.0.3",
     "d3-geo": "^3.1.1",
-    "dompurify": "^3.4.0",
+    "dompurify": "^3.4.16",
     "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",
     "html-to-image": "^1.11.13",
     "jose": "^6.2.3",
     "mysql2": "^3.24.3",
-    "next": "16.3.4",
+    "next": "16.3.8",
     "ollama": "^0.6.3",
     "postgres": "^3.4.8",
     "react": "19.2.3",
@@ -43,11 +43,15 @@
   },
   "overrides": {
     "protobufjs": "^7.6.5",
-    "brace-expansion": "^1.1.18",
+    "glob": {
+      "minimatch": {
+        "brace-expansion": "^1.1.21"
+      }
+    },
     "sharp": "^0.35.4",
     "readdir-glob": {
       "minimatch": {
-        "brace-expansion": "^2.1.2"
+        "brace-expansion": "^2.1.7"
       }
     },
     "esbuild": ">=0.28.1",
