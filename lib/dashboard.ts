@@ -17,6 +17,8 @@ export type DashboardFilters = {
   /** Os `campaign_name` crus que os grupos cobrem — é o que vai para o WHERE. */
   campaignNames?: string[];
   platform?: string[];
+  /** Sub-rede dentro da plataforma (facebook/instagram, YOUTUBE/SEARCH…). */
+  network?: string[];
   ad?: string[];
   objective?: string[];
   /** Tipos de compra escolhidos (CPM/CPC/CPV/CPE) — ver BUYING_TYPE_SQL. */
@@ -54,6 +56,7 @@ export function buildWhere(f: DashboardFilters): { sql: string; params: unknown[
     else conds.push('1=0');
   }
   inList('platform', f.platform);
+  inList('network', f.network);
   inList('ad_name', f.ad);
   inList('objective', f.objective);
   inList('eixo', f.tema);

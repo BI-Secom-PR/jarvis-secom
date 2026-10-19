@@ -49,6 +49,8 @@ export async function POST(req: NextRequest) {
     to: typeof body.to === 'string' ? body.to : undefined,
     campaigns: strs(body.campaign),
     platform: strs(body.platform),
+    // `network: true` é a quebra da tabela; o filtro viaja como `networks`.
+    network: strs(body.networks),
     ad: strs(body.ad),
     objective: strs(body.objective),
     buyingType: strs(body.buyingType),
@@ -73,15 +75,18 @@ export async function POST(req: NextRequest) {
     const resolve = async (ff: DashboardFilters) =>
       withBuyingCampaigns(pool, await withCampaignNames(pool, ff, T_CAMP), T_CAMP);
     const w = buildWhere(await resolve(f));
+    // Região e idade/gênero só trazem `network` para o Google (Meta vem vazio, conferido
+    // ao vivo em 2026-10-19): filtrar por rede ali zeraria a aba. O filtro vale em Campanhas.
+    const wDim = buildWhere({ ...(await resolve(f)), network: undefined });
 
     if (tab === 'demografia') {
       // The crossed table is the only place age and gender coexist —
       // gold_platforms_age and _gender each collapse the other dimension.
       const [rows] = await pool.query(
         `SELECT ${AGE_BUCKET_SQL} AS faixa, gender, ${METRIC_SELECT}
-           FROM ${T_AGE} WHERE ${w.sql}
+           FROM ${T_AGE} WHERE ${wDim.sql}
           GROUP BY faixa, gender`,
-        w.params
+        wDim.params
       );
       return NextResponse.json({
         demografia: (rows as Record<string, unknown>[]).map((r) => ({
@@ -93,9 +98,9 @@ export async function POST(req: NextRequest) {
     if (tab === 'regiao') {
       const [rows] = await pool.query(
         `SELECT region_name, ${METRIC_SELECT}
-           FROM ${T_REG} WHERE ${w.sql}
+           FROM ${T_REG} WHERE ${wDim.sql}
           GROUP BY region_name ORDER BY SUM(impressions) DESC`,
-        w.params
+        wDim.params
       );
       return NextResponse.json({
         regioes: (rows as Record<string, unknown>[]).map((r) => ({

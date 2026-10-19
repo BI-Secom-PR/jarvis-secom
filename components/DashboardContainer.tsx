@@ -37,6 +37,7 @@ type Payload = {
 
 type FiltersData = {
   platforms: string[];
+  networks: string[];
   objectives: string[];
   buyingTypes: string[];
   temas: { code: string; label: string }[];
@@ -144,6 +145,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
   // e AND entre filtros (Meta OU TikTok, E objetivo "tráfego").
   const [campaigns, setCampaigns] = useState<string[]>([]);
   const [platforms, setPlatforms] = useState<string[]>([]);
+  const [networks, setNetworks] = useState<string[]>([]);
   const [ads, setAds] = useState<string[]>([]);
   const [objectives, setObjectives] = useState<string[]>([]);
   // Tipo de compra (CPM/CPC/CPV/CPE) é derivado do objetivo no servidor — ver
@@ -178,6 +180,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
       // Repetido por valor (`platform=meta&platform=tiktok`) — a rota lê com getAll.
       for (const v of campaigns) qs.append("campaign", v);
       for (const v of platforms) qs.append("platform", v);
+      for (const v of networks) qs.append("network", v);
       for (const v of objectives) qs.append("objective", v);
       for (const v of buyingTypes) qs.append("buyingType", v);
       for (const v of temas) qs.append("tema", v);
@@ -186,11 +189,11 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
         if (!res.ok) throw new Error();
         setFiltersData(await res.json());
       } catch {
-        if (!ctrl.signal.aborted) setFiltersData({ platforms: [], objectives: [], buyingTypes: [], temas: [], campaigns: [], ads: [] });
+        if (!ctrl.signal.aborted) setFiltersData({ platforms: [], networks: [], objectives: [], buyingTypes: [], temas: [], campaigns: [], ads: [] });
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [from, to, campaigns, platforms, objectives, buyingTypes, temas, rulesVersion]);
+  }, [from, to, campaigns, platforms, networks, objectives, buyingTypes, temas, rulesVersion]);
 
   // ── Dados da aba ativa ──
   useEffect(() => {
@@ -199,7 +202,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
     const t = setTimeout(async () => {
       try {
         const res = await postJson("/api/dashboard/data",
-          { from, to, campaign: campaigns, platform: platforms, ad: ads, objective: objectives,
+          { from, to, campaign: campaigns, platform: platforms, networks, ad: ads, objective: objectives,
             buyingType: buyingTypes, tema: temas, tab, gran, network: byNetwork },
           { signal: ctrl.signal });
         const json = (await res.json()) as Payload;
@@ -216,7 +219,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [from, to, campaigns, platforms, ads, objectives, buyingTypes, temas, tab, gran, byNetwork]);
+  }, [from, to, campaigns, platforms, networks, ads, objectives, buyingTypes, temas, tab, gran, byNetwork]);
 
   const adOptions = useMemo(
     () => (filtersData?.ads ?? [])
@@ -313,14 +316,17 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
   const scatterChart = useMemo<ChartData | null>(() => {
     const rows = data?.campanhas ?? [];
     if (!rows.length) return null;
+    // Eixo x = impressões; só quando a métrica É impressões o x vira investimento
+    // (impressões × impressões seria uma diagonal).
+    const byCost = metric === "impressoes";
     return {
       type: "scatter",
-      title: `${METRICS[metric].label} por investimento`,
-      xLabel: "Investimento (R$)",
+      title: `${METRICS[metric].label} por ${byCost ? "investimento" : "impressões"}`,
+      xLabel: byCost ? "Investimento (R$)" : "Impressões",
       yLabel: METRICS[metric].label,
       datasets: [{
         label: METRICS[metric].label,
-        data: rows.map((r) => ({ x: r.cost, y: metricValue(r, metric) })),
+        data: rows.map((r) => ({ x: byCost ? r.cost : r.impressions, y: metricValue(r, metric) })),
         meta: rows.map((r) => ({
           Campanha: r.nome.length > 60 ? r.nome.slice(0, 60) + "…" : r.nome,
           Plataforma: platformLabel(r.platform),
@@ -413,7 +419,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
   useEffect(() => {
     if (!insightsInput) { setAiInsights(null); setAiLoading(false); return; }
     const payload = { tab, metric, periodo: { from, to },
-      filtros: { campaign: campaigns, platform: platforms, ad: ads, objective: objectives,
+      filtros: { campaign: campaigns, platform: platforms, network: networks, ad: ads, objective: objectives,
         buyingType: buyingTypes, tema: temas },
       resumo: insightsInput };
     const key = JSON.stringify(payload);
@@ -438,7 +444,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
     }, 400);
     return () => { clearTimeout(t); ctrl.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(insightsInput), tab, metric, from, to, campaigns, platforms, ads, objectives, buyingTypes, temas]);
+  }, [JSON.stringify(insightsInput), tab, metric, from, to, campaigns, platforms, networks, ads, objectives, buyingTypes, temas]);
 
   // ── Estilos herdados do SentimentosContainer ──
   const selectClass =
@@ -545,6 +551,14 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                 <SearchableSelect multiple className={selectClass} value={platforms}
                   options={filtersData?.platforms ?? []} labelOf={platformLabel}
                   emptyLabel="Todas as plataformas" onChange={setPlatforms} />
+                <SearchableSelect multiple className={selectClass} value={networks}
+                  options={filtersData?.networks ?? []} labelOf={networkLabel}
+                  emptyLabel="Todas as redes" onChange={setNetworks} />
+                {networks.length > 0 && tab !== "campanhas" && (
+                  <p className="text-[11px] text-ink-3 self-center">
+                    Rede só filtra a aba Campanhas — região e idade/gênero não trazem a rede do Meta.
+                  </p>
+                )}
                 <SearchableSelect multiple className={selectClass} value={objectives}
                   options={filtersData?.objectives ?? []}
                   emptyLabel="Todos os objetivos" onChange={setObjectives} />
@@ -628,12 +642,18 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
                     {{ dia: "Diário", semana: "Semanal", mes: "Mensal" }[g]}
                   </button>
                 ))}
-                <span className="ml-2">{engSwitch}</span>
+                {/* no mobile o interruptor desce para cima do gráfico que ele controla */}
+                <span className="ml-2 hidden lg:inline">{engSwitch}</span>
               </div>
 
               <section className="grid grid-cols-1 lg:grid-cols-2 auto-rows-fr gap-4">
                 {trendChart && <ChartWidget chart={trendChart} fill />}
-                {engChart && <ChartWidget chart={engChart} fill />}
+                {engChart && (
+                  <div className="flex flex-col gap-3 min-h-0">
+                    <div className="lg:hidden">{engSwitch}</div>
+                    <div className="flex-1 min-h-0"><ChartWidget chart={engChart} fill /></div>
+                  </div>
+                )}
               </section>
 
               <div className="flex flex-wrap gap-2">
