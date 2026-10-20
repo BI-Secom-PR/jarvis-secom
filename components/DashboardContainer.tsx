@@ -12,6 +12,7 @@ import ThemeToggle from "./ThemeToggle";
 import { postJson } from "@/lib/fetchUtils";
 import { AGE_ORDER, ENGAGEMENT_PARTS, GENDERS, GENDER_LABEL, METRICS, networkLabel, platformLabel, type EngagementPartKey, type MetricKey } from "@/lib/dashboard";
 import { buildAchados, kpiDeltaLabel } from "@/lib/dashboardInsights";
+import { PRESET_DAYS, parsePrefs, prefsKey, type Prefs } from "@/lib/dashboardPrefs";
 import type { ChartData } from "@/types/chat";
 
 type Tab = "campanhas" | "demografia" | "regiao";
@@ -138,7 +139,7 @@ function Spark({ values }: { values: number[] }) {
   );
 }
 
-export default function DashboardContainer({ isAdmin = false }: { isAdmin?: boolean }) {
+export default function DashboardContainer({ isAdmin = false, userId }: { isAdmin?: boolean; userId: string }) {
   const [from, setFrom] = useState(isoDaysAgo(30));
   const [to, setTo] = useState(isoDaysAgo(0));
   // Todo filtro é multi-valor: [] = sem filtro, N valores = OR dentro do filtro
@@ -172,8 +173,45 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // ── Filtros lembrados (localStorage, por usuário) ──
+  // Restaura num efeito, não no inicializador do useState: o componente renderiza no
+  // servidor e ler o storage ali geraria mismatch de hidratação. Os fetches esperam
+  // `ready`, senão sairia uma requisição com os padrões antes da restauração.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    try {
+      const p = parsePrefs(localStorage.getItem(prefsKey(userId)));
+      if (p.days) { setFrom(isoDaysAgo(p.days)); setTo(isoDaysAgo(0)); }
+      else if (p.from && p.to) { setFrom(p.from); setTo(p.to); }
+      if (p.campaigns) setCampaigns(p.campaigns);
+      if (p.platforms) setPlatforms(p.platforms);
+      if (p.networks) setNetworks(p.networks);
+      if (p.ads) setAds(p.ads);
+      if (p.objectives) setObjectives(p.objectives);
+      if (p.buyingTypes) setBuyingTypes(p.buyingTypes);
+      if (p.temas) setTemas(p.temas);
+      if (p.tab) setTab(p.tab);
+      if (p.metric) setMetric(p.metric);
+      if (p.gran) setGran(p.gran);
+      if (p.tmode) setTmode(p.tmode);
+      if (p.engMode) setEngMode(p.engMode);
+      if (p.byNetwork !== undefined) setByNetwork(p.byNetwork);
+    } catch { /* storage bloqueado (janela privada): abre nos padrões */ }
+    setReady(true);
+  }, [userId]);
+
+  useEffect(() => {
+    if (!ready) return;
+    // "últimos N dias" salvo como atalho: amanhã continua sendo os últimos N dias.
+    const days = PRESET_DAYS.find((d) => from === isoDaysAgo(d) && to === isoDaysAgo(0));
+    const prefs: Prefs = { ...(days ? { days } : { from, to }), campaigns, platforms, networks, ads,
+      objectives, buyingTypes, temas, tab, metric, gran, tmode, engMode, byNetwork };
+    try { localStorage.setItem(prefsKey(userId), JSON.stringify(prefs)); } catch { /* idem */ }
+  }, [ready, userId, from, to, campaigns, platforms, networks, ads, objectives, buyingTypes, temas, tab, metric, gran, tmode, engMode, byNetwork]);
+
   // ── Opções dos dropdowns (facetadas) ──
   useEffect(() => {
+    if (!ready) return;
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
       const qs = new URLSearchParams({ from, to });
@@ -193,10 +231,11 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [from, to, campaigns, platforms, networks, objectives, buyingTypes, temas, rulesVersion]);
+  }, [ready, from, to, campaigns, platforms, networks, objectives, buyingTypes, temas, rulesVersion]);
 
   // ── Dados da aba ativa ──
   useEffect(() => {
+    if (!ready) return;
     const ctrl = new AbortController();
     setLoading(true);
     const t = setTimeout(async () => {
@@ -219,7 +258,7 @@ export default function DashboardContainer({ isAdmin = false }: { isAdmin?: bool
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [from, to, campaigns, platforms, networks, ads, objectives, buyingTypes, temas, tab, gran, byNetwork]);
+  }, [ready, from, to, campaigns, platforms, networks, ads, objectives, buyingTypes, temas, tab, gran, byNetwork]);
 
   const adOptions = useMemo(
     () => (filtersData?.ads ?? [])

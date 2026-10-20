@@ -5,5 +5,5 @@ export const metadata = { title: 'Dashboard — Jarvis SECOM' }
 
 export default async function DashboardPage() {
   const user = await requireAuth()
-  return <DashboardContainer isAdmin={user.role === 'ADMIN'} />
+  return <DashboardContainer isAdmin={user.role === 'ADMIN'} userId={user.id} />
 }
