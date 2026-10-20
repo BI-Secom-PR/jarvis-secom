@@ -85,6 +85,57 @@ const zeroRow = (): Row => ({
   ...(Object.fromEntries(ENGAGEMENT_PARTS.map((p) => [p.key, 0])) as Record<EngagementPartKey, number>),
 });
 
+// ── Ordenação por cabeçalho: desc → asc → padrão (null) ──
+type Sort = { key: string; dir: "asc" | "desc" } | null;
+const nextSort = (cur: Sort, key: string): Sort =>
+  cur?.key !== key ? { key, dir: "desc" } : cur.dir === "desc" ? { key, dir: "asc" } : null;
+/** Texto compara em pt-BR; não-finito (razão sem denominador, traço na tela) fica no fim nas duas direções. */
+function sortRows<T>(rows: T[], sort: Sort, get: (r: T, key: string) => number | string): T[] {
+  if (!sort) return rows;
+  const sign = sort.dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const x = get(a, sort.key), y = get(b, sort.key);
+    if (typeof x === "string" || typeof y === "string") return sign * String(x).localeCompare(String(y), "pt-BR");
+    const bad = !Number.isFinite(x), badY = !Number.isFinite(y);
+    if (bad || badY) return bad === badY ? 0 : bad ? 1 : -1;
+    return sign * (x - y);
+  });
+}
+const DASH_WHEN_ZERO = new Set<string>(["p25", "p50", "p75", "p95", "p100", "completions", ...ENGAGEMENT_PARTS.map((p) => p.key)]);
+/** Valor que a célula da tabela de Performance mostra (mesmas razões do render). */
+function perfValue(r: Row, key: string): number | string {
+  switch (key) {
+    case "platform": return platformLabel(r.platform);
+    case "network": return networkLabel(r.network);
+    case "nome": return r.nome;
+    case "cpm": return div(r.cost, r.impressions) * 1000;
+    case "cpc": return r.clicks ? r.cost / r.clicks : NaN;
+    case "ctr": return div(r.clicks, r.impressions);
+    case "cpe": return r.engagement ? r.cost / r.engagement : NaN;
+    case "txeng": return div(r.engagement, r.impressions);
+    case "cpv": return r.videoViews ? r.cost / r.videoViews : NaN;
+    case "vtr": return div(r.videoViews, r.impressions);
+    default: {
+      const v = r[key as keyof Totals | "p25" | "p50" | "p75" | "p95" | "p100" | "completions"];
+      return DASH_WHEN_ZERO.has(key) && !v ? NaN : v;
+    }
+  }
+}
+
+function SortTh({ label, k, sort, onSort, className }: {
+  label: string; k: string; sort: Sort; onSort: (k: string) => void; className: string;
+}) {
+  const on = sort?.key === k;
+  return (
+    <th className={className} aria-sort={on ? (sort!.dir === "asc" ? "ascending" : "descending") : "none"}>
+      <button type="button" onClick={() => onSort(k)}
+        className={`inline-flex items-center gap-1 cursor-pointer uppercase tracking-[0.16em] font-hud hover:text-ink ${on ? "text-accent-text" : ""}`}>
+        {label}<span aria-hidden className="text-[8px]">{on ? (sort!.dir === "asc" ? "▲" : "▼") : ""}</span>
+      </button>
+    </th>
+  );
+}
+
 /** Value of a metric over one aggregate row — mirrors metricValue in lib/dashboardInsights.
  *  Razões com denominador zero devolvem NaN (um "R$ 0,00" de CPV numa fatia sem view é
  *  ruído): fmtMetric e o scatter tratam o não-finito como traço / ponto omitido. */
@@ -168,6 +219,8 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
   const [exportOpen, setExportOpen] = useState(false);
   const [rulesVersion, setRulesVersion] = useState(0);
 
+  const [perfSort, setPerfSort] = useState<Sort>(null);
+  const [regSort, setRegSort] = useState<Sort>(null);
   const [filtersData, setFiltersData] = useState<FiltersData | null>(null);
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -508,7 +561,11 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
   const panel = "relative hud-panel rounded-[16px]";
   const panelTitle = "font-hud text-[11px] uppercase tracking-[0.24em] text-ink flex items-center gap-2";
 
-  const tableRows = tmode === "campanha" ? (data?.campanhas ?? []) : (data?.anuncios ?? []);
+  const rawRows = tmode === "campanha" ? (data?.campanhas ?? []) : (data?.anuncios ?? []);
+  const tableRows = useMemo(() => sortRows(rawRows, perfSort, perfValue), [rawRows, perfSort]);
+  const regiaoSorted = useMemo(() => sortRows(regiaoRows, regSort, (r, k) =>
+    k === "uf" ? r.uf : k === "estado" ? r.estado : k === "value" ? r.value
+      : (r[k as EngagementPartKey] || NaN)), [regiaoRows, regSort]);
   const tableParts = engMode === "partes" ? activeParts(tableRows) : [];
   // Linha de total: soma das linhas MOSTRADAS (a tabela é cortada nas 50 maiores),
   // com as razões recalculadas dos somatórios — média de médias não é o CPM.
@@ -729,30 +786,35 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                   <table className="w-full text-[13px]">
                     <thead>
                       <tr className="text-left text-[10px] font-hud uppercase tracking-[0.16em] text-ink-3 border-b border-separator">
-                        <th className="px-4 md:px-6 py-2.5">Plataforma</th>
-                        {byNetwork && <th className="px-3 py-2.5">Rede</th>}
-                        <th className="px-3 py-2.5 min-w-[260px]">{tmode === "campanha" ? "Campanha" : "Anúncio"}</th>
-                        <th className="px-3 py-2.5 text-right">Investimento</th>
-                        <th className="px-3 py-2.5 text-right">Impressões</th>
-                        <th className="px-3 py-2.5 text-right">CPM</th>
-                        <th className="px-3 py-2.5 text-right">Cliques</th>
-                        <th className="px-3 py-2.5 text-right">CPC</th>
-                        <th className="px-3 py-2.5 text-right">CTR</th>
-                        <th className="px-3 py-2.5 text-right">Engajamento</th>
-                        {tableParts.map((p) => (
-                          <th key={p.key} className="px-3 py-2.5 text-right">{p.label}</th>
-                        ))}
-                        <th className="px-3 py-2.5 text-right">CPE</th>
-                        <th className="px-3 py-2.5 text-right">Tx. Eng.</th>
-                        <th className="px-3 py-2.5 text-right">Visualizações</th>
-                        <th className="px-3 py-2.5 text-right">CPV</th>
-                        <th className="px-3 py-2.5 text-right">VTR</th>
-                        <th className="px-3 py-2.5 text-right">25%</th>
-                        <th className="px-3 py-2.5 text-right">50%</th>
-                        <th className="px-3 py-2.5 text-right">75%</th>
-                        <th className="px-3 py-2.5 text-right">95%</th>
-                        <th className="px-3 py-2.5 text-right">100%</th>
-                        <th className="px-3 py-2.5 pr-4 md:pr-6 text-right">Completa</th>
+                        {(() => {
+                          const th = (label: string, k: string, cls = "px-3 py-2.5 text-right") =>
+                            <SortTh key={k} label={label} k={k} sort={perfSort} className={cls}
+                              onSort={(key) => setPerfSort((c) => nextSort(c, key))} />;
+                          return (<>
+                            {th("Plataforma", "platform", "px-4 md:px-6 py-2.5")}
+                            {byNetwork && th("Rede", "network", "px-3 py-2.5")}
+                            {th(tmode === "campanha" ? "Campanha" : "Anúncio", "nome", "px-3 py-2.5 min-w-[260px]")}
+                            {th("Investimento", "cost")}
+                            {th("Impressões", "impressions")}
+                            {th("CPM", "cpm")}
+                            {th("Cliques", "clicks")}
+                            {th("CPC", "cpc")}
+                            {th("CTR", "ctr")}
+                            {th("Engajamento", "engagement")}
+                            {tableParts.map((p) => th(p.label, p.key))}
+                            {th("CPE", "cpe")}
+                            {th("Tx. Eng.", "txeng")}
+                            {th("Visualizações", "videoViews")}
+                            {th("CPV", "cpv")}
+                            {th("VTR", "vtr")}
+                            {th("25%", "p25")}
+                            {th("50%", "p50")}
+                            {th("75%", "p75")}
+                            {th("95%", "p95")}
+                            {th("100%", "p100")}
+                            {th("Completa", "completions", "px-3 py-2.5 pr-4 md:pr-6 text-right")}
+                          </>);
+                        })()}
                       </tr>
                     </thead>
                     <tbody>
@@ -878,17 +940,22 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                     <table className="w-full text-[13px]">
                       <thead className="sticky top-0 bg-surface-opaque">
                         <tr className="text-left text-[10px] font-hud uppercase tracking-[0.16em] text-ink-3 border-b border-separator">
-                          <th className="px-4 md:px-6 py-2.5">UF</th>
-                          <th className="px-3 py-2.5">Estado</th>
-                          <th className="px-3 py-2.5 text-right">{METRICS[metric].label}</th>
-                          {regiaoParts.map((p) => (
-                            <th key={p.key} className="px-3 py-2.5 text-right">{p.label}</th>
-                          ))}
+                          {(() => {
+                            const th = (label: string, k: string, cls = "px-3 py-2.5 text-right") =>
+                              <SortTh key={k} label={label} k={k} sort={regSort} className={cls}
+                                onSort={(key) => setRegSort((c) => nextSort(c, key))} />;
+                            return (<>
+                              {th("UF", "uf", "px-4 md:px-6 py-2.5")}
+                              {th("Estado", "estado", "px-3 py-2.5")}
+                              {th(METRICS[metric].label, "value")}
+                              {regiaoParts.map((p) => th(p.label, p.key))}
+                            </>);
+                          })()}
                           <th className="px-3 py-2.5 pr-4 md:pr-6 w-[150px]">{METRICS[metric].kind === "count" ? "Participação" : "Relativo"}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {regiaoRows.map((r) => {
+                        {regiaoSorted.map((r) => {
                           const isShare = METRICS[metric].kind === "count";
                           const total = regiaoRows.reduce((s, x) => s + finite(x.value), 0);
                           const max = finite(regiaoRows[0]?.value) || 1;
