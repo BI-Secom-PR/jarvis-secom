@@ -19,7 +19,9 @@ export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Parameterized WHERE for the fixed filters (aiWhere appended separately). */
 export function buildWhere(f: SentimentFilters): { sql: string; params: unknown[] } {
-  const conds: string[] = ['1=1'];
+  // Sticker/GIF/image-only comments arrive with empty text and can never be scored
+  // (score_sentiment.py skips them), so they would sit forever as "Sem classificação".
+  const conds: string[] = ["(sentiment IS NOT NULL OR TRIM(IFNULL(comment, '')) <> '')"];
   const params: unknown[] = [];
   if (f.campaign) { conds.push('campaign_name = ?'); params.push(f.campaign); }
   if (f.ad)       { conds.push('ad_name = ?');       params.push(f.ad); }
