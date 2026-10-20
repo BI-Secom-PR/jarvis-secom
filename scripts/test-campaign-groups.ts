@@ -10,7 +10,7 @@ const rules = parseRules(DEFAULT_RULES);
 const g = (name: string) => groupOf(name, rules);
 
 // Comentário e linha vazia não viram regra.
-assert.equal(rules.length, 14, `esperava 14 regras, veio ${rules.length}`);
+assert.equal(rules.length, 15, `esperava 15 regras, veio ${rules.length}`);
 
 // Regra simples, casando no meio do nome cru.
 assert.equal(g('2026 | POSICIONAMENTO DO GOVERNO DO BRASIL | VISUALIZACAO | NACIONAL'),
@@ -23,6 +23,16 @@ assert.equal(g('2026 | TRABALHO PELO BRASIL SANTA CATARINA | ALCANCE'), 'Trabalh
 assert.equal(g('2026 | TRABALHO PELO BRASIL RORAIMA | ALCANCE'), 'Trabalho pelo Brasil Roraima');
 // Sem o 2º termo, nenhuma regra de UF casa e sobra o fallback do pipe.
 assert.equal(g('2026 | TRABALHO PELO BRASIL PARAIBA | ALCANCE'), 'TRABALHO PELO BRASIL PARAIBA');
+
+// "RIO GRANDE" sozinho casava RN e RS no mesmo grupo.
+assert.equal(g('2026 | TRABALHO PELO BRASIL RIO GRANDE DO NORTE | VISUALIZACAO | NACIONAL'), 'Trabalho pelo Brasil Rio Grande do Norte');
+assert.equal(g('2026 | TRABALHO PELO BRASIL | RIO GRANDE DO SUL | VISUALIZACAO | CALIA | Pi 140206'), 'Trabalho pelo Brasil Rio Grande do Sul');
+
+// Palavra inteira: "IR" não casa dentro de FEVEREIRO / JANEIRO / DIRECIONAMENTO.
+assert.equal(g('84516_Secom_Propeg_Midia Avulsa_Always On_Contra Feminicidio_Fevereiro 2026_PI 337.849_IGN'), 'Always On');
+assert.equal(g('82683_Secom_Propeg_Always On_Janeiro26_PI 335.812 _IGN'), 'Always On');
+assert.equal(g('2026 | Always ON | Visualização | Nacional - Joana 2 a 5  #2 Direcionamento detalhado - PI 117481'), 'Always On');
+assert.equal(g('2025_ALWAYS-ON_BR_TRAFEGO_SECOM_13°e IR'), 'Always On IR');
 
 // Acento e cedilha: o dado tem as duas grafias na mesma janela.
 assert.equal(g('2026 | AÇÕES DE OPORTUNIDADE - ALWAYS ON 6 | ENGAJAMENTO | CALIA'), 'Always On');

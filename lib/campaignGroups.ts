@@ -18,7 +18,8 @@ export const RULES_KEY = 'campaign_group_rules';
 /** Transcrição do CASE do Oracle, na mesma ordem — a ordem É a semântica. */
 export const DEFAULT_RULES = `# Uma regra por linha:  TERMO [+ TERMO] => Rótulo
 # "+" = E. Para OU, repita o mesmo rótulo em outra linha. Vence a PRIMEIRA que casar.
-# O match ignora maiúsculas e acentos ("AÇÕES" acha "ACOES", que existe no dado).
+# O match ignora maiúsculas e acentos ("AÇÕES" acha "ACOES", que existe no dado)
+# e é por palavra inteira: "IR" não casa dentro de "FEVEREIRO".
 # Sem regra que case, o rótulo é o trecho entre o 1º e o 2º "|" do nome cru.
 
 POSICIONAMENTO DE GOVERNO => Posicionamento do Governo do Brasil
@@ -29,7 +30,8 @@ POSICIONAMENTO BAHIA => Posicionamento BA
 TRABALHO PELO BRASIL + SANTA CATARINA => Trabalho pelo Brasil Santa Catarina
 TRABALHO PELO BRASIL + AMAZONAS => Trabalho pelo Brasil Amazonas
 TRABALHO PELO BRASIL + ESPIRITO => Trabalho pelo Brasil Espírito Santo
-TRABALHO PELO BRASIL + RIO GRANDE => Trabalho pelo Rio Grande do Sul
+TRABALHO PELO BRASIL + RIO GRANDE DO NORTE => Trabalho pelo Brasil Rio Grande do Norte
+TRABALHO PELO BRASIL + RIO GRANDE DO SUL => Trabalho pelo Brasil Rio Grande do Sul
 TRABALHO PELO BRASIL + RONDONIA => Trabalho pelo Brasil Rondônia
 TRABALHO PELO BRASIL + RORAIMA => Trabalho pelo Brasil Roraima
 
@@ -67,9 +69,21 @@ function secondSegment(name: string): string {
   return parts.length >= 3 ? parts[1].trim() : name.trim();
 }
 
+/** Palavra inteira: "IR" não pode casar dentro de "FEVEREIRO"/"JANEIRO"/"DIRECIONAMENTO".
+    Letra ou dígito colado ao termo = não casa. */
+const termRe = new Map<string, RegExp>();
+function hasTerm(hay: string, term: string): boolean {
+  let re = termRe.get(term);
+  if (!re) {
+    re = new RegExp(`(?<![A-Z0-9])${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Z0-9])`);
+    termRe.set(term, re);
+  }
+  return re.test(hay);
+}
+
 export function groupOf(name: string, rules: Rule[]): string {
   const hay = norm(name);
-  for (const r of rules) if (r.terms.every((t) => hay.includes(t))) return r.label;
+  for (const r of rules) if (r.terms.every((t) => hasTerm(hay, t))) return r.label;
   return secondSegment(name);
 }
 
