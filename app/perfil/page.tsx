@@ -1,7 +1,10 @@
-import { eq } from 'drizzle-orm'
-import { requireAuth } from '@/lib/auth'
+import { cookies } from 'next/headers'
+import { desc, eq } from 'drizzle-orm'
+import { requireAuth, SESSION_COOKIE } from '@/lib/auth'
+import { uaLabel } from '@/lib/sessions'
 import { db } from '@/lib/db'
-import { users, passkeyCredentials } from '@/lib/db/schema'
+import { users, passkeyCredentials, sessions } from '@/lib/db/schema'
+import SessionsPanel from './SessionsPanel'
 import HudBackground from '@/components/HudBackground'
 import ThemeToggle from '@/components/ThemeToggle'
 import PasskeysPanel from './PasskeysPanel'
@@ -27,6 +30,28 @@ export default async function PerfilPage() {
     .from(passkeyCredentials)
     .where(eq(passkeyCredentials.userId, session.id))
 
+  // "Current" = the row holding this request's cookie (or whose token was just rotated out of it)
+  const token = (await cookies()).get(SESSION_COOKIE)?.value
+  const activeSessions = (await db
+    .select({
+      id:        sessions.id,
+      token:     sessions.token,
+      prevToken: sessions.prevToken,
+      userAgent: sessions.userAgent,
+      ip:        sessions.ip,
+      lastSeen:  sessions.lastSeen,
+    })
+    .from(sessions)
+    .where(eq(sessions.userId, session.id))
+    .orderBy(desc(sessions.lastSeen))
+  ).map(s => ({
+    id:       s.id,
+    device:   uaLabel(s.userAgent),
+    ip:       s.ip,
+    lastSeen: s.lastSeen.toISOString(),
+    current:  !!token && (s.token === token || s.prevToken === token),
+  }))
+
   return (
     <main className="hud-void-bg min-h-screen w-screen overflow-auto relative">
       <HudBackground variant="subtle" />
@@ -43,6 +68,8 @@ export default async function PerfilPage() {
           passkeys={passkeys.map(p => ({ ...p, createdAt: p.createdAt.toISOString() }))}
           allowed={row?.passkeyAllowed ?? false}
         />
+
+        <SessionsPanel sessions={activeSessions} />
 
         <a href="/" className="inline-block mt-8 text-sm text-ink-2 hover:text-ink transition-colors">
           ← Voltar ao início

@@ -4,7 +4,9 @@ import bcrypt from 'bcryptjs'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
-import { getSession, BCRYPT_ROUNDS } from '@/lib/auth'
+import { cookies } from 'next/headers'
+import { getSession, BCRYPT_ROUNDS, SESSION_COOKIE } from '@/lib/auth'
+import { revokeOtherSessions } from '@/lib/sessions'
 
 const schema = z.object({
   currentPassword: z.string().min(1),
@@ -39,6 +41,10 @@ export async function POST(req: NextRequest) {
 
   const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS)
   await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, session.id))
+
+  // A password change must cut off anyone else holding a session (stolen token, forgotten device)
+  const token = (await cookies()).get(SESSION_COOKIE)?.value
+  if (token) await revokeOtherSessions(session.id, token)
 
   return NextResponse.json({ ok: true })
 }

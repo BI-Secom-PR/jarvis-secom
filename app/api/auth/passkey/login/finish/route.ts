@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuthenticationResponse } from '@simplewebauthn/server'
 import { eq } from 'drizzle-orm'
-import { randomBytes } from 'node:crypto'
 import { db } from '@/lib/db'
-import { users, sessions, passkeyCredentials } from '@/lib/db/schema'
-import { SESSION_COOKIE } from '@/lib/auth'
+import { users, passkeyCredentials } from '@/lib/db/schema'
+import { createSession, setSessionCookies } from '@/lib/sessions'
 import { RP_ID, ORIGIN, verifyChallengeToken } from '@/lib/webauthn'
 import { rateLimit, clientIp, tooManyRequests } from '@/lib/rateLimit'
-
-const IS_PROD = process.env.NODE_ENV === 'production'
 
 export async function POST(req: NextRequest) {
   const ip = clientIp(req)
@@ -71,17 +68,10 @@ export async function POST(req: NextRequest) {
     .where(eq(passkeyCredentials.credentialId, cred.credentialId))
 
   // Create session (same pattern as password login)
-  const token = randomBytes(64).toString('hex')
-  await db.insert(sessions).values({ token, userId: user.id })
+  const token = await createSession(req, user)
 
   const res = NextResponse.json({ ok: true })
-  res.cookies.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure:   IS_PROD,
-    sameSite: 'lax',
-    path:     '/',
-    maxAge:   60 * 60 * 24 * 30,
-  })
+  setSessionCookies(res, token)
 
   return res
 }

@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, uuid, text, boolean, timestamp, json, integer, customType } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, primaryKey, uuid, text, boolean, timestamp, json, integer, customType } from 'drizzle-orm/pg-core'
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() { return 'bytea' },
@@ -25,7 +25,22 @@ export const sessions = pgTable('sessions', {
   userId:    uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   lastSeen:  timestamp('last_seen',  { withTimezone: true }).notNull().defaultNow(),
+  // Public handle for the /perfil session list — the token itself never leaves the server
+  id:        uuid('id').notNull().unique().defaultRandom(),
+  ip:        text('ip'),
+  userAgent: text('user_agent'),
+  // Token rotation: the previous token stays valid for a short grace window (parallel requests);
+  // seeing it again after that is treated as a stolen-token replay (see getSession)
+  prevToken: text('prev_token'),
+  rotatedAt: timestamp('rotated_at', { withTimezone: true }),
 })
+
+// Browser+OS fingerprints seen per user — drives the "new device" login alert
+export const knownDevices = pgTable('known_devices', {
+  userId:    uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  uaHash:    text('ua_hash').notNull(),
+  firstSeen: timestamp('first_seen', { withTimezone: true }).notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.userId, t.uaHash] })])
 
 export const chatSessions = pgTable('chat_sessions', {
   id:        uuid('id').primaryKey().defaultRandom(),

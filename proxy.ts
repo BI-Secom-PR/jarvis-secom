@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { SESSION_COOKIE } from '@/lib/auth'
+import { SESSION_COOKIE, ROTATE_COOKIE } from '@/lib/auth'
+import { rotateSession, setSessionCookies } from '@/lib/sessions'
 
 // Paths that don't require authentication
 const PUBLIC_PATHS = ['/login', '/register', '/waiting']
@@ -111,7 +112,19 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Token present — full DB validation happens in requireAuth() inside each route/page
+  // Token present — full DB validation happens in requireAuth() inside each route/page.
+  // Rotation: the companion cookie holds the due time, so the DB is only touched when it passes
+  // (a missing cookie counts as due, which migrates pre-existing sessions on their next request).
+  // Downstream handlers still see the old token in this request; getSession accepts it during the grace window.
+  const rotateDue = Number(req.cookies.get(ROTATE_COOKIE)?.value ?? 0)
+  if (Date.now() >= rotateDue) {
+    const next = await rotateSession(token).catch(() => null)
+    if (next) {
+      const res = withCsp(req)
+      setSessionCookies(res, next)
+      return res
+    }
+  }
   return withCsp(req)
 }
 

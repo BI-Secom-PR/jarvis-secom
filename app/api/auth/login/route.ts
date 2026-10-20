@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod/v3'
 import bcrypt from 'bcryptjs'
-import { randomBytes } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { users, sessions, passkeyCredentials } from '@/lib/db/schema'
-import { SESSION_COOKIE } from '@/lib/auth'
+import { users, passkeyCredentials } from '@/lib/db/schema'
+import { createSession, setSessionCookies } from '@/lib/sessions'
 import { rateLimit, clientIp, tooManyRequests } from '@/lib/rateLimit'
 
 const schema = z.object({
@@ -14,7 +13,6 @@ const schema = z.object({
 })
 
 const DUMMY_HASH = '$2b$12$invaliddummyhashforconstanttimingXXXXXXXXXXXXXXXXXXXXX'
-const IS_PROD    = process.env.NODE_ENV === 'production'
 
 export async function POST(req: NextRequest) {
   const ip = clientIp(req)
@@ -55,8 +53,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Create session
-  const token = randomBytes(64).toString('hex')
-  await db.insert(sessions).values({ token, userId: user!.id })
+  const token = await createSession(req, user!)
 
   // Check if user should be prompted to enroll a passkey
   let enrollPasskey = false
@@ -70,13 +67,7 @@ export async function POST(req: NextRequest) {
   }
 
   const res = NextResponse.json({ ok: true, ...(enrollPasskey && { enrollPasskey: true }) })
-  res.cookies.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure:   IS_PROD,
-    sameSite: 'lax',
-    path:     '/',
-    maxAge:   60 * 60 * 24 * 30, // 30 days
-  })
+  setSessionCookies(res, token)
 
   return res
 }
