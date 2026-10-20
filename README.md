@@ -1,6 +1,6 @@
 # Jarvis SECOM
 
-AI chat assistant for SECOM marketing analytics. Query ad platform data across Meta, Google, TikTok, Amazon DSP, Kwai, LinkedIn and Pinterest using natural language. Also hosts the ad verification workflow (comprovante + URL audit parsers).
+AI chat assistant for SECOM marketing analytics. Query ad platform data across Meta, Google, TikTok, Amazon DSP, Kwai, LinkedIn and Pinterest using natural language. Also hosts a media dashboard (`/dashboard`), a comment-sentiment explorer (`/sentimentos`) and the ad verification workflow (comprovante + URL audit parsers).
 
 ## Stack
 
@@ -10,11 +10,12 @@ AI chat assistant for SECOM marketing analytics. Query ad platform data across M
 | UI | React 19, Tailwind CSS 4 |
 | Package manager | Bun (`bun.lock`; npm scripts also work) |
 | AI (text) | Ollama (Gemma 4 · 31B), Google Gemini as alternate provider |
-| AI (voice) | Google Gemini 2.5 Flash TTS |
+| AI (voice) | Browser pt-BR voices by default; Google Gemini 2.5 Flash TTS optional |
 | RAG | Google `gemini-embedding-001` over PG `sql_examples` (few-shot SQL retrieval) |
 | Auth DB | PostgreSQL 18 + Drizzle ORM |
 | Data warehouse | MySQL (`airbyte_secom`, read-only; optional RW user scoped to sentiment corrections) |
 | Verification engine | Python (`app/verification/engine.py` + per-adserver parsers) |
+| Verification uploads | Supabase Storage (bypasses Vercel's 4.5MB body limit) |
 | Email | Resend |
 | Deployment | Vercel |
 
@@ -63,6 +64,20 @@ ADMIN_NAME=Administrador
 RESEND_API_KEY=
 RESEND_FROM=noreply@yourdomain.com
 NEXT_PUBLIC_BASE_URL=https://yourdomain.com
+
+# Passkeys (WebAuthn)
+WEBAUTHN_SECRET=
+
+# Verification uploads (Supabase Storage)
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=      # server-side only
+NEXT_PUBLIC_USE_DIRECT_UPLOAD=  # enables direct upload (prod); unset = on-prem FormData
+
+# Voice: 'true' routes TTS through Gemini (free tier: 10 req/day); default uses browser voices
+NEXT_PUBLIC_USE_GEMINI_TTS=
+
+# Optional: pin the OCI MySQL CA (PEM) after a rotation; lib/mysql.ts also self-heals on HANDSHAKE_SSL_ERROR
+MYSQL_CA=
 ```
 
 ### 3. Database setup
@@ -117,11 +132,14 @@ npm run db:seed
 
 | Route | Description |
 |---|---|
-| `/login` | Email + password login |
+| `/login` | Email + password login, or "Entrar com chave de acesso" (passkey) |
 | `/register` | Request access (requires admin approval) |
 | `/waiting` | Shown after registration or when account is pending |
 | `/` | Home menu — links to available tools |
+| `/perfil` | Profile: change password, manage passkeys, active sessions |
 | `/chat` | AI chat assistant |
+| `/dashboard` | Media dashboard over the gold layer (3 tabs: campanhas / demografia / região) |
+| `/sentimentos` | Comment sentiment explorer (by campaign/ad, with corrections) |
 | `/verification` | Ad verification dashboard (comprovante + URL/category audit) |
 | `/admin` | User management (admin only) |
 
@@ -129,14 +147,18 @@ npm run db:seed
 
 | Role | Can access |
 |---|---|
-| `USER` | Home (`/`), Chat (`/chat`), Verification (`/verification`) |
-| `ADMIN` | Home + Chat + Verification + Admin panel (`/admin`) |
+| `USER` | Home, Chat, Dashboard, Sentimentos, Verification, Profile |
+| `ADMIN` | Everything above + Admin panel (`/admin`), campaign-group rules editor, passkey enrollment |
 
 ### Session behaviour
 
 - Sessions are stored in `sessions` table (PostgreSQL)
 - Cookie: `jarvis_session_token` — HttpOnly, SameSite=Lax, Secure in production
-- Sessions persist until the user logs out or an admin disables the account
+- 30-day absolute expiry + 3-day idle timeout; each session stores IP and user agent
+- Token rotates every 6h (proxy); the previous token is valid for 60s, and reusing it after that revokes the session
+- `/perfil` lists active sessions and ends one or all others; changing the password ends the others
+- E-mail alert when a never-seen browser + OS signs in (`known_devices`)
+- Passkeys: enrollment is admin-gated and one-shot; managed in `/perfil`
 - Disabling a user deletes all their active sessions immediately — next request is rejected
 
 ### Admin panel features
@@ -156,9 +178,23 @@ npm run db:seed
 | SQL queries | AI generates and executes read-only `SELECT`/`WITH` queries against `airbyte_secom`, guarded by an allowlist + blocklist |
 | RAG | Top-3 similar Q→SQL examples retrieved from `sql_examples` and injected into the prompt |
 | Charts | AI embeds a `CHART_REQUEST:{...}` sentinel in its reply; the client parses it into bar/line/scatter/geo charts |
-| Voice mode | Speech recognition input + TTS audio response |
+| Voice mode | Speech recognition + streaming (SSE) replies, conversation memory, barge-in (interrupt mid-speech); browser pt-BR voices by default |
 | Session persistence | Chat messages saved to Postgres per session |
-| `⌘N` / `Ctrl+N` | Start a new chat session |
+| `⌘N` / `Ctrl+N` | Start a new chat session ("Nova conversa" button on mobile) |
+
+---
+
+## Dashboard
+
+`/dashboard` — media performance over the gold layer, three tabs (`campanhas` / `demografia` / `região`):
+
+- Multi-select faceted filters (OR within a filter, AND across): platform, network, campaign group, theme (eixo), buying type (CPM/CPC/CPV/CPE) and more
+- Campaign groups: editable text rules (`TERMO [+ TERMO] => Rótulo`) via an admin-only modal, stored in `app_settings`
+- Derived metrics in the selector (CPC, CPV, CPE, VTR, engagement rate); engagement broken down by interaction type (likes + comments + shares + reactions + saves — never the raw `engagements` column)
+- Period shortcuts (7/14/30/90 days), choropleth map with zoom/pan, impressions scatter, video block in the table
+- AI reading of the filtered slice (`/api/dashboard/insights`), with mix-vs-rate analysis
+- Excel export of the filtered slice
+- Filters, period, tab and modes persist across refreshes and sessions
 
 ---
 
@@ -169,9 +205,9 @@ Ad-delivery verification workflow at `/verification`, backed by a Python engine 
 | Piece | Description |
 |---|---|
 | `app/verification/engine.py` | Reconciles the adserver comprovante (delivery receipt) against the URL/category audit sheet; produces a 29-column "Verificado" workbook |
-| `app/verification/parsers/` | One parser per adserver (`adforce`, `metrike`, `00px`, `ahead`, `admotion`, `brz`, `sense`) — each exposes `parse_comprovante()` and `parse_verif()` |
+| `app/verification/parsers/` | One parser per adserver (`adforce`, `metrike`, `00px`, `00px25`, `ahead`, `admotion`, `sense`, `dgbrasil`, `teratech`) — each exposes `parse_comprovante()` and `parse_verif()` |
 | `app/api/verification/run/route.ts` | Spawns the engine (or forwards to a Python API route on Vercel), streams progress via SSE, runs an AI brand-safety check on flagged URLs |
-| `components/VerificationContainer.tsx` | Upload UI, live progress, results table |
+| `components/VerificationContainer.tsx` | Upload UI (direct to Supabase Storage in prod, split into 40MB parts), live progress, results table |
 
 Supported adservers, date range, and vehicle-name fuzzy matching (≥85% similarity) are validated before the engine runs.
 
@@ -209,7 +245,8 @@ npm run db:seed       # Create first admin user from ADMIN_* env vars
 - Register is enumeration-safe (identical response/timing whether the e-mail exists or not)
 - Nonce-based CSP generated per-request (`proxy.ts`); pages render dynamically (`force-dynamic`)
 - Static security headers (nosniff, X-Frame-Options, Referrer-Policy, Permissions-Policy, HSTS in prod)
-- Sessions: 30-day absolute expiry + 3-day idle timeout
+- Sessions: 30-day absolute expiry + 3-day idle timeout, 6h token rotation with replay detection, new-device e-mail alert
+- MySQL OCI CA: pinned in `lib/mysql.ts`, self-heals on rotation (override with `MYSQL_CA`)
 - SQL guard on the MySQL path: allowlist (`SELECT`/`WITH` + `FROM`) and blocklist (`UNION SELECT`, `SLEEP()`, `BENCHMARK()`, `INFORMATION_SCHEMA`, `mysql.*`, `sys.*`, `performance_schema`), plus a read-only DB user
 - `EXTERNAL_API_KEY` compared in constant time
 - Admin password reset revokes all of the target user's sessions
@@ -222,12 +259,18 @@ npm run db:seed       # Create first admin user from ADMIN_* env vars
 app/
   (auth)/           # Login, register, waiting pages (no URL prefix)
   admin/            # Admin user management panel
+  perfil/           # Profile: password, passkeys, active sessions
+  dashboard/        # Media dashboard (/dashboard)
+  sentimentos/      # Sentiment explorer (/sentimentos)
   chat/             # AI chat page (/chat)
   verification/     # Verification dashboard (/verification)
     engine.py       # Python reconciliation engine (comprovante vs URL/category audit)
     parsers/        # One parser per adserver + category_map.py
   api/
-    auth/           # register, login, logout, me
+    auth/           # register, login, logout, me, change-password, passkey, sessions
+    dashboard/      # filters, data, insights, export, campaign-rules
+    sentimentos/    # filters, data, ai-filter, correct, thumb
+    exports/        # chart/image exports
     admin/users/    # User list + enable/disable/edit
     chat/           # Main AI chat endpoint (SQL guard, tool-calling, RAG)
     chat-sessions/  # Chat session CRUD + message persistence
@@ -238,6 +281,8 @@ components/
   ChatContainer     # Main chat UI + session management
   MessageBubble     # Renders markdown + strips CHART_REQUEST sentinel
   ChartWidget       # Recharts rendering (bar/line/scatter/geo)
+  DashboardContainer # /dashboard client (tabs, filters, charts, tables)
+  SentimentosContainer # Sentiment explorer UI
   VerificationContainer # Upload UI, SSE progress, results table
   UserMenu          # Name display + logout button
   VoiceMode         # Speech recognition + TTS playback
@@ -245,6 +290,11 @@ lib/
   auth.ts           # getSession(), requireAuth(), requireAdmin()
   agent.ts          # System prompt, model selection, chart-sentinel parsing
   mysql.ts          # MySQL pool + SQL guard for the data warehouse
+  dashboard.ts      # Dashboard WHERE builder, metric whitelist, buying-type/age maps
+  campaignGroups.ts # Campaign group rules → campaign_name[]
+  sessions.ts       # Session rotation, listing, revocation
+  webauthn.ts       # Passkey helpers
+  storage.ts        # Supabase Storage signed URLs
   rag.ts            # Top-k SQL example retrieval over PG sql_examples
   email.ts          # sendApprovalEmail() via Resend
   db/
