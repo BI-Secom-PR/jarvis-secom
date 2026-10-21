@@ -10,7 +10,7 @@ import { availableColumns, bothCampaignAndAd, COMBINED_LABEL, DATASETS, EXPORT_C
 
 export type ExportFilters = {
   from: string; to: string;
-  campaign: string[]; platform: string[]; ad: string[]; objective: string[];
+  campaign: string[]; platform: string[]; account: string[]; ad: string[]; objective: string[];
   buyingType: string[]; tema: string[];
 };
 

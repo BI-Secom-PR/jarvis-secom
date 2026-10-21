@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
     platform: strs(body.platform),
     // `network: true` é a quebra da tabela; o filtro viaja como `networks`.
     network: strs(body.networks),
+    account: strs(body.account),
     ad: strs(body.ad),
     objective: strs(body.objective),
     buyingType: strs(body.buyingType),

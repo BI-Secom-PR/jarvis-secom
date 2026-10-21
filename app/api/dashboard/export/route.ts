@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
     to: typeof body.to === 'string' ? body.to : undefined,
     campaigns: strs(body.campaign),
     platform: strs(body.platform),
+    account: strs(body.account),
     ad: strs(body.ad),
     objective: strs(body.objective),
     buyingType: strs(body.buyingType),

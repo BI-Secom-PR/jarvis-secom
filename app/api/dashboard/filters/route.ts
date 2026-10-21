@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
     campaigns: q.getAll('campaign'),
     platform: q.getAll('platform'),
     network: q.getAll('network'),
+    account: q.getAll('account'),
     ad: q.getAll('ad'),
     objective: q.getAll('objective'),
     buyingType: q.getAll('buyingType'),
@@ -49,6 +50,7 @@ export async function GET(req: NextRequest) {
     const wCamp = buildWhere({ ...fr, campaigns: undefined, campaignNames: undefined, ad: undefined });
     const wPlat = buildWhere({ ...fr, platform: undefined });
     const wNet = buildWhere({ ...fr, network: undefined });
+    const wAcc = buildWhere({ ...fr, account: undefined });
     const wAd = buildWhere({ ...fr, ad: undefined });
     const wObj = buildWhere({ ...fr, objective: undefined });
     const wBuy = buildWhere({ ...fr, buyingType: undefined, buyingCampaignIds: undefined });
@@ -62,9 +64,10 @@ export async function GET(req: NextRequest) {
 
     // Two waves: platforms/objectives are trivial, campaigns/ads are the
     // heavier DISTINCT scans. Caps peak connections the same way sentimentos does.
-    const [platforms, networks, objectives, buyingTypes, temas] = await Promise.all([
+    const [platforms, networks, accounts, objectives, buyingTypes, temas] = await Promise.all([
       pool.query(`SELECT DISTINCT platform FROM ${T} WHERE ${wPlat.sql} ${DELIVERED} ORDER BY platform`, wPlat.params),
       pool.query(`SELECT DISTINCT network FROM ${T} WHERE ${wNet.sql} ${DELIVERED} AND network IS NOT NULL AND network != '' ORDER BY network`, wNet.params),
+      pool.query(`SELECT DISTINCT account_name FROM ${T} WHERE ${wAcc.sql} ${DELIVERED} AND account_name IS NOT NULL AND account_name != '' ORDER BY account_name`, wAcc.params),
       pool.query(`SELECT DISTINCT objective FROM ${T} WHERE ${wObj.sql} ${DELIVERED} AND objective IS NOT NULL AND objective != '' ORDER BY objective`, wObj.params),
       // Tipo de compra é expressão, não coluna: o alias não vale no WHERE, então o
       // "sem tipo" sai no HAVING. A lista só oferece tipo que entregou na janela.
@@ -91,6 +94,7 @@ export async function GET(req: NextRequest) {
     const data = {
       platforms: (platforms[0] as { platform: string }[]).map((r) => r.platform),
       networks: (networks[0] as { network: string }[]).map((r) => r.network),
+      accounts: (accounts[0] as { account_name: string }[]).map((r) => r.account_name),
       objectives: (objectives[0] as { objective: string }[]).map((r) => r.objective),
       buyingTypes: (buyingTypes[0] as { bt: string }[]).map((r) => r.bt),
       temas: (temas[0] as { eixo: string; eixo_label: string | null }[]).map((r) => ({

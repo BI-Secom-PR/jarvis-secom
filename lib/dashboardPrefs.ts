@@ -14,6 +14,7 @@ export type Prefs = {
   campaigns: string[];
   platforms: string[];
   networks: string[];
+  accounts: string[];
   ads: string[];
   objectives: string[];
   buyingTypes: string[];
@@ -53,6 +54,7 @@ export function parsePrefs(raw: string | null): Partial<Prefs> {
     campaigns: strs(o.campaigns),
     platforms: strs(o.platforms),
     networks: strs(o.networks),
+    accounts: strs(o.accounts),
     ads: strs(o.ads),
     objectives: strs(o.objectives),
     buyingTypes: strs(o.buyingTypes),

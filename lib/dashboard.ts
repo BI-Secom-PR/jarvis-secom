@@ -19,6 +19,8 @@ export type DashboardFilters = {
   platform?: string[];
   /** Sub-rede dentro da plataforma (facebook/instagram, YOUTUBE/SEARCH…). */
   network?: string[];
+  /** Conta de anúncio (`account_name`) — no Kwai é o nome da agência. */
+  account?: string[];
   ad?: string[];
   objective?: string[];
   /** Tipos de compra escolhidos (CPM/CPC/CPV/CPE) — ver BUYING_TYPE_SQL. */
@@ -57,6 +59,7 @@ export function buildWhere(f: DashboardFilters): { sql: string; params: unknown[
   }
   inList('platform', f.platform);
   inList('network', f.network);
+  inList('account_name', f.account);
   inList('ad_name', f.ad);
   inList('objective', f.objective);
   inList('eixo', f.tema);

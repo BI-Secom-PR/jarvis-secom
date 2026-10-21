@@ -7,7 +7,7 @@ import { parsePrefs, prefsKey } from '../lib/dashboardPrefs';
 
 // Round-trip completo.
 const full = {
-  days: 30, campaigns: ['A'], platforms: ['meta', 'google'], networks: [], ads: ['x'],
+  days: 30, campaigns: ['A'], platforms: ['meta', 'google'], networks: [], accounts: ['CALIA | SECOM | CONTA 1'], ads: ['x'],
   objectives: [], buyingTypes: ['CPV'], temas: ['ECO'],
   tab: 'regiao', metric: 'cliques', gran: 'semana', tmode: 'anuncio', engMode: 'partes', byNetwork: true,
 };

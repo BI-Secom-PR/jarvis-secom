@@ -39,6 +39,7 @@ type Payload = {
 type FiltersData = {
   platforms: string[];
   networks: string[];
+  accounts: string[];
   objectives: string[];
   buyingTypes: string[];
   temas: { code: string; label: string }[];
@@ -198,6 +199,8 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
   const [campaigns, setCampaigns] = useState<string[]>([]);
   const [platforms, setPlatforms] = useState<string[]>([]);
   const [networks, setNetworks] = useState<string[]>([]);
+  // Conta de anúncio (`account_name`); no Kwai é o nome da agência.
+  const [accounts, setAccounts] = useState<string[]>([]);
   const [ads, setAds] = useState<string[]>([]);
   const [objectives, setObjectives] = useState<string[]>([]);
   // Tipo de compra (CPM/CPC/CPV/CPE) é derivado do objetivo no servidor — ver
@@ -239,6 +242,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
       if (p.campaigns) setCampaigns(p.campaigns);
       if (p.platforms) setPlatforms(p.platforms);
       if (p.networks) setNetworks(p.networks);
+      if (p.accounts) setAccounts(p.accounts);
       if (p.ads) setAds(p.ads);
       if (p.objectives) setObjectives(p.objectives);
       if (p.buyingTypes) setBuyingTypes(p.buyingTypes);
@@ -257,10 +261,10 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
     if (!ready) return;
     // "últimos N dias" salvo como atalho: amanhã continua sendo os últimos N dias.
     const days = PRESET_DAYS.find((d) => from === isoDaysAgo(d) && to === isoDaysAgo(0));
-    const prefs: Prefs = { ...(days ? { days } : { from, to }), campaigns, platforms, networks, ads,
+    const prefs: Prefs = { ...(days ? { days } : { from, to }), campaigns, platforms, networks, accounts, ads,
       objectives, buyingTypes, temas, tab, metric, gran, tmode, engMode, byNetwork };
     try { localStorage.setItem(prefsKey(userId), JSON.stringify(prefs)); } catch { /* idem */ }
-  }, [ready, userId, from, to, campaigns, platforms, networks, ads, objectives, buyingTypes, temas, tab, metric, gran, tmode, engMode, byNetwork]);
+  }, [ready, userId, from, to, campaigns, platforms, networks, accounts, ads, objectives, buyingTypes, temas, tab, metric, gran, tmode, engMode, byNetwork]);
 
   // ── Opções dos dropdowns (facetadas) ──
   useEffect(() => {
@@ -272,6 +276,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
       for (const v of campaigns) qs.append("campaign", v);
       for (const v of platforms) qs.append("platform", v);
       for (const v of networks) qs.append("network", v);
+      for (const v of accounts) qs.append("account", v);
       for (const v of objectives) qs.append("objective", v);
       for (const v of buyingTypes) qs.append("buyingType", v);
       for (const v of temas) qs.append("tema", v);
@@ -280,11 +285,11 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
         if (!res.ok) throw new Error();
         setFiltersData(await res.json());
       } catch {
-        if (!ctrl.signal.aborted) setFiltersData({ platforms: [], networks: [], objectives: [], buyingTypes: [], temas: [], campaigns: [], ads: [] });
+        if (!ctrl.signal.aborted) setFiltersData({ platforms: [], networks: [], accounts: [], objectives: [], buyingTypes: [], temas: [], campaigns: [], ads: [] });
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [ready, from, to, campaigns, platforms, networks, objectives, buyingTypes, temas, rulesVersion]);
+  }, [ready, from, to, campaigns, platforms, networks, accounts, objectives, buyingTypes, temas, rulesVersion]);
 
   // ── Dados da aba ativa ──
   useEffect(() => {
@@ -294,7 +299,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
     const t = setTimeout(async () => {
       try {
         const res = await postJson("/api/dashboard/data",
-          { from, to, campaign: campaigns, platform: platforms, networks, ad: ads, objective: objectives,
+          { from, to, campaign: campaigns, platform: platforms, networks, account: accounts, ad: ads, objective: objectives,
             buyingType: buyingTypes, tema: temas, tab, gran, network: byNetwork },
           { signal: ctrl.signal });
         const json = (await res.json()) as Payload;
@@ -311,7 +316,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [ready, from, to, campaigns, platforms, networks, ads, objectives, buyingTypes, temas, tab, gran, byNetwork]);
+  }, [ready, from, to, campaigns, platforms, networks, accounts, ads, objectives, buyingTypes, temas, tab, gran, byNetwork]);
 
   const adOptions = useMemo(
     () => (filtersData?.ads ?? [])
@@ -511,7 +516,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
   useEffect(() => {
     if (!insightsInput) { setAiInsights(null); setAiLoading(false); return; }
     const payload = { tab, metric, periodo: { from, to },
-      filtros: { campaign: campaigns, platform: platforms, network: networks, ad: ads, objective: objectives,
+      filtros: { campaign: campaigns, platform: platforms, network: networks, account: accounts, ad: ads, objective: objectives,
         buyingType: buyingTypes, tema: temas },
       resumo: insightsInput };
     const key = JSON.stringify(payload);
@@ -536,7 +541,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
     }, 400);
     return () => { clearTimeout(t); ctrl.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(insightsInput), tab, metric, from, to, campaigns, platforms, networks, ads, objectives, buyingTypes, temas]);
+  }, [JSON.stringify(insightsInput), tab, metric, from, to, campaigns, platforms, networks, accounts, ads, objectives, buyingTypes, temas]);
 
   // ── Estilos herdados do SentimentosContainer ──
   const selectClass =
@@ -585,7 +590,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
         <DashboardExportModal
           onClose={() => setExportOpen(false)}
           initial={tab === "campanhas" ? "campanhas" : tab}
-          filters={{ from, to, campaign: campaigns, platform: platforms, ad: ads, objective: objectives,
+          filters={{ from, to, campaign: campaigns, platform: platforms, account: accounts, ad: ads, objective: objectives,
             buyingType: buyingTypes, tema: temas }}
         />
       )}
@@ -674,6 +679,9 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                   emptyLabel="Todos os temas"
                   noOptionsHint="Nenhum tema classificado nesta janela; amplie o período"
                   onChange={setTemas} />
+                <SearchableSelect multiple className={selectClass} value={accounts}
+                  options={filtersData?.accounts ?? []}
+                  emptyLabel="Todas as contas / agências" onChange={setAccounts} />
                 <div className="md:col-span-2 flex flex-wrap gap-2.5 items-center">
                   <label className="flex items-center gap-1.5 text-[12px] text-ink-3">
                     de <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className={dateClass} />
