@@ -571,7 +571,10 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
   const regiaoSorted = useMemo(() => sortRows(regiaoRows, regSort, (r, k) =>
     k === "uf" ? r.uf : k === "estado" ? r.estado : k === "value" ? r.value
       : (r[k as EngagementPartKey] || NaN)), [regiaoRows, regSort]);
-  const tableParts = engMode === "partes" ? activeParts(tableRows) : [];
+  // Comentários fica sempre na tabela (traço quando a plataforma não reporta); as demais
+  // partes só aparecem no modo Discriminado e se tiverem valor na janela.
+  const tableParts = ENGAGEMENT_PARTS.filter((p) =>
+    p.key === "comments" || (engMode === "partes" && tableRows.some((r) => r[p.key] > 0)));
   // Linha de total: soma das linhas MOSTRADAS (a tabela é cortada nas 50 maiores),
   // com as razões recalculadas dos somatórios — média de médias não é o CPM.
   const tableTotal = tableRows.reduce((a, r) => {
@@ -1023,7 +1026,6 @@ function Empty() {
 
 /** Leitura gerada pela IA sobre a métrica ativa; cai nas frases determinísticas se ela falhar. */
 function Observacoes({ items, loading, ia }: { items: string[]; loading?: boolean; ia?: boolean }) {
-  if (!items.length && !loading) return null;
   return (
     <div className="relative hud-panel hud-panel-gold rounded-[16px] px-4 py-5 md:px-6">
       <HudCorners accent="gold" size={16} inset={8} />
@@ -1035,6 +1037,11 @@ function Observacoes({ items, loading, ia }: { items: string[]; loading?: boolea
         )}
       </div>
       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        {!loading && !items.length && (
+          <p className="text-[13px] leading-[1.6] text-ink-3 md:col-span-2">
+            Sem achados para este recorte — poucos dados ou volume abaixo de 10 mil impressões por plataforma.
+          </p>
+        )}
         {loading
           ? [0, 1, 2].map((i) => (
               <div key={i} className="flex gap-2.5">
