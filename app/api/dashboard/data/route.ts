@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
     // compararia "campanha X" com "tudo".
     const wPrev = prev ? buildWhere(await resolve({ ...f, from: prev.from, to: prev.to })) : null;
 
-    // Two waves so the pool never sees more than three of these at once
+    // Three waves so the pool never sees more than three of these at once
     // (connectionLimit is 10 and the filters route shares it).
     const [totalsRes, prevRes, dailyRes] = await Promise.all([
       pool.query(
@@ -152,12 +152,51 @@ export async function POST(req: NextRequest) {
       pool.query(tableSql('ad_name'), w.params),
     ]);
 
+    // Leitura: plataforma × rede agora e na janela anterior, e a referência do foco.
+    // Foco = exatamente uma campanha (grupo) ou, sem ela, exatamente uma plataforma; a
+    // referência é o mesmo recorte sem esse filtro (o cliente subtrai o foco → "demais").
+    const foco = f.campaigns?.length === 1 ? 'campanha' : f.platform?.length === 1 ? 'plataforma' : null;
+    const wRef = foco === 'campanha'
+      ? buildWhere(await resolve({ ...f, campaigns: [] }))
+      : foco === 'plataforma'
+        ? buildWhere(await resolve({ ...f, platform: [], network: [] }))
+        : null;
+    const redeSql = (ww: { sql: string }) =>
+      `SELECT platform, network, ${METRIC_SELECT} FROM ${T_CAMP} WHERE ${ww.sql}
+        GROUP BY platform, network HAVING ${HAS_DELIVERY}`;
+    const none = Promise.resolve([[]] as unknown as [Record<string, unknown>[]]);
+    const [redeRes, prevRedeRes, refRes] = await Promise.all([
+      pool.query(redeSql(w), w.params),
+      wPrev ? pool.query(redeSql(wPrev), wPrev.params) : none,
+      wRef
+        ? pool.query(`SELECT platform, ${METRIC_SELECT} FROM ${T_CAMP} WHERE ${wRef.sql} GROUP BY platform`, wRef.params)
+        : none,
+    ]);
+    const redeRows = (res: [unknown, ...unknown[]]) => (res[0] as Record<string, unknown>[]).map((r) => ({
+      platform: String(r.platform), network: String(r.network ?? ''), ...totalsOf(r),
+    }));
+    const previousByRede = redeRows(prevRedeRes);
+    // Plataforma = soma das suas redes (as linhas particionam a janela).
+    const previousByPlatform = [...new Set(previousByRede.map((r) => r.platform))].map((platform) => {
+      const rs = previousByRede.filter((r) => r.platform === platform);
+      const keys = Object.keys(rs[0]!).filter((k) => k !== 'platform' && k !== 'network') as (keyof Totals)[];
+      return { platform, ...Object.fromEntries(keys.map((k) => [k, rs.reduce((acc, r) => acc + r[k], 0)])) };
+    });
+
     const totalsRow = (totalsRes[0] as Record<string, unknown>[])[0];
     const prevRow = (prevRes[0] as Record<string, unknown>[])[0];
 
     return NextResponse.json({
       totals: { ...totalsOf(totalsRow), campaigns: n(totalsRow?.campaigns), ads: n(totalsRow?.ads) },
       previous: prevRow ? totalsOf(prevRow) : null,
+      previousByPlatform,
+      redes: redeRows(redeRes),
+      previousByRede,
+      referencia: foco && wRef ? {
+        foco,
+        nome: foco === 'campanha' ? f.campaigns![0] : f.platform![0],
+        porPlataforma: (refRes[0] as Record<string, unknown>[]).map((r) => ({ platform: String(r.platform), ...totalsOf(r) })),
+      } : null,
       daily: (dailyRes[0] as Record<string, unknown>[]).map((r) => ({ date: iso(r.bucket), ...totalsOf(r) })),
       campanhas: (campRes[0] as Record<string, unknown>[]).map((r) => ({
         platform: String(r.platform), network: String(r.network ?? ''),

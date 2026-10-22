@@ -11,13 +11,14 @@ import SearchableSelect from "./SearchableSelect";
 import ThemeToggle from "./ThemeToggle";
 import { postJson } from "@/lib/fetchUtils";
 import { AGE_ORDER, ENGAGEMENT_PARTS, GENDERS, GENDER_LABEL, METRICS, networkLabel, platformLabel, type EngagementPartKey, type MetricKey } from "@/lib/dashboard";
-import { buildAchados, kpiDeltaLabel } from "@/lib/dashboardInsights";
+import { BLOCOS, buildAchados, kpiDeltaLabel, type Bloco, type Referencia } from "@/lib/dashboardInsights";
 import { PRESET_DAYS, parsePrefs, prefsKey, type Prefs } from "@/lib/dashboardPrefs";
 import type { ChartData } from "@/types/chat";
 
 type Tab = "campanhas" | "demografia" | "regiao";
 type Gran = "dia" | "semana" | "mes";
 type EngMode = "total" | "partes";
+type Leitura = { bloco: Bloco; frase: string };
 
 type Totals = { cost: number; impressions: number; reach: number; clicks: number; videoViews: number; engagement: number }
   & Record<EngagementPartKey, number>;
@@ -27,6 +28,10 @@ type Row = Totals & { platform: string; network: string; nome: string;
 type Payload = {
   totals?: Totals & { campaigns: number; ads: number };
   previous?: Totals | null;
+  previousByPlatform?: (Totals & { platform: string })[];
+  redes?: (Totals & { platform: string; network: string })[];
+  previousByRede?: (Totals & { platform: string; network: string })[];
+  referencia?: Referencia | null;
   daily?: (Totals & { date: string })[];
   campanhas?: Row[];
   anuncios?: Row[];
@@ -503,15 +508,20 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
   // Achados pré-computados: a IA só redige; se ela cair, estas frases vão para a tela.
   const achados = useMemo(() => buildAchados({
     tab, metric, totals, previous: data?.previous ?? null,
-    campanhas: data?.campanhas, demografia: data?.demografia,
-    regioes: regiaoRows,
-  }), [tab, metric, totals, data?.previous, data?.campanhas, data?.demografia, regiaoRows]);
-  const observacoes = useMemo(() => achados.map((a) => a.frase), [achados]);
+    previousByPlatform: data?.previousByPlatform, redes: data?.redes, previousByRede: data?.previousByRede,
+    referencia: data?.referencia, campanhas: data?.campanhas, anuncios: data?.anuncios,
+    daily, gran, demografia: data?.demografia, regioes: regiaoRows,
+  }), [tab, metric, totals, data?.previous, data?.previousByPlatform, data?.redes, data?.previousByRede, data?.referencia,
+    data?.campanhas, data?.anuncios, daily, gran, data?.demografia, regiaoRows]);
+  const foco = data?.referencia
+    ? data.referencia.foco === "campanha" ? data.referencia.nome : platformLabel(data.referencia.nome)
+    : undefined;
+  const observacoes = useMemo<Leitura[]>(() => achados.map(({ bloco, frase }) => ({ bloco, frase })), [achados]);
   const insightsInput = useMemo(() => (achados.length ? { achados } : null), [achados]);
 
-  const [aiInsights, setAiInsights] = useState<string[] | null>(null);
+  const [aiInsights, setAiInsights] = useState<Leitura[] | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const aiCache = useRef(new Map<string, string[]>());
+  const aiCache = useRef(new Map<string, Leitura[]>());
 
   useEffect(() => {
     if (!insightsInput) { setAiInsights(null); setAiLoading(false); return; }
@@ -528,9 +538,12 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
     const t = setTimeout(async () => {
       try {
         const res = await postJson("/api/dashboard/insights", payload, { signal: ctrl.signal });
-        const json = (await res.json()) as { insights?: string[] };
+        const json = (await res.json()) as { insights?: Leitura[] };
         if (ctrl.signal.aborted) return;
-        if (!res.ok || !json.insights?.length) throw new Error("sem insights");
+        // A IA só redige: bloco que não foi enviado é invenção — cai no determinístico.
+        const enviados = new Set(achados.map((a) => a.bloco));
+        if (!res.ok || !json.insights?.length || !json.insights.every((x) => enviados.has(x.bloco)))
+          throw new Error("sem insights");
         aiCache.current.set(key, json.insights);
         setAiInsights(json.insights);
       } catch {
@@ -771,7 +784,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
 
               <section className="grid grid-cols-1 lg:grid-cols-2 auto-rows-fr gap-4">
                 {scatterChart && <ChartWidget chart={scatterChart} fill />}
-                <Observacoes items={aiInsights ?? observacoes} loading={aiLoading} ia={!!aiInsights} />
+                <Observacoes items={aiInsights ?? observacoes} loading={aiLoading} ia={!!aiInsights} scroll={!!scatterChart} foco={foco} />
               </section>
 
               <section className={`${panel} overflow-hidden`}>
@@ -1025,40 +1038,73 @@ function Empty() {
 }
 
 /** Leitura gerada pela IA sobre a métrica ativa; cai nas frases determinísticas se ela falhar. */
-function Observacoes({ items, loading, ia }: { items: string[]; loading?: boolean; ia?: boolean }) {
+function Observacoes({ items, loading, ia, scroll, foco }: { items: Leitura[]; loading?: boolean; ia?: boolean; scroll?: boolean; foco?: string }) {
+  // Frases do mesmo bloco ficam juntas sob um rótulo; a recomendação fecha em linha cheia.
+  const grupos = (Object.keys(BLOCOS) as Bloco[])
+    .map((b) => ({ b, frases: items.filter((x) => x.bloco === b).map((x) => x.frase) }))
+    .filter((g) => g.frases.length);
   return (
-    <div className="relative hud-panel hud-panel-gold rounded-[16px] px-4 py-5 md:px-6">
+    // `scroll`: ao lado de um gráfico, a altura é a dele (h-0 + min-h-full não empurra a linha
+    // do grid) e as frases rolam por dentro; empilhado (mobile), um teto fixo faz o mesmo.
+    <div className={`relative hud-panel hud-panel-gold rounded-[16px] px-4 py-5 md:px-6 ${
+      scroll ? "flex flex-col max-h-[480px] lg:max-h-none lg:h-0 lg:min-h-full" : ""}`}>
       <HudCorners accent="gold" size={16} inset={8} />
-      <div className="font-hud text-[11px] uppercase tracking-[0.24em] text-ink flex items-center gap-2"
+      <div className="shrink-0 font-hud text-[11px] uppercase tracking-[0.24em] text-ink flex items-center gap-2"
            style={{ textShadow: "0 0 12px color-mix(in srgb, var(--hud-gold) 35%, transparent)" }}>
         <span style={{ color: "var(--hud-gold)" }}>⚛</span> Leitura dos números
         {ia && !loading && (
           <span className="tracking-[0.18em] text-[9px] text-ink-3" style={{ textShadow: "none" }}>por IA</span>
         )}
+        {foco && (
+          <span className="ml-auto max-w-[45%] truncate rounded-md border px-2 py-0.5 tracking-[0.14em] text-[9px] normal-case"
+                style={{ textShadow: "none", color: "var(--hud-gold)", borderColor: "color-mix(in srgb, var(--hud-gold) 35%, transparent)" }}
+                title={`Foco: ${foco}`}>
+            Foco: {foco}
+          </span>
+        )}
       </div>
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3.5">
+      {/* Colunas CSS (não grid): cada bloco encaixa sob o anterior, sem a linha alinhar pela
+          frase mais alta. A rolagem fica num invólucro — multicol com altura fixa transborda
+          em colunas extras para o lado em vez de rolar. */}
+      <div className={`mt-4 ${scroll ? "flex-1 min-h-0 overflow-y-auto pr-2" : ""}`}>
+      <div className="md:columns-2 md:gap-x-5">
         {!loading && !items.length && (
-          <p className="text-[13px] leading-[1.6] text-ink-3 md:col-span-2">
+          <p className="text-[13px] leading-[1.6] text-ink-3 [column-span:all]">
             Sem achados para este recorte — poucos dados ou volume abaixo de 10 mil impressões por plataforma.
           </p>
         )}
         {loading
-          ? [0, 1, 2].map((i) => (
-              <div key={i} className="flex gap-2.5">
+          ? [0, 1, 2, 3].map((i) => (
+              <div key={i} className="flex gap-2.5 mb-4 break-inside-avoid">
                 <span className="text-[11px] leading-[1.6] shrink-0 opacity-40" style={{ color: "var(--hud-gold)" }}>▸</span>
                 <span className="block h-[13px] flex-1 animate-pulse rounded"
                       style={{ background: "var(--hud-gold-soft)", opacity: 0.35 }} />
               </div>
             ))
-          : items.map((t) => (
-              <div key={t} className="flex gap-2.5">
-                <span className="text-[11px] leading-[1.6] shrink-0" style={{ color: "var(--hud-gold)" }}>▸</span>
-                <p className="text-[13px] leading-[1.6] text-ink-2">{t}</p>
-              </div>
-            ))}
+          : grupos.map(({ b, frases }) => {
+              const rec = b === "recomendacao";
+              return (
+                <div key={b} className={`min-w-0 break-inside-avoid ${rec ? "[column-span:all] border-t pt-3.5" : "mb-4"}`}
+                     style={rec ? { borderColor: "color-mix(in srgb, var(--hud-gold) 30%, transparent)" } : undefined}>
+                  <div className="font-hud text-[9px] uppercase tracking-[0.2em] mb-1.5"
+                       style={{ color: rec ? "var(--hud-gold)" : undefined }}>
+                    <span className={rec ? "" : "text-ink-3"}>{BLOCOS[b]}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {frases.map((t) => (
+                      <div key={t} className="flex gap-2.5">
+                        <span className="text-[11px] leading-[1.6] shrink-0" style={{ color: "var(--hud-gold)" }}>▸</span>
+                        <p className={`min-w-0 text-[13px] leading-[1.6] [overflow-wrap:anywhere] ${rec ? "text-ink" : "text-ink-2"}`}>{t}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+      </div>
       </div>
       <Link href="/chat"
-            className="mt-5 inline-flex items-center gap-2 font-hud text-[11px] uppercase tracking-[0.18em] transition-opacity hover:opacity-80"
+            className="shrink-0 self-start mt-5 inline-flex items-center gap-2 font-hud text-[11px] uppercase tracking-[0.18em] transition-opacity hover:opacity-80"
             style={{ color: "var(--hud-gold)" }}>
         Perguntar ao Jarvis
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">

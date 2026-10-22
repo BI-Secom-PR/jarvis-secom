@@ -28,16 +28,17 @@ function buildSystem(tab: string, metric: MetricKey): string {
   return `Você é analista de mídia da SECOM. Os achados já foram calculados — você SÓ redige.
 
 Métrica ativa: ${label}. Escopo: ${ESCOPO[tab]}.
-- Reescreva cada achado em UMA frase fluente. Pode fundir no máximo dois achados vizinhos.
-- NÃO altere números, nomes, sinais (+/−) nem o sentido.
-- NÃO invente campanha, plataforma, período ou valor.
+- Cada achado tem um "bloco" (tendencia, dia, referencia, plataformas, redes, campanhas, anuncios, distribuicao, eficiencia, cobertura, recomendacao). Reescreva cada achado em UMA frase fluente e devolva com o MESMO bloco, na MESMA ordem. Não funda blocos diferentes nem crie blocos.
+- NÃO altere números, nomes, sinais (+/−), multiplicadores (×) nem o sentido.
+- NÃO invente campanha, plataforma, anúncio, período ou valor.
 - NÃO descreva último lugar em volume ("menor entrega", "menor volume").
 - Anomalia (cobertura/base) NÃO é tendência de crescimento.
-- mix_vs_rate vem antes do líder. recomendacao, se houver, fecha.
+- Recomendação é estimativa linear: mantenha a palavra "estimativa" e a ressalva de objetivo.
+- Referência compara o foco (campanha ou plataforma) com as demais do mesmo recorte: mantenha a ressalva de objetivos diferentes.
 - Nunca escreva que algo "não foi fornecido", nem cite payload, JSON, tipo do achado ou campos.
 
-Formato: responda APENAS com JSON {"insights": ["frase 1", "frase 2", "frase 3"]}.
-De 3 a 4 frases, português do Brasil, cada uma com no máximo 220 caracteres, sem markdown, sem bullets, sem títulos.`;
+Formato: responda APENAS com JSON {"insights": [{"bloco": "...", "frase": "..."}]}.
+Uma frase por achado, português do Brasil, cada uma com no máximo 260 caracteres, sem markdown, sem bullets, sem títulos.`;
 }
 
 export async function POST(req: NextRequest) {
@@ -72,9 +73,11 @@ export async function POST(req: NextRequest) {
     if (!jsonMatch) throw new Error('resposta sem JSON');
     const parsed = JSON.parse(jsonMatch[0]) as { insights?: unknown };
     const insights = (Array.isArray(parsed.insights) ? parsed.insights : [])
-      .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
-      .map((s) => s.trim().slice(0, 240))
-      .slice(0, 4);
+      .filter((x): x is { bloco: string; frase: string } =>
+        !!x && typeof x === 'object' && typeof (x as { bloco?: unknown }).bloco === 'string'
+        && typeof (x as { frase?: unknown }).frase === 'string' && (x as { frase: string }).frase.trim().length > 0)
+      .map((x) => ({ bloco: x.bloco, frase: x.frase.trim().slice(0, 260) }))
+      .slice(0, 9);
     if (!insights.length) throw new Error('nenhuma frase utilizável');
     return NextResponse.json({ insights });
   } catch (e) {
