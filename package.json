@@ -26,13 +26,13 @@
     "ai": "^6.0.116",
     "bcryptjs": "^3.0.3",
     "d3-geo": "^3.1.1",
-    "dompurify": "^3.4.16",
+    "dompurify": "^3.4.17",
     "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",
     "html-to-image": "^1.11.13",
     "jose": "^6.2.3",
     "mysql2": "^3.24.3",
-    "next": "16.3.8",
+    "next": "16.4.1",
     "ollama": "^0.6.3",
     "postgres": "^3.4.8",
     "react": "19.2.3",
@@ -48,7 +48,7 @@
         "brace-expansion": "^1.1.21"
       }
     },
-    "sharp": "^0.35.4",
+    "sharp": "^0.35.5",
     "readdir-glob": {
       "minimatch": {
         "brace-expansion": "^2.1.7"
@@ -59,6 +59,7 @@
     "tmp": ">=0.2.6",
     "ws": ">=8.21.0",
     "svix": ">=1.91.2",
+    "source-map-js": "^1.2.2",
     "uuid": "^11.1.1"
   },
   "devDependencies": {
