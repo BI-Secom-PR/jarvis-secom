@@ -5,5 +5,5 @@ export const metadata = { title: 'Sentimentos — Jarvis SECOM' }
 
 export default async function SentimentosPage() {
   const user = await requireAuth()
-  return <SentimentosContainer userEmail={user.email} />
+  return <SentimentosContainer userEmail={user.email} userId={user.id} isAdmin={user.role === 'ADMIN'} />
 }

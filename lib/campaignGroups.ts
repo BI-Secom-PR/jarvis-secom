@@ -137,18 +137,25 @@ export async function resolveGroups(
   f: Pick<DashboardFilters, 'from' | 'to'>,
   labels: string[],
   table = 'gold_platforms_campaigns',
+  dateCol = 'date',
 ): Promise<string[]> {
   const { text, rules } = await loadCampaignRules();
   // Ordena para que a mesma seleção em outra ordem reaproveite o cache.
   const wanted = new Set(labels);
-  const key = `${table}|${f.from ?? ''}|${f.to ?? ''}|${rulesHash(text)}|${[...wanted].sort().join('\u0000')}`;
+  const key = `${table}|${dateCol}|${f.from ?? ''}|${f.to ?? ''}|${rulesHash(text)}|${[...wanted].sort().join('\u0000')}`;
   const hit = membersCache.get(key);
   if (hit && Date.now() - hit.loadedAt < MEMBERS_TTL_MS) return hit.names;
 
   const conds: string[] = ['1=1'];
   const params: unknown[] = [];
-  if (f.from && ISO_DATE.test(f.from)) { conds.push('date >= ?'); params.push(f.from); }
-  if (f.to && ISO_DATE.test(f.to)) { conds.push('date <= ?'); params.push(f.to); }
+  // `dateCol` é identificador interno (nunca input). Coluna datetime (sentimentos:
+  // created_time) precisa do limite superior exclusivo no dia seguinte.
+  const dt = dateCol !== 'date';
+  if (f.from && ISO_DATE.test(f.from)) { conds.push(`${dateCol} >= ?`); params.push(f.from); }
+  if (f.to && ISO_DATE.test(f.to)) {
+    conds.push(dt ? `${dateCol} < DATE_ADD(?, INTERVAL 1 DAY)` : 'date <= ?');
+    params.push(f.to);
+  }
   const [rows] = await pool.query(
     `SELECT DISTINCT campaign_name FROM ${table}
       WHERE ${conds.join(' AND ')} AND campaign_name IS NOT NULL AND campaign_name != ''`,
@@ -168,7 +175,8 @@ export async function withCampaignNames<T extends DashboardFilters>(
   pool: Pool,
   f: T,
   table?: string,
+  dateCol?: string,
 ): Promise<T> {
   if (!f.campaigns?.length) return f;
-  return { ...f, campaignNames: await resolveGroups(pool, f, f.campaigns, table) };
+  return { ...f, campaignNames: await resolveGroups(pool, f, f.campaigns, table, dateCol) };
 }

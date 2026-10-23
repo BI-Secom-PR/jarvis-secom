@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getPool, isTransientDbError, resetPool } from '@/lib/mysql';
-import { buildWhere, isSafeWhereFragment, type SentimentFilters } from '@/lib/sentimentos';
+import { buildWhere, isSafeWhereFragment, strs, type SentimentFilters } from '@/lib/sentimentos';
+import { withCampaignNames } from '@/lib/campaignGroups';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -74,7 +75,10 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: SentimentFilters & { page?: number; trendGranularity?: string; trendOnly?: boolean };
+  let body: Omit<SentimentFilters, 'campaigns' | 'ad' | 'platform' | 'sentiment'> & {
+    campaign?: unknown; ad?: unknown; platform?: unknown; sentiment?: unknown;
+    page?: number; trendGranularity?: string; trendOnly?: boolean;
+  };
   try {
     body = await req.json();
   } catch {
@@ -90,17 +94,30 @@ export async function POST(req: NextRequest) {
       ? (body.trendGranularity as TrendGranularity)
       : 'month';
   const trendBucket = TREND_BUCKETS[trendGranularity];
-  const { sql: where, params } = buildWhere(body);
+  const filters: SentimentFilters = {
+    from: body.from,
+    to: body.to,
+    aiWhere: body.aiWhere,
+    campaigns: strs(body.campaign),
+    ad: strs(body.ad),
+    platform: strs(body.platform),
+    sentiment: strs(body.sentiment),
+  };
+  // Rótulos de grupo → nomes crus, depois do parse e antes dos WHEREs (precisa do pool).
+  const pool = getPool();
+  const resolved = await withCampaignNames(pool, filters, 'silver_social_comments', 'created_time')
+    .catch((e) => e as Error);
+  if (resolved instanceof Error) return dbError(resolved);
+  const { sql: where, params } = buildWhere(resolved);
   const from = `FROM silver_social_comments WHERE ${where}`;
   // Safety cap for unbounded day-level grouping — only applies when the user
   // hasn't picked their own date range, otherwise it silently clips it.
   const trendCap = body.from ? '' : ` AND created_time >= DATE_SUB(CURDATE(), ${trendBucket.interval})`;
   // top-ads lists pin their own sentiment, so they must ignore the user's
   // sentiment filter (otherwise `sentiment='Positivo' AND sentiment='Negativo'`)
-  const { sql: whereNoSent, params: paramsNoSent } = buildWhere({ ...body, sentiment: undefined });
+  const { sql: whereNoSent, params: paramsNoSent } = buildWhere({ ...resolved, sentiment: undefined });
 
   try {
-    const pool = getPool();
     const commentsSql = `SELECT id, image_url, creative_image_path, post_message, comment, author, like_count, created_time, sentiment, sentiment_source, audited_by, campaign_name, ad_name, platform
          ${from} ORDER BY created_time DESC LIMIT ${PAGE_SIZE} OFFSET ${page * PAGE_SIZE}`;
 
@@ -159,14 +176,18 @@ export async function POST(req: NextRequest) {
       pageSize: PAGE_SIZE,
     });
   } catch (e) {
-    console.error('[sentimentos/data]', e);
-    if (isTransientDbError(e)) {
-      resetPool();
-      return NextResponse.json(
-        { error: 'Conexão com o banco esgotou. Tente novamente.' },
-        { status: 503 }
-      );
-    }
-    return NextResponse.json({ error: 'Erro ao consultar comentários' }, { status: 500 });
+    return dbError(e);
   }
+}
+
+function dbError(e: unknown) {
+  console.error('[sentimentos/data]', e);
+  if (isTransientDbError(e)) {
+    resetPool();
+    return NextResponse.json(
+      { error: 'Conexão com o banco esgotou. Tente novamente.' },
+      { status: 503 }
+    );
+  }
+  return NextResponse.json({ error: 'Erro ao consultar comentários' }, { status: 500 });
 }

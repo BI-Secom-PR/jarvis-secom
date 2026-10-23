@@ -5,15 +5,24 @@ export const SENTIMENTS = ['Positivo', 'Negativo', 'Neutro'] as const;
 export type Sentiment = (typeof SENTIMENTS)[number];
 
 export type SentimentFilters = {
-  campaign?: string;
-  ad?: string;
-  platform?: string;
-  sentiment?: string;
+  /** Rótulos de grupo (lib/campaignGroups); a rota os resolve para `campaignNames`. */
+  campaigns?: string[];
+  /** Nomes crus já resolvidos. Vazio (com `campaigns` setado) vira `1=0`. */
+  campaignNames?: string[];
+  ad?: string[];
+  platform?: string[];
+  sentiment?: string[];
   /** Date range over created_time, YYYY-MM-DD (inclusive). */
   from?: string;
   to?: string;
   aiWhere?: string;
 };
+
+/** Querystring/JSON → string[] limpo (aceita valor único legado). */
+export const strs = (v: unknown): string[] =>
+  (Array.isArray(v) ? v : typeof v === 'string' ? [v] : []).filter(
+    (x): x is string => typeof x === 'string' && x !== '',
+  );
 
 export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -23,12 +32,17 @@ export function buildWhere(f: SentimentFilters): { sql: string; params: unknown[
   // (score_sentiment.py skips them), so they would sit forever as "Sem classificação".
   const conds: string[] = ["(sentiment IS NOT NULL OR TRIM(IFNULL(comment, '')) <> '')"];
   const params: unknown[] = [];
-  if (f.campaign) { conds.push('campaign_name = ?'); params.push(f.campaign); }
-  if (f.ad)       { conds.push('ad_name = ?');       params.push(f.ad); }
-  if (f.platform) { conds.push('platform = ?');      params.push(f.platform); }
-  if (f.sentiment && (SENTIMENTS as readonly string[]).includes(f.sentiment)) {
-    conds.push('sentiment = ?'); params.push(f.sentiment);
+  // Multi-valor como no dashboard: OR dentro de um filtro, AND entre eles; lista vazia = sem filtro.
+  const inList = (col: string, v?: string[]) => {
+    if (v?.length) { conds.push(`${col} IN (?)`); params.push(v); }
+  };
+  if (f.campaignNames) {
+    if (f.campaignNames.length) { conds.push('campaign_name IN (?)'); params.push(f.campaignNames); }
+    else conds.push('1=0'); // grupo sem membros na janela; `IN ()` seria erro no MySQL
   }
+  inList('ad_name', f.ad);
+  inList('platform', f.platform);
+  inList('sentiment', f.sentiment?.filter((s) => (SENTIMENTS as readonly string[]).includes(s)));
   if (f.from && ISO_DATE.test(f.from)) { conds.push('created_time >= ?'); params.push(f.from); }
   if (f.to && ISO_DATE.test(f.to))     { conds.push('created_time < DATE_ADD(?, INTERVAL 1 DAY)'); params.push(f.to); }
   if (f.aiWhere && isSafeWhereFragment(f.aiWhere)) conds.push(`(${f.aiWhere})`);
