@@ -7,6 +7,7 @@ import HudCorners from "./HudCorners";
 import ThemeToggle from "./ThemeToggle";
 import ChartWidget from "./ChartWidget";
 import SearchableSelect from "./SearchableSelect";
+import CampaignRulesModal from "./CampaignRulesModal";
 import { postJson } from "@/lib/fetchUtils";
 import { SENTIMENTS } from "@/lib/sentimentos";
 import type { ChartData } from "@/types/chat";
@@ -146,12 +147,49 @@ function Thumb({
   );
 }
 
-export default function SentimentosContainer({ userEmail }: { userEmail: string }) {
+// Filtros lembrados por usuário (localStorage), como no /dashboard.
+const prefsKey = (userId: string) => `jarvis.sentimentos.v1:${userId}`;
+const strArr = (v: unknown): string[] | undefined =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x !== "") : undefined;
+
+export default function SentimentosContainer({
+  userEmail,
+  userId,
+  isAdmin = false,
+}: {
+  userEmail: string;
+  userId: string;
+  isAdmin?: boolean;
+}) {
   const [filtersData, setFiltersData] = useState<FiltersData | null>(null);
-  const [campaign, setCampaign] = useState("");
-  const [ad, setAd] = useState("");
-  const [platform, setPlatform] = useState("");
-  const [sentiment, setSentiment] = useState("");
+  // Multi-valor como no dashboard: [] = sem filtro, OR dentro do filtro, AND entre filtros.
+  const [campaign, setCampaign] = useState<string[]>([]);
+  const [ad, setAd] = useState<string[]>([]);
+  const [platform, setPlatform] = useState<string[]>([]);
+  const [sentiment, setSentiment] = useState<string[]>([]);
+  // Editor de regras de grupo (só admin); `rulesVersion` refaz o fetch dos filtros ao salvar.
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [rulesVersion, setRulesVersion] = useState(0);
+  // Os fetches esperam `ready`: restaura no efeito (não no useState) para não dar
+  // mismatch de hidratação e não disparar uma requisição com os padrões antes.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    try {
+      const o = JSON.parse(localStorage.getItem(prefsKey(userId)) ?? "{}");
+      const c = strArr(o?.campaign), a = strArr(o?.ad), p = strArr(o?.platform), s = strArr(o?.sentiment);
+      if (c) setCampaign(c);
+      if (a) setAd(a);
+      if (p) setPlatform(p);
+      if (s) setSentiment(s);
+    } catch { /* storage bloqueado ou JSON quebrado: abre nos padrões */ }
+    setReady(true);
+  }, [userId]);
+  useEffect(() => {
+    if (!ready) return;
+    try {
+      localStorage.setItem(prefsKey(userId), JSON.stringify({ campaign, ad, platform, sentiment }));
+    } catch { /* idem */ }
+  }, [ready, userId, campaign, ad, platform, sentiment]);
   // default window: last 14 days
   const [from, setFrom] = useState(() => isoDaysAgo(14));
   const [to, setTo] = useState(() => isoDaysAgo(0));
@@ -197,11 +235,15 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
 
   // Debounced filters fetch + abort so rapid filter changes don't stack DB load.
   useEffect(() => {
+    if (!ready) return;
     const ac = new AbortController();
     const t = window.setTimeout(() => {
       const qs = new URLSearchParams();
-      for (const [k, v] of Object.entries({ from, to, campaign, ad, platform, sentiment }))
-        if (v) qs.set(k, v);
+      if (from) qs.set("from", from);
+      if (to) qs.set("to", to);
+      // Repetido por valor — a rota lê com getAll.
+      for (const [k, vs] of Object.entries({ campaign, ad, platform, sentiment }))
+        for (const v of vs) qs.append(k, v);
       fetch(`/api/sentimentos/filters?${qs}`, { signal: ac.signal })
         .then(async (r) => {
           const d = await r.json();
@@ -212,9 +254,12 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
         .then((d) => {
           setFiltersData(d);
           // drop selections that fell out of the new option universe
-          setCampaign((c) => (c && !d.campaigns.includes(c) ? "" : c));
-          setAd((a) => (a && !d.ads.some((x) => x.ad === a) ? "" : a));
-          setPlatform((p) => (p && !d.platforms.includes(p) ? "" : p));
+          // (só reatribui quando algo cai fora, senão o array novo refaria o efeito em loop)
+          const keep = (cur: string[], ok: (v: string) => boolean) =>
+            cur.every(ok) ? cur : cur.filter(ok);
+          setCampaign((c) => keep(c, (v) => d.campaigns.includes(v)));
+          setAd((a) => keep(a, (v) => d.ads.some((x) => x.ad === v)));
+          setPlatform((p) => keep(p, (v) => d.platforms.includes(v)));
         })
         .catch((e) => {
           if (ac.signal.aborted || (e instanceof DOMException && e.name === "AbortError")) return;
@@ -225,9 +270,10 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
       window.clearTimeout(t);
       ac.abort();
     };
-  }, [from, to, campaign, ad, platform, sentiment]);
+  }, [ready, from, to, campaign, ad, platform, sentiment, rulesVersion]);
 
   useEffect(() => {
+    if (!ready) return;
     const ac = new AbortController();
     const t = window.setTimeout(async () => {
       setLoading(true);
@@ -253,7 +299,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
       window.clearTimeout(t);
       ac.abort();
     };
-  }, [campaign, ad, platform, sentiment, from, to, aiFilter, page]);
+  }, [ready, campaign, ad, platform, sentiment, from, to, aiFilter, page, rulesVersion]);
 
   // Granularity toggle only re-fetches the trend chart's bucket — KPI tiles,
   // comments, byPlatform and topAds stay put (they don't depend on it).
@@ -289,10 +335,12 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trendGranularity]);
 
-  // server already facets the ads list by the other filters
+  // server facets the ads by the other filters; here only narrow by the selected campaign groups
   const adOptions = useMemo(
-    () => [...new Set((filtersData?.ads ?? []).map((a) => a.ad))],
-    [filtersData]
+    () => [...new Set((filtersData?.ads ?? [])
+      .filter((a) => !campaign.length || (a.campaign !== null && campaign.includes(a.campaign)))
+      .map((a) => a.ad))],
+    [filtersData, campaign]
   );
 
   // distribution shares the comments query's WHERE, so its sum = total rows — no extra query
@@ -314,7 +362,7 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
       setAiFilter(json);
       // AI-extracted sentiment/date range become normal filter state, so the
       // user can refine them with the existing dropdowns afterward.
-      if (json.sentiment) setSentiment(json.sentiment);
+      if (json.sentiment) setSentiment([json.sentiment]);
       if (json.from) setFrom(json.from);
       if (json.to) setTo(json.to);
     } catch (e) {
@@ -488,40 +536,51 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
                 <span style={{ color: "var(--hud-violet)" }}>◇</span> Filtros
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 items-center">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <SearchableSelect
+                    multiple
+                    className={selectClass}
+                    value={campaign}
+                    options={filtersData?.campaigns ?? []}
+                    emptyLabel="Todas as campanhas"
+                    onChange={(v) => { setCampaign(v); setAd([]); setPage(0); }}
+                  />
+                  {/* Campanhas agrupadas pelas mesmas regras do dashboard; só admin edita. */}
+                  {isAdmin && (
+                    <button
+                      onClick={() => setRulesOpen(true)}
+                      title="Editar os grupos de campanha"
+                      className="shrink-0 px-2 py-2 rounded-lg border border-separator text-ink-3 hover:text-ink transition-colors text-[13px] leading-none"
+                    >
+                      ⚙
+                    </button>
+                  )}
+                </div>
                 <SearchableSelect
-                  className={selectClass}
-                  value={campaign}
-                  options={filtersData?.campaigns ?? []}
-                  emptyLabel="Todas as campanhas"
-                  onChange={(v) => { setCampaign(v); setAd(""); setPage(0); }}
-                />
-                <SearchableSelect
+                  multiple
                   className={selectClass}
                   value={ad}
                   options={adOptions}
                   emptyLabel="Todos os anúncios"
                   onChange={(v) => { setAd(v); setPage(0); }}
                 />
-                <select
+                <SearchableSelect
+                  multiple
                   className={selectClass}
                   value={platform}
-                  onChange={(e) => { setPlatform(e.target.value); setPage(0); }}
-                >
-                  <option value="">Todas as plataformas</option>
-                  {filtersData?.platforms.map((p) => (
-                    <option key={p} value={p}>{platformLabel(p)}</option>
-                  ))}
-                </select>
-                <select
+                  options={filtersData?.platforms ?? []}
+                  labelOf={platformLabel}
+                  emptyLabel="Todas as plataformas"
+                  onChange={(v) => { setPlatform(v); setPage(0); }}
+                />
+                <SearchableSelect
+                  multiple
                   className={selectClass}
                   value={sentiment}
-                  onChange={(e) => { setSentiment(e.target.value); setPage(0); }}
-                >
-                  <option value="">Todos os sentimentos</option>
-                  {SENTIMENTS.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
+                  options={[...SENTIMENTS]}
+                  emptyLabel="Todos os sentimentos"
+                  onChange={(v) => { setSentiment(v); setPage(0); }}
+                />
                 <div className="md:col-span-2 flex flex-wrap gap-2.5 items-center">
                   <label className="flex items-center gap-1.5 text-[12px] text-ink-3">
                     de
@@ -767,6 +826,9 @@ export default function SentimentosContainer({ userEmail }: { userEmail: string 
         </div>
       )}
 
+      {rulesOpen && (
+        <CampaignRulesModal onClose={() => setRulesOpen(false)} onSaved={() => setRulesVersion((v) => v + 1)} />
+      )}
       {previewUrl && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"

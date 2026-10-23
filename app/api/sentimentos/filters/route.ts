@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getPool, isTransientDbError, resetPool } from '@/lib/mysql';
-import { buildWhere } from '@/lib/sentimentos';
+import { buildWhere, type SentimentFilters } from '@/lib/sentimentos';
+import { groupOf, loadCampaignRules, rulesHash, withCampaignNames } from '@/lib/campaignGroups';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,26 +15,31 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const q = req.nextUrl.searchParams;
-  const f = {
+  // Multi-valor: o cliente repete o parâmetro (`platform=meta&platform=tiktok`).
+  const f: SentimentFilters = {
     from: q.get('from') ?? undefined,
     to: q.get('to') ?? undefined,
-    campaign: q.get('campaign') ?? undefined,
-    ad: q.get('ad') ?? undefined,
-    platform: q.get('platform') ?? undefined,
-    sentiment: q.get('sentiment') ?? undefined,
+    campaigns: q.getAll('campaign'),
+    ad: q.getAll('ad'),
+    platform: q.getAll('platform'),
+    sentiment: q.getAll('sentiment'),
   };
-  const key = JSON.stringify(f);
-
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.loadedAt < CACHE_TTL_MS)
-    return NextResponse.json(hit.data);
 
   try {
-    // Faceted: each list is constrained by every filter EXCEPT its own dimension.
-    const wCampaigns = buildWhere({ ...f, campaign: undefined });
-    const wPlatforms = buildWhere({ ...f, platform: undefined });
-    const wAds = buildWhere({ ...f, ad: undefined });
+    // As regras entram na chave: um PUT no editor aparece sem esperar os 10 min do cache.
+    const { text: rulesText, rules } = await loadCampaignRules();
+    const key = `${rulesHash(rulesText)}|${JSON.stringify(f)}`;
+    const hit = cache.get(key);
+    if (hit && Date.now() - hit.loadedAt < CACHE_TTL_MS)
+      return NextResponse.json(hit.data);
+
     const pool = getPool();
+    // `campaign` chega como rótulo(s) de grupo → nomes crus antes dos WHEREs.
+    const fr = await withCampaignNames(pool, f, 'silver_social_comments', 'created_time');
+    // Faceted: each list is constrained by every filter EXCEPT its own dimension.
+    const wCampaigns = buildWhere({ ...fr, campaigns: undefined, campaignNames: undefined });
+    const wPlatforms = buildWhere({ ...fr, platform: undefined });
+    const wAds = buildWhere({ ...fr, ad: undefined });
     // Platforms is tiny; campaigns + ads are the heavier DISTINCT scans.
     // Cap peak at 2 so this route can coexist with data's first wave.
     const platforms = await pool.query(
@@ -45,12 +51,17 @@ export async function GET(req: NextRequest) {
       pool.query(`SELECT DISTINCT campaign_name, ad_name FROM silver_social_comments WHERE ${wAds.sql} AND ad_name IS NOT NULL AND ad_name != '' ORDER BY ad_name`, wAds.params),
     ]);
     const data = {
-      campaigns: (campaigns[0] as { campaign_name: string }[]).map((r) => r.campaign_name),
+      // Nomes crus viram rótulos de grupo (mesmas regras do dashboard).
+      campaigns: [...new Set((campaigns[0] as { campaign_name: string }[])
+        .map((r) => groupOf(r.campaign_name, rules)))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
       platforms: (platforms[0] as { platform: string }[]).map((r) => r.platform),
-      ads: (ads[0] as { campaign_name: string | null; ad_name: string }[]).map((r) => ({
-        campaign: r.campaign_name,
-        ad: r.ad_name,
-      })),
+      // O anúncio carrega o GRUPO da campanha (o cliente filtra anúncios por rótulo).
+      // Dedupe: o DISTINCT é por nome cru, campanhas do mesmo grupo repetiriam o anúncio.
+      ads: [...new Map((ads[0] as { campaign_name: string | null; ad_name: string }[])
+        .map((r) => {
+          const campaign = r.campaign_name ? groupOf(r.campaign_name, rules) : null;
+          return [`${campaign}\u0000${r.ad_name}`, { campaign, ad: r.ad_name }] as const;
+        })).values()],
     };
     if (cache.size > 50) cache.clear(); // ponytail: crude bound; LRU if it ever matters
     cache.set(key, { data, loadedAt: Date.now() });
