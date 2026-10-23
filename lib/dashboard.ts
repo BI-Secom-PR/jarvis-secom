@@ -202,6 +202,27 @@ export const UF_BY_NAME: Record<string, string> = {
   'Sergipe': 'SE', 'Tocantins': 'TO',
 };
 
+/** Macrorregião IBGE de cada UF. */
+export const MACRO_BY_UF: Record<string, string> = {
+  AC: 'Norte', AP: 'Norte', AM: 'Norte', PA: 'Norte', RO: 'Norte', RR: 'Norte', TO: 'Norte',
+  AL: 'Nordeste', BA: 'Nordeste', CE: 'Nordeste', MA: 'Nordeste', PB: 'Nordeste',
+  PE: 'Nordeste', PI: 'Nordeste', RN: 'Nordeste', SE: 'Nordeste',
+  DF: 'Centro-Oeste', GO: 'Centro-Oeste', MT: 'Centro-Oeste', MS: 'Centro-Oeste',
+  ES: 'Sudeste', MG: 'Sudeste', RJ: 'Sudeste', SP: 'Sudeste',
+  PR: 'Sul', RS: 'Sul', SC: 'Sul',
+};
+
+/** População residente por UF — IBGE, Censo 2022 (resultados do universo). Base do índice
+ *  de penetração (% da entrega ÷ % da população); estimativa, não audiência-alvo. */
+export const POP_BY_UF: Record<string, number> = {
+  SP: 44_411_238, MG: 20_539_989, RJ: 16_055_174, BA: 14_141_626, PR: 11_444_380,
+  RS: 10_882_965, PE: 9_058_931, CE: 8_794_957, PA: 8_120_131, SC: 7_610_361,
+  GO: 7_056_495, MA: 6_776_699, PB: 3_974_687, AM: 3_941_613, ES: 3_833_712,
+  MT: 3_658_649, RN: 3_302_729, PI: 3_271_199, AL: 3_127_683, DF: 2_817_381,
+  MS: 2_757_013, SE: 2_210_004, RO: 1_581_196, TO: 1_511_460, AC: 830_018,
+  AP: 733_759, RR: 636_707,
+};
+
 export const PLATFORM_LABEL: Record<string, string> = {
   meta: 'Meta', google: 'Google', tiktok: 'TikTok', kwai: 'Kwai',
   linkedin: 'LinkedIn', pinterest: 'Pinterest', amazon_dsp: 'Amazon DSP', globoads: 'GloboAds',

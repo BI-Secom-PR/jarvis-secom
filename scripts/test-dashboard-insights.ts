@@ -3,8 +3,10 @@
 
 import assert from 'node:assert/strict';
 import {
-  buildAchados, kpiDeltaLabel, shortCampaignName, type NamedRow, type TotalsLite,
+  alvoAchados, buildAchados, faixaNoAlvo, kpiDeltaLabel, parseAlvoIdade, penetracao, shortCampaignName,
+  type AlvoRow, type DemoRow, type GeoRow, type NamedRow, type TotalsLite,
 } from '../lib/dashboardInsights';
+import { MACRO_BY_UF, POP_BY_UF, UF_BY_NAME } from '../lib/dashboard';
 
 const z = { reach: 0, videoViews: 0, engagement: 0 };
 
@@ -176,3 +178,109 @@ assert.ok(metaFoco.some((a) => a.bloco === 'recomendacao' && /de Facebook .* par
 assert.ok(!metaFoco.some((a) => a.bloco === 'plataformas'), 'plataforma única não tem ranking de plataformas');
 console.log('ok — foco em campanha e em plataforma');
 for (const a of [...foco, ...metaFoco]) console.log(`  [${a.bloco}] ${a.frase}`);
+
+// ── Idade & Gênero: mix, viés de plataforma, faixa × gênero, público-alvo ──
+const d = (platform: string, faixa: string, gender: string, cost: number, impressions: number, clicks: number): DemoRow =>
+  ({ platform, faixa, gender, cost, impressions, clicks, reach: 0, videoViews: 0, engagement: 0 });
+const demoPlat: DemoRow[] = [
+  d('tiktok', '18-24', 'MULHER', 3000, 3_000_000, 30_000), d('tiktok', '18-24', 'HOMEM', 2000, 2_000_000, 12_000),
+  d('tiktok', '25-34', 'MULHER', 1000, 800_000, 4000),
+  d('meta', '25-34', 'MULHER', 4000, 1_500_000, 6000), d('meta', '25-34', 'HOMEM', 3000, 1_500_000, 3000),
+  d('meta', '35-44', 'MULHER', 2000, 1_000_000, 2500), d('meta', '13-17', 'HOMEM', 800, 400_000, 1200),
+  d('meta', 'n/d', 'DESCONHECIDO', 500, 700_000, 400),
+];
+const colapsa = (rs: DemoRow[]) => [...rs.reduce((m, r) => {
+  const k = `${r.faixa}|${r.gender}`, c = m.get(k);
+  m.set(k, c ? { ...c, cost: c.cost + r.cost, impressions: c.impressions + r.impressions, clicks: c.clicks + r.clicks } : { ...r, platform: undefined });
+  return m;
+}, new Map<string, DemoRow>()).values()];
+const demoPrev = colapsa([
+  d('tiktok', '18-24', 'MULHER', 500, 500_000, 4000), d('meta', '25-34', 'MULHER', 4000, 3_000_000, 9000),
+  d('meta', '25-34', 'HOMEM', 3000, 2_500_000, 5000), d('meta', '35-44', 'MULHER', 2000, 1_500_000, 3000),
+]);
+const alvoRows: AlvoRow[] = [
+  { targetAge: '18+', targetGender: 'AS', faixa: '13-17', gender: 'HOMEM', cost: 800, impressions: 400_000, clicks: 1200, reach: 0, videoViews: 0, engagement: 0 },
+  { targetAge: '18+', targetGender: 'AS', faixa: '25-34', gender: 'MULHER', cost: 5000, impressions: 2_300_000, clicks: 10_000, reach: 0, videoViews: 0, engagement: 0 },
+  { targetAge: '25 A 44', targetGender: 'M', faixa: '25-34', gender: 'HOMEM', cost: 3000, impressions: 1_500_000, clicks: 3000, reach: 0, videoViews: 0, engagement: 0 },
+  { targetAge: null, targetGender: null, faixa: '18-24', gender: 'MULHER', cost: 3000, impressions: 3_000_000, clicks: 30_000, reach: 0, videoViews: 0, engagement: 0 },
+];
+const demoOut2 = buildAchados({
+  tab: 'demografia', metric: 'cliques', demografia: colapsa(demoPlat), demografiaPlat: demoPlat,
+  previousDemografia: demoPrev, alvo: alvoRows, redeFiltrada: true,
+});
+const dBlob = demoOut2.map((a) => `[${a.bloco}] ${a.frase}`).join('\n');
+assert.ok(demoOut2.some((a) => a.bloco === 'tendencia' && /^Mix de cliques vs janela anterior: faixa 18-24 foi de/.test(a.frase)), `mix ausente:\n${dBlob}`);
+assert.ok(demoOut2.some((a) => a.bloco === 'plataformas' && /TikTok concentra \d+% em faixa 18-24/.test(a.frase)), `viés ausente:\n${dBlob}`);
+assert.ok(demoOut2.some((a) => a.bloco === 'eficiencia' && /Mulher 18-24/.test(a.frase)), `célula faixa×gênero ausente:\n${dBlob}`);
+assert.ok(demoOut2.some((a) => a.bloco === 'recomendacao' && /fora do público-alvo, sobretudo no gênero Homem/.test(a.frase)), `alvo ausente:\n${dBlob}`);
+assert.ok(demoOut2.some((a) => a.bloco === 'cobertura' && /filtro de rede não vale/.test(a.frase)), 'ressalva de rede ausente');
+assert.ok(buildAchados({ tab: 'demografia', metric: 'impressoes', demografia: colapsa(demoPlat) })
+  .some((a) => /sem gênero identificado/.test(a.frase)), 'cobertura de gênero ausente');
+assert.ok(!demoOut2.some((a) => a.bloco === 'plataformas' && /Kwai/.test(a.frase)), 'Kwai não está nos dados');
+
+// Sem plataforma única, sem janela anterior e sem alvo: nada de viés, mix ou aderência inventados.
+const demoMin = buildAchados({ tab: 'demografia', metric: 'cliques', demografia: colapsa(demoPlat) });
+assert.ok(!demoMin.some((a) => /Mix de|concentra|público-alvo/.test(a.frase)), 'achado sem base');
+
+// Foco em plataforma: composição do foco × demais.
+const demoFoco = buildAchados({
+  tab: 'demografia', metric: 'impressoes',
+  demografia: colapsa(demoPlat.filter((r) => r.platform === 'tiktok')),
+  refDemografia: colapsa(demoPlat), focoDim: { foco: 'plataforma', nome: 'tiktok' },
+});
+assert.ok(demoFoco.some((a) => a.bloco === 'referencia' && /^TikTok: em impressões, faixa 18-24 pesa \d+% contra \d+% das demais plataformas/.test(a.frase)),
+  `ref de mix ausente:\n${demoFoco.map((a) => `[${a.bloco}] ${a.frase}`).join('\n')}`);
+
+// Parser do alvo (formatos vistos ao vivo em 2026-10-23: '18+', '18 A 34', '25+', null).
+assert.deepEqual(parseAlvoIdade('18+'), [18, 200]);
+assert.deepEqual(parseAlvoIdade('25 A 44'), [25, 44]);
+assert.equal(parseAlvoIdade('texto livre'), null);
+assert.equal(parseAlvoIdade(null), null);
+assert.equal(faixaNoAlvo('13-17', '18+'), false);
+assert.equal(faixaNoAlvo('25-34', '18 A 29'), true, 'sobreposição parcial conta como dentro');
+assert.equal(faixaNoAlvo('55+', '25 A 44'), false);
+assert.equal(faixaNoAlvo('n/d', '18+'), null);
+assert.equal(faixaNoAlvo('25-34', null), null);
+// Alvo declarado em quase nada: só a ressalva, sem inventar aderência.
+const alvoPouco = alvoAchados([
+  { ...alvoRows[1]!, targetAge: null, targetGender: null },
+  { ...alvoRows[0]!, impressions: 50_000 },
+], 'cliques');
+assert.ok(alvoPouco.length === 1 && /Só \d+% da entrega tem público-alvo declarado/.test(alvoPouco[0]!.frase), 'cobertura de alvo');
+assert.ok(alvoAchados([], 'cliques').length === 0);
+console.log('ok — idade & gênero');
+for (const a of demoOut2) console.log(`  [${a.bloco}/${a.tipo}] ${a.frase}`);
+
+// ── Região: macrorregião, penetração, mix de UF ────────────────────────────
+// Tabelas estáticas: toda UF do mapa tem macro e população; Brasil 2022 = 203,08 mi.
+for (const uf of Object.values(UF_BY_NAME)) assert.ok(MACRO_BY_UF[uf] && POP_BY_UF[uf], `${uf} sem macro/população`);
+assert.equal(Object.keys(POP_BY_UF).length, 27);
+assert.equal(Object.values(POP_BY_UF).reduce((a, b) => a + b, 0), 203_080_756, 'soma do Censo 2022');
+assert.deepEqual([...new Set(Object.values(MACRO_BY_UF))].sort(), ['Centro-Oeste', 'Nordeste', 'Norte', 'Sudeste', 'Sul']);
+
+const nomeUf = Object.fromEntries(Object.entries(UF_BY_NAME).map(([n, u]) => [u, n]));
+const g = (uf: string | null, impressions: number, clicks: number, platform?: string): GeoRow =>
+  ({ uf, estado: uf ? nomeUf[uf]! : 'Outro', platform, cost: impressions / 1000, impressions, clicks, reach: 0, videoViews: 0, engagement: 0 });
+// Entrega concentrada no Sudeste; Nordeste (BA, PE, CE, MA) bem abaixo do peso demográfico.
+const geoRows: GeoRow[] = [
+  g('SP', 6_000_000, 30_000), g('RJ', 3_000_000, 12_000), g('MG', 2_500_000, 9000), g('ES', 300_000, 900),
+  g('PR', 900_000, 2700), g('RS', 800_000, 2400), g('SC', 500_000, 1500),
+  g('BA', 150_000, 300), g('PE', 100_000, 200), g('CE', 100_000, 200), g('MA', 50_000, 100),
+  g('GO', 400_000, 1200), g('DF', 300_000, 900), g(null, 400_000, 400),
+];
+const geoPrev: GeoRow[] = geoRows.map((r) => ({ ...r, impressions: r.uf === 'BA' ? r.impressions * 6 : r.impressions, cost: r.uf === 'BA' ? r.cost * 6 : r.cost }));
+const geoOut2 = buildAchados({ tab: 'regiao', metric: 'impressoes', regioes: geoRows, previousRegioes: geoPrev, redeFiltrada: false });
+const gBlob = geoOut2.map((a) => `[${a.bloco}] ${a.frase}`).join('\n');
+assert.ok(geoOut2.some((a) => a.bloco === 'distribuicao' && /Por macrorregião, Sudeste lidera/.test(a.frase)), `macro ausente:\n${gBlob}`);
+assert.ok(!/Nordeste somado/.test(gBlob), 'o NE fixo saiu');
+assert.ok(geoOut2.some((a) => a.bloco === 'recomendacao' && /Censo 2022\), Rio de Janeiro recebe 2,5× .* e Pará não recebeu entrega/.test(a.frase)), `penetração ausente:\n${gBlob}`);
+assert.ok(geoOut2.some((a) => a.bloco === 'tendencia' && /Mix de impressões vs janela anterior: .*(Bahia perdeu|perdeu)/.test(a.frase)), `mix de UF ausente:\n${gBlob}`);
+assert.ok(geoOut2.some((a) => a.bloco === 'cobertura' && /não são UFs brasileiras/.test(a.frase)), 'UF sem nome fora do ranking');
+// Entrega num punhado de UFs (campanha regional): sem penetração, que viraria alarme falso.
+assert.equal(penetracao([g('SP', 6_000_000, 0), g('RJ', 3_000_000, 0), g('MG', 2_000_000, 0)]).length, 0);
+// Macrorregiões particionam o total.
+const somaMacro = new Map<string, number>();
+for (const r of geoRows) if (r.uf) somaMacro.set(MACRO_BY_UF[r.uf]!, (somaMacro.get(MACRO_BY_UF[r.uf]!) ?? 0) + r.impressions);
+assert.equal([...somaMacro.values()].reduce((a, b) => a + b, 0), geoRows.filter((r) => r.uf).reduce((a, r) => a + r.impressions, 0));
+console.log('ok — região');
+for (const a of geoOut2) console.log(`  [${a.bloco}/${a.tipo}] ${a.frase}`);

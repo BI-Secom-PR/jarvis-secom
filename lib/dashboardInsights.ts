@@ -9,7 +9,7 @@
 // entre a fatia da métrica e a fatia do gasto (1,0× = proporcional).
 
 import {
-  AGE_ORDER, GENDER_LABEL, GENDERS, METRICS, networkLabel, platformLabel,
+  AGE_ORDER, GENDER_LABEL, GENDERS, MACRO_BY_UF, METRICS, networkLabel, platformLabel, POP_BY_UF, UF_BY_NAME,
   type MetricKey,
 } from '@/lib/dashboard';
 
@@ -48,12 +48,18 @@ export type RedeRow = PlatformRow & { network: string };
  *  mesmo recorte sem esse filtro — o foco é subtraído para comparar com "as demais". */
 export type Referencia = { foco: 'campanha' | 'plataforma'; nome: string; porPlataforma: PlatformRow[] };
 export type DailyRow = TotalsLite & { date: string };
-export type DemoRow = TotalsLite & { faixa: string; gender: string };
-export type GeoRow = TotalsLite & { uf: string; estado: string };
+export type DemoRow = TotalsLite & { faixa: string; gender: string; platform?: string };
+export type GeoRow = TotalsLite & { uf: string | null; estado: string; platform?: string };
+/** Entrega por faixa × gênero junto do público-alvo declarado no nome da campanha
+ *  (`target_age` '18+' | '25 A 44', `target_gender` AS | H | M, ambos podem ser nulos). */
+export type AlvoRow = TotalsLite & {
+  targetAge: string | null; targetGender: string | null; faixa: string; gender: string;
+};
+/** Foco das abas dimensionais: o mesmo critério de Campanhas (1 campanha, senão 1 plataforma). */
+export type FocoDim = { foco: 'campanha' | 'plataforma'; nome: string };
 
 const PISO = 10_000;
 const MAX = 9;
-const NE = ['BA', 'CE', 'PE', 'MA', 'PB', 'AL', 'PI', 'RN', 'SE'];
 
 const nf = (v: number, d = 0) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -97,6 +103,12 @@ const add = (a: TotalsLite, r: TotalsLite): TotalsLite => ({
   clicks: a.clicks + r.clicks, videoViews: a.videoViews + r.videoViews, engagement: a.engagement + r.engagement,
 });
 const sum = (rows: TotalsLite[]) => rows.reduce(add, ZERO);
+/** a − b, sem negativos (o foco está dentro do recorte de referência). */
+const menos = (a: TotalsLite, b: TotalsLite): TotalsLite => ({
+  cost: Math.max(0, a.cost - b.cost), impressions: Math.max(0, a.impressions - b.impressions),
+  reach: Math.max(0, a.reach - b.reach), clicks: Math.max(0, a.clicks - b.clicks),
+  videoViews: Math.max(0, a.videoViews - b.videoViews), engagement: Math.max(0, a.engagement - b.engagement),
+});
 
 /** Volume (soma) ou razão sobre as somas — nunca média de taxas. */
 const isVolume = (m: MetricKey) =>
@@ -225,9 +237,30 @@ export function buildAchados(input: {
   hoje?: string;
   demografia?: DemoRow[];
   regioes?: GeoRow[];
+  // Abas dimensionais: janela anterior, quebra por plataforma, recorte sem o foco e alvo declarado.
+  previousDemografia?: DemoRow[] | null;
+  demografiaPlat?: DemoRow[];
+  refDemografia?: DemoRow[];
+  alvo?: AlvoRow[];
+  previousRegioes?: GeoRow[] | null;
+  regioesPlat?: GeoRow[];
+  refRegioes?: GeoRow[];
+  focoDim?: FocoDim | null;
+  /** Campanhas do recorte da aba dimensional (top por gasto). */
+  campanhasDim?: NamedRow[];
+  /** Filtro de rede ligado: nessas abas ele não se aplica (só o Google traz rede). */
+  redeFiltrada?: boolean;
 }): Achado[] {
-  if (input.tab === 'demografia') return pick(demoAchados(input.demografia ?? [], input.metric));
-  if (input.tab === 'regiao') return pick(geoAchados(input.regioes ?? [], input.metric));
+  if (input.tab === 'demografia') return pick(demoAchados({
+    rows: input.demografia ?? [], previous: input.previousDemografia ?? null, plat: input.demografiaPlat ?? [],
+    ref: input.refDemografia ?? [], foco: input.focoDim ?? null, alvo: input.alvo ?? [], camps: input.campanhasDim ?? [],
+    redeFiltrada: !!input.redeFiltrada, metric: input.metric,
+  }));
+  if (input.tab === 'regiao') return pick(geoAchados({
+    rows: input.regioes ?? [], previous: input.previousRegioes ?? null, plat: input.regioesPlat ?? [],
+    ref: input.refRegioes ?? [], foco: input.focoDim ?? null, camps: input.campanhasDim ?? [],
+    redeFiltrada: !!input.redeFiltrada, metric: input.metric,
+  }));
   const { metric } = input;
   const totals = input.totals ?? null;
   const rows = input.campanhas ?? [];
@@ -396,11 +429,6 @@ function referencia(ref: Referencia | null, totals: TotalsLite, plats: NamedRow[
   const o = OUT[metric];
   const s = score(metric);
   const tudo = sum(ref.porPlataforma);
-  const menos = (a: TotalsLite, b: TotalsLite): TotalsLite => ({
-    cost: Math.max(0, a.cost - b.cost), impressions: Math.max(0, a.impressions - b.impressions),
-    reach: Math.max(0, a.reach - b.reach), clicks: Math.max(0, a.clicks - b.clicks),
-    videoViews: Math.max(0, a.videoViews - b.videoViews), engagement: Math.max(0, a.engagement - b.engagement),
-  });
   const demais = menos(tudo, totals);
   const nome = ref.foco === 'campanha' ? ref.nome : platformLabel(ref.nome);
   const grupo = ref.foco === 'campanha' ? 'das demais campanhas' : 'das demais plataformas';
@@ -513,7 +541,7 @@ function anuncios(ads: NamedRow[], metric: MetricKey): Achado[] {
  *  do pior é ao menos o dobro. Plataformas, redes ou anúncios — o mesmo cálculo. */
 function realocar(
   items: NamedRow[], totals: TotalsLite, metric: MetricKey,
-  opt: { piso: number; frac: number; anuncio?: boolean },
+  opt: { piso: number; frac: number; anuncio?: boolean; publico?: boolean },
 ): Achado[] {
   if (metric === 'investimento') return [];
   const o = OUT[metric];
@@ -529,7 +557,9 @@ function realocar(
   const ganho = verba * ((o.mil ? 1000 : 1) / uB - (o.mil ? 1000 : 1) / uW);
   return [{
     tipo: 'recomendacao', bloco: 'recomendacao',
-    frase: opt.anuncio
+    frase: opt.publico
+      ? `Estimativa linear: deslocar ${pct(opt.frac * 100)} do gasto entregue a ${worst.nome} (${brl(verba)}) para ${best.nome} renderia ~+${compact(ganho)} ${o.nome} (${o.unit} ${brl(uW)} vs ${brl(uB)}) — exige segmentação ou criativo dirigido a esse público; a faixa e o gênero entregues não são a segmentação.`
+      : opt.anuncio
       ? `Estimativa linear: mover ${pct(opt.frac * 100)} do gasto do anúncio "${shortAd(worst.nome)}" (${brl(verba)}) para "${shortAd(best.nome)}" renderia ~+${compact(ganho)} ${o.nome} (${o.unit} ${brl(uW)} vs ${brl(uB)}) — escalar o mais eficiente e revisar o criativo do outro.`
       : `Estimativa linear: mover ${pct(opt.frac * 100)} do gasto de ${worst.nome} (${brl(verba)}) para ${best.nome} renderia ~+${compact(ganho)} ${o.nome} (${o.unit} ${brl(uW)} vs ${brl(uB)}) — vale só se os dois servirem ao mesmo objetivo de campanha.`,
   }];
@@ -584,7 +614,8 @@ function eficienciaFatias(fatias: { nome: string; t: TotalsLite }[], metric: Met
   }];
 }
 
-function demoAchados(rows: DemoRow[], metric: MetricKey): Achado[] {
+/** Distribuição por faixa/gênero, eficiência por faixa e cobertura de n/d (sem comparação). */
+function demoBase(rows: DemoRow[], metric: MetricKey): Achado[] {
   if (!rows.length) return [];
   const out: Achado[] = [];
   const label = METRICS[metric].label.toLowerCase();
@@ -649,7 +680,8 @@ function demoAchados(rows: DemoRow[], metric: MetricKey): Achado[] {
   return out;
 }
 
-function geoAchados(rows: GeoRow[], metric: MetricKey): Achado[] {
+/** Distribuição e eficiência por UF (só linhas com UF identificada). */
+function geoBase(rows: GeoRow[], metric: MetricKey): Achado[] {
   if (!rows.length) return [];
   const out: Achado[] = [];
   const label = METRICS[metric].label.toLowerCase();
@@ -682,12 +714,350 @@ function geoAchados(rows: GeoRow[], metric: MetricKey): Achado[] {
     });
   }
   out.push(...eficienciaFatias(rows.map((r) => ({ nome: r.estado, t: r })), metric));
-  const ne = sorted.filter((r) => NE.includes(r.uf)).reduce((s, r) => s + metricValue(r, metric), 0);
-  if (total) {
+  const macros = [...porChave(sorted, macroDe)]
+    .map(([nome, t]) => ({ nome, v: metricValue(t, metric) }))
+    .sort((a, b) => b.v - a.v);
+  if (total && macros.length >= 2) {
+    const [m1, m2, m3] = macros as [typeof macros[0], typeof macros[0], typeof macros[0] | undefined];
+    const p = (v: number) => pct(div(v, total) * 100, 1);
     out.push({
       tipo: 'outlier', bloco: 'distribuicao',
-      frase: `O Nordeste somado responde por ${pct(div(ne, total) * 100, 1)}, distribuído em ${sorted.filter((r) => NE.includes(r.uf)).length} UFs.`,
+      frase: `Por macrorregião, ${m1.nome} lidera com ${p(m1.v)}, seguido de ${m2.nome} (${p(m2.v)})${m3 ? ` e ${m3.nome} (${p(m3.v)})` : ''}.`,
     });
   }
   return out;
+}
+
+// ── Abas dimensionais (idade & gênero, região) ─────────────────────────────
+// Campanhas compara plataformas e campanhas; aqui o eixo é a própria fatia. O que muda:
+// tendência é mudança de MIX (pontos percentuais de participação, não %), a comparação
+// entre plataformas é de viés (onde cada uma concentra), e a recomendação nasce de
+// aderência ao público-alvo (idade & gênero) e de penetração frente à população (região).
+
+/** O que pesa numa participação: o volume da métrica ativa; em razão, as impressões. */
+const massa = (t: TotalsLite, m: MetricKey) => (isVolume(m) ? metricValue(t, m) : t.impressions);
+const massaLabel = (m: MetricKey) => (isVolume(m) ? METRICS[m].label : 'Impressões');
+const ppAbs = (v: number) => `${nf(Math.abs(v), Math.abs(v) < 10 ? 1 : 0)} pp`;
+const ppTxt = (v: number) => `${v >= 0 ? '+' : '−'}${ppAbs(v)}`;
+
+function porChave<T extends TotalsLite>(
+  rows: T[], key: (r: T) => string | null | undefined,
+): Map<string, TotalsLite> {
+  const map = new Map<string, TotalsLite>();
+  for (const r of rows) {
+    const k = key(r);
+    if (k == null) continue;
+    map.set(k, add(map.get(k) ?? ZERO, r));
+  }
+  return map;
+}
+/** Participação (%) de cada chave sobre o que foi identificado. */
+function partDe(m: Map<string, TotalsLite>, metric: MetricKey): Map<string, number> {
+  const tot = [...m.values()].reduce((s, t) => s + massa(t, metric), 0);
+  return new Map([...m].map(([k, t]): [string, number] => [k, div(massa(t, metric), tot) * 100]));
+}
+function deslocamentos(cur: Map<string, number>, base: Map<string, number>) {
+  return [...new Set([...cur.keys(), ...base.keys()])]
+    .map((k) => ({ k, de: base.get(k) ?? 0, para: cur.get(k) ?? 0, dpp: (cur.get(k) ?? 0) - (base.get(k) ?? 0) }))
+    .sort((a, b) => b.dpp - a.dpp);
+}
+const maiorDesvio = (d: ReturnType<typeof deslocamentos>, min: number) =>
+  [...d].sort((a, b) => Math.abs(b.dpp) - Math.abs(a.dpp)).find((x) => Math.abs(x.dpp) >= min);
+/** As duas janelas têm volume para comparar. */
+const comparavel = (cur: TotalsLite, prev: TotalsLite | null) =>
+  !!prev && prev.impressions >= PISO && cur.impressions >= PISO;
+
+const faixaId = (r: { faixa: string }) => (r.faixa === 'n/d' ? null : r.faixa);
+const generoId = (r: { gender: string }) => (r.gender === 'DESCONHECIDO' ? null : r.gender);
+const generoNome = (g: string) => GENDER_LABEL[g] ?? g;
+const macroDe = (r: { uf: string | null }) => (r.uf ? MACRO_BY_UF[r.uf] ?? null : null);
+const nomePorUf = Object.fromEntries(Object.entries(UF_BY_NAME).map(([n, u]) => [u, n]));
+
+/** Referência no formato de Campanhas: o recorte inteiro vira uma "plataforma" só. */
+const refDe = (foco: FocoDim | null, ref: TotalsLite[]): Referencia | null =>
+  foco && ref.length ? { foco: foco.foco, nome: foco.nome, porPlataforma: [{ platform: '', ...sum(ref) }] } : null;
+
+/** Plataforma que concentra a entrega numa fatia bem acima do recorte (≥ 10 pp). */
+function vies<T extends TotalsLite & { platform?: string }>(
+  rows: T[], key: (r: T) => string | null, metric: MetricKey, rot: (k: string) => string,
+): Achado[] {
+  const plats = porChave(rows, (r) => r.platform ?? null);
+  if (plats.size < 2) return [];
+  const totalMassa = [...plats.values()].reduce((s, t) => s + massa(t, metric), 0);
+  const geral = partDe(porChave(rows, key), metric);
+  const cand: { p: string; k: string; v: number; g: number; d: number }[] = [];
+  for (const [p, t] of plats) {
+    if (t.impressions < PISO || div(massa(t, metric), totalMassa) < 0.1) continue;
+    for (const [k, v] of partDe(porChave(rows.filter((r) => r.platform === p), key), metric)) {
+      const g = geral.get(k) ?? 0;
+      cand.push({ p, k, v, g, d: v - g });
+    }
+  }
+  cand.sort((a, b) => b.d - a.d);
+  const top = cand[0];
+  if (!top || top.d < 10) return [];
+  const second = cand.find((c) => c.p !== top.p && c.d >= 10);
+  const txt = (c: typeof top) => `${platformLabel(c.p)} concentra ${fatia(c.v)} em ${rot(c.k)} (recorte: ${fatia(c.g)})`;
+  return [{
+    tipo: 'outlier', bloco: 'plataformas',
+    frase: `Em ${massaLabel(metric)}, ${txt(top)}${second ? `; ${txt(second)}` : ''}.`,
+  }];
+}
+
+/** Foco × demais do mesmo recorte: onde a composição do foco mais diverge (≥ 5 pp). */
+function refMix<T extends TotalsLite>(
+  foco: FocoDim | null, rows: T[], ref: T[], key: (r: T) => string | null, metric: MetricKey,
+  dim: string, rot: (k: string) => string,
+): Achado[] {
+  if (!foco || !ref.length) return [];
+  const cur = porChave(rows, key);
+  const demais = new Map<string, TotalsLite>();
+  for (const [k, t] of porChave(ref, key)) demais.set(k, menos(t, cur.get(k) ?? ZERO));
+  if (sum([...demais.values()]).impressions < PISO) return [];
+  const s = maiorDesvio(deslocamentos(partDe(cur, metric), partDe(demais, metric)), 5);
+  if (!s) return [];
+  const nome = foco.foco === 'campanha' ? foco.nome : platformLabel(foco.nome);
+  const grupo = foco.foco === 'campanha' ? 'das demais campanhas' : 'das demais plataformas';
+  return [{
+    tipo: 'outlier', bloco: 'referencia',
+    frase: `${nome}: em ${massaLabel(metric).toLowerCase()}, ${dim} ${rot(s.k)} pesa ${fatia(s.para)} contra ${fatia(s.de)} ${grupo} no mesmo recorte (${ppTxt(s.dpp)}).`,
+  }];
+}
+
+// ── Idade & Gênero ─────────────────────────────────────────────────────────
+function mixDemo(rows: DemoRow[], prev: DemoRow[] | null, metric: MetricKey): Achado[] {
+  if (!prev?.length || !comparavel(sum(rows), sum(prev))) return [];
+  const dims: { nome: string; key: (r: DemoRow) => string | null; rot: (k: string) => string }[] = [
+    { nome: 'faixa', key: faixaId, rot: (k) => k },
+    { nome: 'gênero', key: generoId, rot: generoNome },
+  ];
+  const partes: string[] = [];
+  for (const d of dims) {
+    const s = maiorDesvio(
+      deslocamentos(partDe(porChave(rows, d.key), metric), partDe(porChave(prev, d.key), metric)), 3);
+    if (s) partes.push(`${d.nome} ${d.rot(s.k)} foi de ${fatia(s.de)} para ${fatia(s.para)} (${ppTxt(s.dpp)})`);
+  }
+  if (!partes.length) return [];
+  return [{
+    tipo: 'mix_vs_rate', bloco: 'tendencia',
+    frase: `Mix de ${massaLabel(metric).toLowerCase()} vs janela anterior: ${partes.join('; ')}.`,
+  }];
+}
+
+/** Melhor e pior célula faixa × gênero (≥ 3% do gasto) por custo unitário ou taxa. */
+function cruzado(rows: DemoRow[], prev: DemoRow[] | null, metric: MetricKey): Achado[] {
+  const celulas = (rs: DemoRow[]) =>
+    porChave(rs, (r) => (faixaId(r) && generoId(r) ? `${generoNome(r.gender)} ${r.faixa}` : null));
+  const atual = celulas(rows);
+  const tot = sum([...atual.values()]);
+  const items: NamedRow[] = [...atual]
+    .filter(([, t]) => div(t.cost, tot.cost) >= 0.03)
+    .map(([nome, t]) => ({ ...t, nome, platform: '' }));
+  return ranking(items, tot, prev ? celulas(prev) : new Map(), metric, 'eficiencia');
+}
+
+/** Células faixa × gênero identificadas, como linhas rankeáveis. A recomendação ignora 13-17:
+ *  não se recomenda levar verba a menores de idade, e essa faixa é a que mais distorce o custo. */
+const celulasItens = (rs: DemoRow[]): NamedRow[] =>
+  [...porChave(rs, (r) => (faixaId(r) && generoId(r) ? `${generoNome(r.gender)} ${r.faixa}` : null))]
+    .map(([nome, t]) => ({ ...t, nome, platform: '' }));
+
+const BANDAS: Record<string, [number, number]> = {
+  '13-17': [13, 17], '18-24': [18, 24], '25-34': [25, 34], '35-44': [35, 44], '45-54': [45, 54], '55+': [55, 200],
+};
+/** '18+' | '25 A 44' → [mín, máx]; qualquer outro texto não declara alvo de idade. */
+export function parseAlvoIdade(s: string | null): [number, number] | null {
+  const t = (s ?? '').trim();
+  const mais = /^(\d{2})\s*\+$/.exec(t);
+  if (mais) return [Number(mais[1]), 200];
+  const faixa = /^(\d{2})\s*A\s*(\d{2,3})$/i.exec(t);
+  return faixa ? [Number(faixa[1]), Number(faixa[2])] : null;
+}
+/** Faixa que se sobrepõe ao intervalo conta como dentro — as bordas são aproximadas
+ *  (Kwai/TikTok já chegam com faixas próprias). null = não dá para julgar. */
+export function faixaNoAlvo(faixa: string, alvo: string | null): boolean | null {
+  const iv = parseAlvoIdade(alvo), b = BANDAS[faixa];
+  return iv && b ? b[0] <= iv[1] && b[1] >= iv[0] : null;
+}
+const ALVO_GENERO: Record<string, string> = { H: 'HOMEM', M: 'MULHER' };
+function situacao(r: AlvoRow): { s: 'dentro' | 'fora' | 'sem'; motivo?: string } {
+  const idade = faixaNoAlvo(r.faixa, r.targetAge);
+  const g = r.targetGender ? ALVO_GENERO[r.targetGender.toUpperCase()] : undefined;
+  const genero = g && r.gender !== 'DESCONHECIDO' ? r.gender === g : null;
+  if (idade === false) return { s: 'fora', motivo: `na faixa ${r.faixa}` };
+  if (genero === false) return { s: 'fora', motivo: `no gênero ${generoNome(r.gender)}` };
+  return idade === true || genero === true ? { s: 'dentro' } : { s: 'sem' };
+}
+
+/** Entregue × público-alvo declarado no nome da campanha. Sem alvo, sem frase. */
+export function alvoAchados(alvo: AlvoRow[], metric: MetricKey): Achado[] {
+  let dentro = ZERO, fora = ZERO, sem = ZERO;
+  const motivos = new Map<string, TotalsLite>();
+  for (const r of alvo) {
+    const { s, motivo } = situacao(r);
+    if (s === 'dentro') dentro = add(dentro, r);
+    else if (s === 'sem') sem = add(sem, r);
+    else { fora = add(fora, r); motivos.set(motivo!, add(motivos.get(motivo!) ?? ZERO, r)); }
+  }
+  const julgado = add(dentro, fora);
+  const total = add(julgado, sem);
+  if (total.impressions < PISO) return [];
+  const cob = div(julgado.impressions, total.impressions);
+  if (julgado.impressions < PISO || cob < 0.3) {
+    return [{
+      tipo: 'caveat', bloco: 'cobertura',
+      frase: `Só ${fatia(cob * 100)} da entrega tem público-alvo declarado no nome da campanha — no resto não dá para medir aderência ao alvo.`,
+    }];
+  }
+  const pFora = div(fora.impressions, julgado.impressions) * 100;
+  if (div(fora.cost, julgado.cost) < 0.03) {
+    return [{
+      tipo: 'lider', bloco: 'cobertura',
+      frase: `${fatia(100 - pFora)} da entrega com alvo declarado (${fatia(cob * 100)} do total) chegou dentro do público-alvo das campanhas.`,
+    }];
+  }
+  const o = OUT[metric];
+  const topMotivo = [...motivos].sort((a, b) => b[1].cost - a[1].cost)[0]![0];
+  const uF = unitCost(fora, o), uD = unitCost(dentro, o);
+  let est = '';
+  if (metric !== 'investimento' && Number.isFinite(uF) && Number.isFinite(uD) && uF >= uD * 1.2) {
+    const k = o.mil ? 1000 : 1;
+    est = ` Estimativa linear: levar essa verba ao público-alvo (${o.unit} ${brl(uD)} contra ${brl(uF)}) renderia ~+${compact(fora.cost * (k / uD - k / uF))} ${o.nome}.`;
+  }
+  return [{
+    tipo: 'recomendacao', bloco: 'recomendacao',
+    frase: `${fatia(pFora)} da entrega com alvo declarado (R$ ${compact(fora.cost)}) chegou fora do público-alvo, sobretudo ${topMotivo}.${est} Faixa e gênero entregues não são a segmentação: confirme se o alvo é restrição ou só referência.`,
+  }];
+}
+
+function demoAchados(a: {
+  rows: DemoRow[]; previous: DemoRow[] | null; plat: DemoRow[]; ref: DemoRow[]; foco: FocoDim | null;
+  alvo: AlvoRow[]; camps: NamedRow[]; redeFiltrada: boolean; metric: MetricKey;
+}): Achado[] {
+  const { rows, metric } = a;
+  if (!rows.length) return [];
+  const tot = sum(rows);
+  const prevTot = a.previous?.length ? sum(a.previous) : null;
+
+  const coberturas: Achado[] = [];
+  const massaTotal = rows.reduce((s, r) => s + massa(r, metric), 0);
+  const semGenero = div(rows.filter((r) => r.gender === 'DESCONHECIDO').reduce((s, r) => s + massa(r, metric), 0), massaTotal);
+  if (semGenero >= 0.05) {
+    coberturas.push({ tipo: 'caveat', bloco: 'cobertura', frase: `${fatia(semGenero * 100)} da entrega chega sem gênero identificado.` });
+  }
+  if (a.redeFiltrada) {
+    coberturas.unshift({
+      tipo: 'caveat', bloco: 'cobertura',
+      frase: 'O filtro de rede não vale nesta aba: idade e gênero só trazem rede para o Google, então o recorte ignora essa seleção.',
+    });
+  }
+
+  return [
+    ...mixDemo(rows, a.previous, metric),
+    ...tendencia(tot, prevTot && prevTot.impressions > 0 ? prevTot : null, metric),
+    ...vies(a.plat, faixaId, metric, (k) => `faixa ${k}`),
+    ...referencia(refDe(a.foco, a.ref), tot, [], metric),
+    ...refMix(a.foco, rows, a.ref, faixaId, metric, 'faixa', (k) => k),
+    ...refMix(a.foco, rows, a.ref, generoId, metric, 'gênero', generoNome),
+    ...cruzado(rows, a.previous, metric),
+    ...campanhas(a.camps, tot, metric),
+    ...(a.redeFiltrada ? coberturas.slice(0, 1) : []),
+    ...demoBase(rows, metric),
+    ...alvoAchados(a.alvo, metric),
+    ...realocar(celulasItens(rows.filter((r) => r.faixa !== '13-17')), sum(celulasItens(rows)), metric, { piso: 0.05, frac: 0.1, publico: true }),
+    ...(a.redeFiltrada ? coberturas.slice(1) : coberturas),
+  ];
+}
+
+// ── Região ─────────────────────────────────────────────────────────────────
+function mixUf(rows: GeoRow[], prev: GeoRow[] | null, metric: MetricKey): Achado[] {
+  if (!prev?.length || !comparavel(sum(rows), sum(prev))) return [];
+  const nome = new Map([...rows, ...prev].map((r): [string, string] => [r.uf!, r.estado]));
+  const d = deslocamentos(partDe(porChave(rows, (r) => r.uf), metric), partDe(porChave(prev, (r) => r.uf), metric));
+  const up = d[0], down = d[d.length - 1];
+  const fmt = (x: NonNullable<typeof up>, verbo: string) =>
+    `${nome.get(x.k) ?? x.k} ${verbo} ${ppAbs(x.dpp)} (de ${fatia(x.de)} para ${fatia(x.para)})`;
+  const partes = [
+    ...(up && up.dpp >= 2 ? [fmt(up, 'ganhou')] : []),
+    ...(down && down !== up && down.dpp <= -2 ? [fmt(down, 'perdeu')] : []),
+  ];
+  if (!partes.length) return [];
+  return [{
+    tipo: 'mix_vs_rate', bloco: 'tendencia',
+    frase: `Mix de ${massaLabel(metric).toLowerCase()} vs janela anterior: ${partes.join(' e ')}.`,
+  }];
+}
+
+/** Entrega ÷ população (Censo 2022) nas UFs com ≥ 2% dos habitantes. */
+export function penetracao(rows: GeoRow[]): Achado[] {
+  const porUf = porChave(rows, (r) => r.uf);
+  const totalImp = sum(rows).impressions;
+  const popTotal = Object.values(POP_BY_UF).reduce((s, v) => s + v, 0);
+  if (totalImp < PISO * 10 || [...porUf.values()].filter((t) => t.impressions >= PISO).length < 8) return [];
+  const cand = Object.entries(POP_BY_UF)
+    .map(([uf, pop]) => {
+      const imp = porUf.get(uf)?.impressions ?? 0;
+      const popS = pop / popTotal, impS = imp / totalImp;
+      return { uf, popS, impS, imp, idx: impS / popS };
+    })
+    .filter((c) => c.popS >= 0.02)
+    .sort((x, y) => y.idx - x.idx);
+  const hi = cand[0], lo = cand[cand.length - 1];
+  if (!hi || !lo || hi === lo || hi.idx < lo.idx * 2) return [];
+  const est = (uf: string) => nomePorUf[uf] ?? uf;
+  const baixo = lo.imp > 0
+    ? `só ${vx(lo.idx)} (${fatia(lo.popS * 100)} dos habitantes, ${fatia(lo.impS * 100)} das impressões)`
+    : `não recebeu entrega (${fatia(lo.popS * 100)} dos habitantes)`;
+  return [{
+    tipo: 'recomendacao', bloco: 'recomendacao',
+    frase: `Frente ao peso demográfico (Censo 2022), ${est(hi.uf)} recebe ${vx(hi.idx)} o que a população indicaria (${fatia(hi.popS * 100)} dos habitantes, ${fatia(hi.impS * 100)} das impressões) e ${est(lo.uf)} ${baixo}. Se a campanha é nacional, vale reforçar ${est(lo.uf)}; um alvo regional declarado explicaria a diferença.`,
+  }];
+}
+
+function geoAchados(a: {
+  rows: GeoRow[]; previous: GeoRow[] | null; plat: GeoRow[]; ref: GeoRow[]; foco: FocoDim | null;
+  camps: NamedRow[]; redeFiltrada: boolean; metric: MetricKey;
+}): Achado[] {
+  const { metric } = a;
+  if (!a.rows.length) return [];
+  const identificada = (r: GeoRow) => !!r.uf && !!MACRO_BY_UF[r.uf];
+  const ident = a.rows.filter(identificada);
+  const prevIdent = (a.previous ?? []).filter(identificada);
+  const tot = sum(a.rows);
+  const prevTot = a.previous?.length ? sum(a.previous) : null;
+  const identTot = sum(ident);
+
+  const macros = (rs: GeoRow[]) => porChave(rs, macroDe);
+  const macroItems: NamedRow[] = [...macros(ident)].map(([nome, t]) => ({ ...t, nome, platform: '' }));
+  const ufItems: NamedRow[] = ident.map((r) => ({ ...r, nome: r.estado, platform: r.platform ?? '' }));
+
+  const coberturas: Achado[] = [];
+  const semUf = div(sum(a.rows.filter((r) => !identificada(r))).impressions, tot.impressions);
+  if (semUf >= 0.02) {
+    coberturas.push({
+      tipo: 'caveat', bloco: 'cobertura',
+      frase: `${fatia(semUf * 100)} das impressões vêm de regiões que não são UFs brasileiras e ficam fora do mapa e do ranking.`,
+    });
+  }
+  if (a.redeFiltrada) {
+    coberturas.unshift({
+      tipo: 'caveat', bloco: 'cobertura',
+      frase: 'O filtro de rede não vale nesta aba: região só traz rede para o Google, então o recorte ignora essa seleção.',
+    });
+  }
+
+  return [
+    ...mixUf(ident, prevIdent.length ? prevIdent : null, metric),
+    ...tendencia(tot, prevTot && prevTot.impressions > 0 ? prevTot : null, metric),
+    ...vies(a.plat.filter(identificada), macroDe, metric, (k) => k),
+    ...referencia(refDe(a.foco, a.ref), tot, [], metric),
+    ...refMix(a.foco, ident, a.ref, macroDe, metric, 'macrorregião', (k) => k),
+    ...ranking(macroItems, identTot, macros(prevIdent), metric, 'eficiencia'),
+    ...campanhas(a.camps, tot, metric),
+    ...geoBase(ident, metric),
+    ...(a.redeFiltrada ? coberturas.slice(0, 1) : []),
+    ...penetracao(ident),
+    ...realocar(ufItems, identTot, metric, { piso: 0.05, frac: 0.1 }),
+    ...(a.redeFiltrada ? coberturas.slice(1) : coberturas),
+  ];
 }

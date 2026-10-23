@@ -34,6 +34,28 @@ const videoOf = (r: Record<string, unknown>): Video => ({
   p25: n(r.p25), p50: n(r.p50), p75: n(r.p75), p95: n(r.p95), p100: n(r.p100), completions: n(r.completions),
 });
 
+const TOTAL_KEYS: (keyof Totals)[] =
+  ['cost', 'impressions', 'reach', 'clicks', 'videoViews', 'engagement', ...ENGAGEMENT_PARTS.map((p) => p.key)];
+
+/** Soma linhas que coincidem nas chaves dadas (as colunas de total são todas aditivas). */
+function collapse<T extends Totals>(rows: T[], keys: (keyof T & string)[]): T[] {
+  const map = new Map<string, T>();
+  for (const r of rows) {
+    const k = keys.map((x) => String(r[x])).join('|');
+    const cur = map.get(k);
+    if (!cur) { map.set(k, { ...r }); continue; }
+    for (const m of TOTAL_KEYS) cur[m] += r[m];
+  }
+  return [...map.values()];
+}
+
+/** Foco = exatamente uma campanha (grupo) ou, sem ela, exatamente uma plataforma. */
+function focoDe(f: DashboardFilters): { foco: 'campanha' | 'plataforma'; nome: string } | null {
+  if (f.campaigns?.length === 1) return { foco: 'campanha', nome: f.campaigns[0]! };
+  if (f.platform?.length === 1) return { foco: 'plataforma', nome: f.platform[0]! };
+  return null;
+}
+
 const iso = (v: unknown): string =>
   v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? '').slice(0, 10);
 
@@ -80,35 +102,92 @@ export async function POST(req: NextRequest) {
     // ao vivo em 2026-10-19): filtrar por rede ali zeraria a aba. O filtro vale em Campanhas.
     const wDim = buildWhere({ ...(await resolve(f)), network: undefined });
 
-    if (tab === 'demografia') {
-      // The crossed table is the only place age and gender coexist —
-      // gold_platforms_age and _gender each collapse the other dimension.
-      const [rows] = await pool.query(
-        `SELECT ${AGE_BUCKET_SQL} AS faixa, gender, ${METRIC_SELECT}
-           FROM ${T_AGE} WHERE ${wDim.sql}
-          GROUP BY faixa, gender`,
-        wDim.params
-      );
-      return NextResponse.json({
-        demografia: (rows as Record<string, unknown>[]).map((r) => ({
-          faixa: String(r.faixa), gender: String(r.gender), ...totalsOf(r),
-        })),
-      });
-    }
+    if (tab === 'demografia' || tab === 'regiao') {
+      // Leitura: as abas dimensionais comparam com a janela anterior e com o recorte sem o
+      // foco, no mesmo WHERE sem rede (`wDim`). A quebra por plataforma só serve à leitura;
+      // `demografia`/`regioes` seguem agregados como o gráfico e o export esperam.
+      const prev = previousWindow(f);
+      const dim = async (ff: DashboardFilters) => buildWhere({ ...(await resolve(ff)), network: undefined });
+      const wPrevDim = prev ? await dim({ ...f, from: prev.from, to: prev.to }) : null;
+      const focoDim = focoDe(f);
+      const wRefDim = !focoDim ? null
+        : await dim(focoDim.foco === 'campanha' ? { ...f, campaigns: [] } : { ...f, platform: [], network: [] });
+      const none = Promise.resolve([[]] as unknown as [Record<string, unknown>[]]);
+      const rowsOf = (res: [unknown, ...unknown[]]) => res[0] as Record<string, unknown>[];
+      // Campanhas do recorte da aba (mesma tabela e WHERE): a leitura aponta quais têm tração.
+      const campSql = (table: string, ww: { sql: string }) =>
+        `SELECT platform, campaign_name, ${METRIC_SELECT} FROM ${table} WHERE ${ww.sql}
+          GROUP BY platform, campaign_name HAVING ${HAS_DELIVERY}
+          ORDER BY SUM(cost) DESC LIMIT ${TABLE_LIMIT}`;
+      const campRows = (res: [unknown, ...unknown[]]) => rowsOf(res).map((r) => ({
+        platform: String(r.platform), nome: String(r.campaign_name ?? ''), ...totalsOf(r),
+      }));
 
-    if (tab === 'regiao') {
-      const [rows] = await pool.query(
-        `SELECT region_name, ${METRIC_SELECT}
-           FROM ${T_REG} WHERE ${wDim.sql}
-          GROUP BY region_name ORDER BY SUM(impressions) DESC`,
-        wDim.params
-      );
+      if (tab === 'demografia') {
+        // The crossed table is the only place age and gender coexist —
+        // gold_platforms_age and _gender each collapse the other dimension.
+        const sql = (ww: { sql: string }) =>
+          `SELECT platform, ${AGE_BUCKET_SQL} AS faixa, gender, ${METRIC_SELECT}
+             FROM ${T_AGE} WHERE ${ww.sql}
+            GROUP BY platform, faixa, gender`;
+        // Público-alvo declarado no nome da campanha: só a view classificada o traz (a base
+        // não tem), então esta consulta lê sempre a view — superset, mesmas linhas.
+        const alvoSql = `SELECT target_age, target_gender, ${AGE_BUCKET_SQL} AS faixa, gender, ${METRIC_SELECT}
+             FROM gold_age_gender_classified WHERE ${wDim.sql}
+            GROUP BY target_age, target_gender, faixa, gender`;
+        const [cur, prv, ref, alvo, camp] = await Promise.all([
+          pool.query(sql(wDim), wDim.params),
+          wPrevDim ? pool.query(sql(wPrevDim), wPrevDim.params) : none,
+          wRefDim ? pool.query(sql(wRefDim), wRefDim.params) : none,
+          pool.query(alvoSql, wDim.params),
+          pool.query(campSql(T_AGE, wDim), wDim.params),
+        ]);
+        const demo = (res: [unknown, ...unknown[]]) => rowsOf(res).map((r) => ({
+          platform: String(r.platform ?? ''), faixa: String(r.faixa), gender: String(r.gender), ...totalsOf(r),
+        }));
+        const porFaixaGenero = (rs: ReturnType<typeof demo>) => collapse(rs, ['faixa', 'gender']);
+        const curRows = demo(cur);
+        return NextResponse.json({
+          demografia: porFaixaGenero(curRows).map(({ platform: _p, ...r }) => r),
+          demografiaPlat: curRows,
+          previousDemografia: wPrevDim ? porFaixaGenero(demo(prv)).map(({ platform: _p, ...r }) => r) : null,
+          refDemografia: wRefDim ? porFaixaGenero(demo(ref)).map(({ platform: _p, ...r }) => r) : [],
+          focoDim,
+          campanhasDim: campRows(camp),
+          alvo: rowsOf(alvo).map((r) => ({
+            targetAge: r.target_age == null ? null : String(r.target_age),
+            targetGender: r.target_gender == null ? null : String(r.target_gender),
+            faixa: String(r.faixa), gender: String(r.gender), ...totalsOf(r),
+          })),
+        });
+      }
+
+      const sql = (ww: { sql: string }) =>
+        `SELECT platform, region_name, ${METRIC_SELECT}
+           FROM ${T_REG} WHERE ${ww.sql}
+          GROUP BY region_name, platform`;
+      const [cur, prv, ref, camp] = await Promise.all([
+        pool.query(sql(wDim), wDim.params),
+        wPrevDim ? pool.query(sql(wPrevDim), wPrevDim.params) : none,
+        wRefDim ? pool.query(sql(wRefDim), wRefDim.params) : none,
+        pool.query(campSql(T_REG, wDim), wDim.params),
+      ]);
+      const reg = (res: [unknown, ...unknown[]]) => rowsOf(res).map((r) => ({
+        platform: String(r.platform ?? ''),
+        estado: String(r.region_name ?? ''),
+        uf: UF_BY_NAME[String(r.region_name ?? '')] ?? null,
+        ...totalsOf(r),
+      }));
+      const porEstado = (rs: ReturnType<typeof reg>) =>
+        collapse(rs, ['estado']).map(({ platform: _p, ...r }) => r).sort((a, b) => b.impressions - a.impressions);
+      const curRows = reg(cur);
       return NextResponse.json({
-        regioes: (rows as Record<string, unknown>[]).map((r) => ({
-          estado: String(r.region_name ?? ''),
-          uf: UF_BY_NAME[String(r.region_name ?? '')] ?? null,
-          ...totalsOf(r),
-        })),
+        regioes: porEstado(curRows),
+        regioesPlat: curRows,
+        previousRegioes: wPrevDim ? porEstado(reg(prv)) : null,
+        refRegioes: wRefDim ? porEstado(reg(ref)) : [],
+        focoDim,
+        campanhasDim: campRows(camp),
       });
     }
 

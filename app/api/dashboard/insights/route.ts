@@ -23,6 +23,19 @@ const ESCOPO: Record<string, string> = {
   regiao: 'unidades federativas',
 };
 
+const MAX_FRASE = 360;
+
+// O que é próprio de cada aba dimensional: composição (pp), não performance.
+const REGRAS_ABA: Record<string, string> = {
+  demografia: `- "pp" são pontos percentuais de participação no mix, não variação percentual.
+- Faixa e gênero entregues NÃO são o público-alvo: só diga "fora do alvo" onde o achado disser.
+- Mix, viés de plataforma e aderência ao alvo são leituras de composição; não as trate como desempenho.
+- Só cite ressalvas (faixas aproximadas, filtro de rede) se estiverem escritas no achado; nunca acrescente uma que o achado não traz.`,
+  regiao: `- "pp" são pontos percentuais de participação no mix, não variação percentual.
+- O índice de penetração compara a entrega com a população (Censo 2022): é estimativa, não meta; se o achado traz a ressalva de alvo regional, mantenha-a, e não acrescente outras.
+- Não chame uma UF de baixa entrega de ruim sem citar o índice ou o custo unitário do achado.`,
+};
+
 function buildSystem(tab: string, metric: MetricKey): string {
   const label = METRICS[metric].label;
   return `Você é analista de mídia da SECOM. Os achados já foram calculados — você SÓ redige.
@@ -36,9 +49,9 @@ Métrica ativa: ${label}. Escopo: ${ESCOPO[tab]}.
 - Recomendação é estimativa linear: mantenha a palavra "estimativa" e a ressalva de objetivo.
 - Referência compara o foco (campanha ou plataforma) com as demais do mesmo recorte: mantenha a ressalva de objetivos diferentes.
 - Nunca escreva que algo "não foi fornecido", nem cite payload, JSON, tipo do achado ou campos.
-
+${REGRAS_ABA[tab] ?? ''}
 Formato: responda APENAS com JSON {"insights": [{"bloco": "...", "frase": "..."}]}.
-Uma frase por achado, português do Brasil, cada uma com no máximo 260 caracteres, sem markdown, sem bullets, sem títulos.`;
+Uma frase por achado, português do Brasil, cada uma com no máximo ${MAX_FRASE} caracteres, sem markdown, sem bullets, sem títulos.`;
 }
 
 export async function POST(req: NextRequest) {
@@ -76,7 +89,7 @@ export async function POST(req: NextRequest) {
       .filter((x): x is { bloco: string; frase: string } =>
         !!x && typeof x === 'object' && typeof (x as { bloco?: unknown }).bloco === 'string'
         && typeof (x as { frase?: unknown }).frase === 'string' && (x as { frase: string }).frase.trim().length > 0)
-      .map((x) => ({ bloco: x.bloco, frase: x.frase.trim().slice(0, 260) }))
+      .map((x) => ({ bloco: x.bloco, frase: x.frase.trim().slice(0, MAX_FRASE) }))
       .slice(0, 9);
     if (!insights.length) throw new Error('nenhuma frase utilizável');
     return NextResponse.json({ insights });

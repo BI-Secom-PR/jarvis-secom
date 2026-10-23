@@ -11,7 +11,7 @@ import SearchableSelect from "./SearchableSelect";
 import ThemeToggle from "./ThemeToggle";
 import { postJson } from "@/lib/fetchUtils";
 import { AGE_ORDER, ENGAGEMENT_PARTS, GENDERS, GENDER_LABEL, METRICS, networkLabel, platformLabel, type EngagementPartKey, type MetricKey } from "@/lib/dashboard";
-import { BLOCOS, buildAchados, kpiDeltaLabel, type Bloco, type Referencia } from "@/lib/dashboardInsights";
+import { BLOCOS, buildAchados, kpiDeltaLabel, type AlvoRow, type Bloco, type FocoDim, type Referencia } from "@/lib/dashboardInsights";
 import { PRESET_DAYS, parsePrefs, prefsKey, type Prefs } from "@/lib/dashboardPrefs";
 import type { ChartData } from "@/types/chat";
 
@@ -38,6 +38,16 @@ type Payload = {
   limit?: number;
   demografia?: (Totals & { faixa: string; gender: string })[];
   regioes?: (Totals & { estado: string; uf: string | null })[];
+  // Só para a leitura das abas dimensionais (ver /api/dashboard/data).
+  demografiaPlat?: (Totals & { platform: string; faixa: string; gender: string })[];
+  previousDemografia?: (Totals & { faixa: string; gender: string })[] | null;
+  refDemografia?: (Totals & { faixa: string; gender: string })[];
+  alvo?: AlvoRow[];
+  regioesPlat?: (Totals & { platform: string; estado: string; uf: string | null })[];
+  previousRegioes?: (Totals & { estado: string; uf: string | null })[] | null;
+  refRegioes?: (Totals & { estado: string; uf: string | null })[];
+  focoDim?: FocoDim | null;
+  campanhasDim?: (Totals & { platform: string; nome: string })[];
   error?: string;
 };
 
@@ -510,11 +520,20 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
     tab, metric, totals, previous: data?.previous ?? null,
     previousByPlatform: data?.previousByPlatform, redes: data?.redes, previousByRede: data?.previousByRede,
     referencia: data?.referencia, campanhas: data?.campanhas, anuncios: data?.anuncios,
-    daily, gran, demografia: data?.demografia, regioes: regiaoRows,
+    daily, gran, demografia: data?.demografia, regioes: data?.regioes,
+    previousDemografia: data?.previousDemografia, demografiaPlat: data?.demografiaPlat,
+    refDemografia: data?.refDemografia, alvo: data?.alvo,
+    previousRegioes: data?.previousRegioes, regioesPlat: data?.regioesPlat, refRegioes: data?.refRegioes,
+    focoDim: data?.focoDim, campanhasDim: data?.campanhasDim, redeFiltrada: networks.length > 0,
   }), [tab, metric, totals, data?.previous, data?.previousByPlatform, data?.redes, data?.previousByRede, data?.referencia,
-    data?.campanhas, data?.anuncios, daily, gran, data?.demografia, regiaoRows]);
-  const foco = data?.referencia
-    ? data.referencia.foco === "campanha" ? data.referencia.nome : platformLabel(data.referencia.nome)
+    data?.campanhas, data?.anuncios, daily, gran, data?.demografia, data?.regioes,
+    data?.previousDemografia, data?.demografiaPlat, data?.refDemografia, data?.alvo,
+    data?.previousRegioes, data?.regioesPlat, data?.refRegioes, data?.focoDim, data?.campanhasDim, networks.length]);
+  const focoAtivo = tab === "campanhas"
+    ? data?.referencia ? { foco: data.referencia.foco, nome: data.referencia.nome } : null
+    : data?.focoDim ?? null;
+  const foco = focoAtivo
+    ? focoAtivo.foco === "campanha" ? focoAtivo.nome : platformLabel(focoAtivo.nome)
     : undefined;
   const observacoes = useMemo<Leitura[]>(() => achados.map(({ bloco, frase }) => ({ bloco, frase })), [achados]);
   const insightsInput = useMemo(() => (achados.length ? { achados } : null), [achados]);
@@ -939,7 +958,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                 {genderChart && <ChartWidget chart={genderChart} fill />}
               </section>
               {!ageChart && !loading && <Empty />}
-              <Observacoes items={aiInsights ?? observacoes} loading={aiLoading} ia={!!aiInsights} />
+              <Observacoes items={aiInsights ?? observacoes} loading={aiLoading} ia={!!aiInsights} foco={foco} />
               <p className="text-[11px] text-ink-3">
                 As faixas são normalizadas: Kwai reporta 25 a 36 / 37 a 50 / 50+ e o TikTok 55 a 100, então os
                 limites 34/44/55 são aproximados nessas plataformas. Só Meta, Google, TikTok e Kwai reportam idade e gênero.
@@ -1016,7 +1035,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                   </div>
                 </div>
               </section>
-              <Observacoes items={aiInsights ?? observacoes} loading={aiLoading} ia={!!aiInsights} />
+              <Observacoes items={aiInsights ?? observacoes} loading={aiLoading} ia={!!aiInsights} foco={foco} />
               <p className="text-[11px] text-ink-3">
                 Só Meta, Google, TikTok, Kwai e Amazon reportam região. Alcance e visualizações costumam vir zerados
                 nesse grão — prefira impressões, cliques ou CTR aqui.
