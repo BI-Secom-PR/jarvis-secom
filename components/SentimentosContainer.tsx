@@ -201,7 +201,7 @@ export default function SentimentosContainer({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [topMode, setTopMode] = useState<"Negativo" | "Positivo">("Negativo");
-  const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>("month");
+  const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>("day");
   const trendGranularityRef = useRef(trendGranularity);
   trendGranularityRef.current = trendGranularity;
   const [trendLoading, setTrendLoading] = useState(false);
