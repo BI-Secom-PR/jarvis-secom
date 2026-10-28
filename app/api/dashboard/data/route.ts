@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
     network: strs(body.networks),
     account: strs(body.account),
     ad: strs(body.ad),
+    adGroup: strs(body.adGroup),
     objective: strs(body.objective),
     buyingType: strs(body.buyingType),
     tema: strs(body.tema),

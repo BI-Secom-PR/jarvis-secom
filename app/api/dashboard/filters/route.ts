@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
     network: q.getAll('network'),
     account: q.getAll('account'),
     ad: q.getAll('ad'),
+    adGroup: q.getAll('adGroup'),
     objective: q.getAll('objective'),
     buyingType: q.getAll('buyingType'),
     tema: q.getAll('tema'),
@@ -52,6 +53,7 @@ export async function GET(req: NextRequest) {
     const wNet = buildWhere({ ...fr, network: undefined });
     const wAcc = buildWhere({ ...fr, account: undefined });
     const wAd = buildWhere({ ...fr, ad: undefined });
+    const wGrp = buildWhere({ ...fr, adGroup: undefined });
     const wObj = buildWhere({ ...fr, objective: undefined });
     const wBuy = buildWhere({ ...fr, buyingType: undefined, buyingCampaignIds: undefined });
     const wTema = buildWhere({ ...fr, tema: undefined });
@@ -86,9 +88,10 @@ export async function GET(req: NextRequest) {
         wTema.params
       ),
     ]);
-    const [campaigns, ads] = await Promise.all([
+    const [campaigns, ads, adGroups] = await Promise.all([
       pool.query(`SELECT DISTINCT campaign_name FROM ${T} WHERE ${wCamp.sql} ${DELIVERED} AND campaign_name IS NOT NULL AND campaign_name != '' ORDER BY campaign_name`, wCamp.params),
       pool.query(`SELECT DISTINCT campaign_name, ad_name FROM ${T} WHERE ${wAd.sql} ${DELIVERED} AND ad_name IS NOT NULL AND ad_name != '' ORDER BY ad_name`, wAd.params),
+      pool.query(`SELECT DISTINCT campaign_name, ad_group_name FROM ${T} WHERE ${wGrp.sql} ${DELIVERED} AND ad_group_name IS NOT NULL AND ad_group_name != '' ORDER BY ad_group_name`, wGrp.params),
     ]);
 
     const data = {
@@ -111,6 +114,12 @@ export async function GET(req: NextRequest) {
         .map((r) => {
           const campaign = r.campaign_name ? groupOf(r.campaign_name, rules) : null;
           return [`${campaign}\u0000${r.ad_name}`, { campaign, ad: r.ad_name }] as const;
+        })).values()],
+      // Mesmo desenho dos anúncios: carrega o GRUPO da campanha para o cliente filtrar.
+      adGroups: [...new Map((adGroups[0] as { campaign_name: string | null; ad_group_name: string }[])
+        .map((r) => {
+          const campaign = r.campaign_name ? groupOf(r.campaign_name, rules) : null;
+          return [`${campaign}\u0000${r.ad_group_name}`, { campaign, adGroup: r.ad_group_name }] as const;
         })).values()],
     };
     if (cache.size > 50) cache.clear(); // ponytail: crude bound; LRU if it ever matters

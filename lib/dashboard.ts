@@ -22,6 +22,8 @@ export type DashboardFilters = {
   /** Conta de anúncio (`account_name`) — no Kwai é o nome da agência. */
   account?: string[];
   ad?: string[];
+  /** Conjunto de anúncios / ad group (`ad_group_name`) — o nível abaixo da campanha. */
+  adGroup?: string[];
   objective?: string[];
   /** Tipos de compra escolhidos (CPM/CPC/CPV/CPE) — ver BUYING_TYPE_SQL. */
   buyingType?: string[];
@@ -61,6 +63,7 @@ export function buildWhere(f: DashboardFilters): { sql: string; params: unknown[
   inList('network', f.network);
   inList('account_name', f.account);
   inList('ad_name', f.ad);
+  inList('ad_group_name', f.adGroup);
   inList('objective', f.objective);
   inList('eixo', f.tema);
   return { sql: conds.join(' AND '), params };

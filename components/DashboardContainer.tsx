@@ -6,6 +6,7 @@ import CampaignRulesModal from "./CampaignRulesModal";
 import DashboardExportModal from "./DashboardExportModal";
 import ChartWidget from "./ChartWidget";
 import HudBackground from "./HudBackground";
+import BudgetsModal from "./BudgetsModal";
 import HudCorners from "./HudCorners";
 import SearchableSelect from "./SearchableSelect";
 import ThemeToggle from "./ThemeToggle";
@@ -60,6 +61,13 @@ type FiltersData = {
   temas: { code: string; label: string }[];
   campaigns: string[];
   ads: { campaign: string | null; ad: string }[];
+  adGroups?: { campaign: string | null; adGroup: string }[];
+};
+
+type Pacing = {
+  total: number; used: number; left: number; pacing: number | null;
+  noBudget?: string[];
+  byPlatform: { platform: string; total: number; used: number; left: number; pacing: number | null }[];
 };
 
 const METRIC_KEYS: MetricKey[] = ["alcance", "impressoes", "cliques", "visualizacoes", "engajamento", "investimento", "ctr", "cpc", "cpv", "cpe", "vtr", "tx_eng"];
@@ -215,6 +223,10 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
   // Conta de anúncio (`account_name`); no Kwai é o nome da agência.
   const [accounts, setAccounts] = useState<string[]>([]);
   const [ads, setAds] = useState<string[]>([]);
+  // Conjunto de anúncios (ad set / ad group): o nível em que o orçamento também existe.
+  // Só vale na sessão — não entra nos filtros lembrados.
+  const [adGroups, setAdGroups] = useState<string[]>([]);
+  const [pacing, setPacing] = useState<Pacing | null>(null);
   const [objectives, setObjectives] = useState<string[]>([]);
   // Tipo de compra (CPM/CPC/CPV/CPE) é derivado do objetivo no servidor — ver
   // BUYING_TYPE_SQL em lib/dashboard.
@@ -233,6 +245,9 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
   // depois de salvar — o dropdown É o preview das regras.
   const [rulesOpen, setRulesOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  // Orçamentos do pacing: salvar bumpa a versão para os cards rebuscarem.
+  const [budgetsOpen, setBudgetsOpen] = useState(false);
+  const [budgetsVersion, setBudgetsVersion] = useState(0);
   const [rulesVersion, setRulesVersion] = useState(0);
 
   const [perfSort, setPerfSort] = useState<Sort>(null);
@@ -290,6 +305,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
       for (const v of platforms) qs.append("platform", v);
       for (const v of networks) qs.append("network", v);
       for (const v of accounts) qs.append("account", v);
+      for (const v of adGroups) qs.append("adGroup", v);
       for (const v of objectives) qs.append("objective", v);
       for (const v of buyingTypes) qs.append("buyingType", v);
       for (const v of temas) qs.append("tema", v);
@@ -302,7 +318,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [ready, from, to, campaigns, platforms, networks, accounts, objectives, buyingTypes, temas, rulesVersion]);
+  }, [ready, from, to, campaigns, platforms, networks, accounts, adGroups, objectives, buyingTypes, temas, rulesVersion]);
 
   // ── Dados da aba ativa ──
   useEffect(() => {
@@ -312,7 +328,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
     const t = setTimeout(async () => {
       try {
         const res = await postJson("/api/dashboard/data",
-          { from, to, campaign: campaigns, platform: platforms, networks, account: accounts, ad: ads, objective: objectives,
+          { from, to, campaign: campaigns, platform: platforms, networks, account: accounts, ad: ads, adGroup: adGroups, objective: objectives,
             buyingType: buyingTypes, tema: temas, tab, gran, network: byNetwork },
           { signal: ctrl.signal });
         const json = (await res.json()) as Payload;
@@ -329,7 +345,27 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [ready, from, to, campaigns, platforms, networks, accounts, ads, objectives, buyingTypes, temas, tab, gran, byNetwork]);
+  }, [ready, from, to, campaigns, platforms, networks, accounts, ads, adGroups, objectives, buyingTypes, temas, tab, gran, byNetwork]);
+
+  // ── Pacing: orçado × utilizado sob os mesmos filtros (sem anúncio: orçamento não tem esse nível) ──
+  useEffect(() => {
+    if (!ready) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await postJson("/api/dashboard/pacing",
+          { from, to, campaign: campaigns, platform: platforms, networks, account: accounts, adGroup: adGroups,
+            objective: objectives, buyingType: buyingTypes, tema: temas },
+          { signal: ctrl.signal });
+        if (!res.ok) throw new Error();
+        const json = (await res.json()) as Pacing;
+        if (!ctrl.signal.aborted) setPacing(json);
+      } catch {
+        if (!ctrl.signal.aborted) setPacing(null);
+      }
+    }, 250);
+    return () => { clearTimeout(t); ctrl.abort(); };
+  }, [ready, from, to, campaigns, platforms, networks, accounts, adGroups, objectives, buyingTypes, temas, budgetsVersion]);
 
   const adOptions = useMemo(
     () => (filtersData?.ads ?? [])
@@ -337,6 +373,19 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
       .map((a) => a.ad),
     [filtersData, campaigns]
   );
+
+  const adGroupOptions = useMemo(
+    () => [...new Set((filtersData?.adGroups ?? [])
+      .filter((a) => !campaigns.length || (a.campaign && campaigns.includes(a.campaign)))
+      .map((a) => a.adGroup))],
+    [filtersData, campaigns]
+  );
+
+  // Os mesmos filtros do pacing alimentam o modal de orçamentos (memo: o modal recarrega ao mudar).
+  const pacingFilters = useMemo(() => ({
+    from, to, campaign: campaigns, platform: platforms, networks, account: accounts, adGroup: adGroups,
+    objective: objectives, buyingType: buyingTypes, tema: temas,
+  }), [from, to, campaigns, platforms, networks, accounts, adGroups, objectives, buyingTypes, temas]);
 
   // O select de tema guarda o código (`ECO`) e mostra o rótulo humano.
   const temaLabel = useMemo(() => {
@@ -619,6 +668,9 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
       {rulesOpen && (
         <CampaignRulesModal onClose={() => setRulesOpen(false)} onSaved={() => setRulesVersion((v) => v + 1)} />
       )}
+      {budgetsOpen && (
+        <BudgetsModal filters={pacingFilters} onClose={() => setBudgetsOpen(false)} onSaved={() => setBudgetsVersion((v) => v + 1)} />
+      )}
       {exportOpen && (
         <DashboardExportModal
           onClose={() => setExportOpen(false)}
@@ -640,6 +692,10 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
           </h1>
         </div>
         <div className="flex items-center gap-3 shrink-0">
+          <button onClick={() => setBudgetsOpen(true)}
+            className="font-hud text-[10px] uppercase tracking-[0.16em] px-3 py-1.5 rounded-lg border border-separator text-ink-3 hover:text-ink hover:border-accent-border transition-colors">
+            Orçamentos
+          </button>
           <button onClick={() => setExportOpen(true)}
             className="font-hud text-[10px] uppercase tracking-[0.16em] px-3 py-1.5 rounded-lg border border-separator text-ink-3 hover:text-ink hover:border-accent-border transition-colors">
             Exportar
@@ -670,7 +726,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <SearchableSelect multiple className={selectClass} value={campaigns} options={filtersData?.campaigns ?? []}
-                    emptyLabel="Todas as campanhas" onChange={(v) => { setCampaigns(v); setAds([]); }} />
+                    emptyLabel="Todas as campanhas" onChange={(v) => { setCampaigns(v); setAds([]); setAdGroups([]); }} />
                   {/* As campanhas aparecem agrupadas por regra (lib/campaignGroups); só
                       admin edita as regras, que valem para todo mundo. */}
                   {isAdmin && (
@@ -682,6 +738,8 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                 </div>
                 <SearchableSelect multiple className={selectClass} value={ads} options={adOptions}
                   emptyLabel="Todos os anúncios" onChange={setAds} />
+                <SearchableSelect multiple className={selectClass} value={adGroups} options={adGroupOptions}
+                  emptyLabel="Todos os conjuntos" onChange={setAdGroups} />
                 <SearchableSelect multiple className={selectClass} value={platforms}
                   options={filtersData?.platforms ?? []} labelOf={platformLabel}
                   emptyLabel="Todas as plataformas" onChange={setPlatforms} />
@@ -747,6 +805,49 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
           {/* ══ CAMPANHAS ══ */}
           {tab === "campanhas" && (
             <>
+              {pacing && (pacing.total > 0 || (pacing.noBudget?.length ?? 0) > 0) && (
+                <section className="hud-panel rounded-[12px] px-4 py-3.5" aria-label="Pacing do orçamento">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
+                    {([
+                      ["Orçado", brl(pacing.total)],
+                      ["Utilizado", brl(pacing.used)],
+                      ["Sobra", brl(pacing.left)],
+                      ["Pacing", pacing.pacing == null ? dash : pct(pacing.pacing * 100)],
+                    ] as const).map(([label, value]) => (
+                      <div key={label}>
+                        <div className="font-hud text-[9px] uppercase tracking-[0.22em] text-ink-3">{label}</div>
+                        <div className="mt-1 text-[20px] font-bold tabular-nums text-ink truncate" title={value}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {pacing.total === 0 && (
+                    <p className="mt-2 text-[11px] text-ink-3">
+                      {adGroups.length ? "Sem orçamento cadastrado para este(s) conjunto(s)." : "Sem orçamento cadastrado neste recorte."} Use “Orçamentos” para cadastrar.
+                    </p>
+                  )}
+                  <div className="mt-3 h-1.5 rounded-full bg-separator overflow-hidden" role="progressbar"
+                       aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.round((pacing.pacing ?? 0) * 100))}>
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (pacing.pacing ?? 0) * 100)}%`, background: "var(--hud-cyan)" }} />
+                  </div>
+                  {(pacing.byPlatform.length > 1 || (pacing.noBudget?.length ?? 0) > 0) && (
+                    <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[11px] tabular-nums text-ink-3">
+                      {pacing.byPlatform.map((p) => (
+                        <div key={p.platform} className="flex items-baseline gap-1.5">
+                          <span>{platformLabel(p.platform)}</span>
+                          <span className="text-ink font-semibold">{p.pacing == null ? dash : pct(p.pacing * 100, 1)}</span>
+                        </div>
+                      ))}
+                      {pacing.noBudget?.map((p) => (
+                        <div key={p} className="flex items-baseline gap-1.5" title="Sem orçamento cadastrado — use Orçamentos">
+                          <span>{platformLabel(p)}</span>
+                          <span className="italic">sem orçamento</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+
               <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 {(kpis.length ? kpis : Array.from({ length: 6 }, () => null)).map((k, i) => (
                   <div key={k?.label ?? i} className="relative hud-panel rounded-[12px] px-4 py-3.5">
