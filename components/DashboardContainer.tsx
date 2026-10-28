@@ -66,8 +66,6 @@ const METRIC_KEYS: MetricKey[] = ["alcance", "impressoes", "cliques", "visualiza
 
 const nf = (v: number, d = 0) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const brl = (v: number) => `R$ ${nf(v, 2)}`;
-/** Centavos são ruído acima de dez mil — e faziam a tile de Investimento truncar. */
-const brlShort = (v: number) => (Math.abs(v) >= 10_000 ? `R$ ${nf(Math.round(v))}` : brl(v));
 const pct = (v: number, d = 2) => `${nf(v, d)}%`;
 const compact = (v: number) => {
   const a = Math.abs(v);
@@ -354,7 +352,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
     if (!totals) return [];
     const prev = data?.previous ?? null;
     const defs: { label: string; value: string; key: keyof Totals }[] = [
-      { label: "Investimento", value: brlShort(totals.cost), key: "cost" },
+      { label: "Investimento", value: brl(totals.cost), key: "cost" },
       { label: "Impressões", value: nf(totals.impressions), key: "impressions" },
       { label: "Alcance", value: nf(totals.reach), key: "reach" },
       { label: "Cliques", value: nf(totals.clicks), key: "clicks" },
