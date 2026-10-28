@@ -33,9 +33,25 @@ const totalsOf = (total: number, used: number): PacingTotals => ({
  * Por campanha vale a linha de campanha; sem ela, somam-se os conjuntos — senão a
  * Meta/TikTok, que têm orçamento nos dois níveis, contariam em dobro.
  */
-export function aggregatePacing(rows: BudgetRow[]): Pacing {
+function keptRows(rows: BudgetRow[]): BudgetRow[] {
   const hasCampaign = new Set(rows.filter((r) => r.level === 'campaign').map((r) => `${r.platform}|${r.campaignId}`));
-  const kept = rows.filter((r) => r.level === 'campaign' || !hasCampaign.has(`${r.platform}|${r.campaignId}`));
+  return rows.filter((r) => r.level === 'campaign' || !hasCampaign.has(`${r.platform}|${r.campaignId}`));
+}
+
+/** Orçado/utilizado por campanha real (`plataforma|campaign_id`), com a mesma regra do total. */
+export function pacingByCampaign(rows: BudgetRow[]): Map<string, { total: number; used: number }> {
+  const out = new Map<string, { total: number; used: number }>();
+  for (const r of keptRows(rows)) {
+    const k = `${r.platform}|${r.campaignId}`;
+    const cur = out.get(k) ?? { total: 0, used: 0 };
+    cur.total += flightTotal(r); cur.used += r.used;
+    out.set(k, cur);
+  }
+  return out;
+}
+
+export function aggregatePacing(rows: BudgetRow[]): Pacing {
+  const kept = keptRows(rows);
 
   const per = new Map<string, { total: number; used: number }>();
   let total = 0, used = 0;

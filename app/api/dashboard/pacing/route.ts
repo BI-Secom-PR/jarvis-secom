@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getPool, isTransientDbError, resetPool } from '@/lib/mysql';
 import { ISO_DATE, type DashboardFilters } from '@/lib/dashboard';
-import { aggregatePacing } from '@/lib/pacing';
-import { loadBudgetRows, loadDeliveringPlatforms } from '@/lib/pacingQuery';
+import { aggregatePacing, pacingByCampaign } from '@/lib/pacing';
+import { loadBudgetRows, loadDeliveredCampaigns } from '@/lib/pacingQuery';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -41,10 +41,19 @@ export async function POST(req: NextRequest) {
 
   const pool = getPool();
   try {
-    const [rows, delivering] = await Promise.all([loadBudgetRows(pool, f), loadDeliveringPlatforms(pool, f)]);
+    const [rows, delivered] = await Promise.all([loadBudgetRows(pool, f), loadDeliveredCampaigns(pool, f)]);
     const pacing = aggregatePacing(rows);
+    const per = pacingByCampaign(rows);
     const withBudget = new Set(pacing.byPlatform.map((p) => p.platform));
-    return NextResponse.json({ ...pacing, noBudget: delivering.filter((p) => !withBudget.has(p)).sort() });
+    // Campanhas reais por trás do filtro (que agrupa por rótulo). Sem orçamento, `used` é o gasto da janela.
+    const campaigns = delivered.map((c) => {
+      const b = per.get(`${c.platform}|${c.campaignId}`);
+      return b
+        ? { ...c, total: b.total, used: b.used, left: b.total - b.used, pacing: b.total > 0 ? b.used / b.total : null }
+        : { ...c, total: null, used: c.cost, left: null, pacing: null };
+    });
+    const noBudget = [...new Set(delivered.map((c) => c.platform))].filter((p) => !withBudget.has(p)).sort();
+    return NextResponse.json({ ...pacing, noBudget, campaigns });
   } catch (e) {
     console.error('[dashboard/pacing]', e);
     if (isTransientDbError(e)) {

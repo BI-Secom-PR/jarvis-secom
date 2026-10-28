@@ -67,6 +67,7 @@ type FiltersData = {
 type Pacing = {
   total: number; used: number; left: number; pacing: number | null;
   noBudget?: string[];
+  campaigns?: { platform: string; campaignId: string; name: string; total: number | null; used: number; left: number | null; pacing: number | null }[];
   byPlatform: { platform: string; total: number; used: number; left: number; pacing: number | null }[];
 };
 
@@ -111,6 +112,9 @@ const zeroRow = (): Row => ({
 type Sort = { key: string; dir: "asc" | "desc" } | null;
 const nextSort = (cur: Sort, key: string): Sort =>
   cur?.key !== key ? { key, dir: "desc" } : cur.dir === "desc" ? { key, dir: "asc" } : null;
+// Verde até 90% do orçado, amarelo de 90% a 100%, vermelho acima (estourou o orçamento).
+const pacingColor = (p: number | null) => (p == null ? "var(--hud-cyan)" : p > 1 ? "#ef4444" : p >= 0.9 ? "#eab308" : "#22c55e");
+
 /** Texto compara em pt-BR; não-finito (razão sem denominador, traço na tela) fica no fim nas duas direções. */
 function sortRows<T>(rows: T[], sort: Sort, get: (r: T, key: string) => number | string): T[] {
   if (!sort) return rows;
@@ -227,6 +231,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
   // Só vale na sessão — não entra nos filtros lembrados.
   const [adGroups, setAdGroups] = useState<string[]>([]);
   const [pacing, setPacing] = useState<Pacing | null>(null);
+  const [pacingOpen, setPacingOpen] = useState(false);
   const [objectives, setObjectives] = useState<string[]>([]);
   // Tipo de compra (CPM/CPC/CPV/CPE) é derivado do objetivo no servidor — ver
   // BUYING_TYPE_SQL em lib/dashboard.
@@ -736,10 +741,10 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                     </button>
                   )}
                 </div>
-                <SearchableSelect multiple className={selectClass} value={ads} options={adOptions}
-                  emptyLabel="Todos os anúncios" onChange={setAds} />
                 <SearchableSelect multiple className={selectClass} value={adGroups} options={adGroupOptions}
                   emptyLabel="Todos os conjuntos" onChange={setAdGroups} />
+                <SearchableSelect multiple className={selectClass} value={ads} options={adOptions}
+                  emptyLabel="Todos os anúncios" onChange={setAds} />
                 <SearchableSelect multiple className={selectClass} value={platforms}
                   options={filtersData?.platforms ?? []} labelOf={platformLabel}
                   emptyLabel="Todas as plataformas" onChange={setPlatforms} />
@@ -827,7 +832,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                   )}
                   <div className="mt-3 h-1.5 rounded-full bg-separator overflow-hidden" role="progressbar"
                        aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.round((pacing.pacing ?? 0) * 100))}>
-                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (pacing.pacing ?? 0) * 100)}%`, background: "var(--hud-cyan)" }} />
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (pacing.pacing ?? 0) * 100)}%`, background: pacingColor(pacing.pacing) }} />
                   </div>
                   {(pacing.byPlatform.length > 1 || (pacing.noBudget?.length ?? 0) > 0) && (
                     <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[11px] tabular-nums text-ink-3">
@@ -844,6 +849,40 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                         </div>
                       ))}
                     </div>
+                  )}
+                  {(pacing.campaigns?.length ?? 0) > 1 && (
+                    <>
+                      <button onClick={() => setPacingOpen((o) => !o)} aria-expanded={pacingOpen}
+                        className="mt-3 text-[11px] text-ink-3 hover:text-ink transition-colors">
+                        {pacingOpen ? "▾ Recolher" : `▸ Detalhar as ${pacing.campaigns!.length} campanhas`}
+                      </button>
+                      {pacingOpen && (
+                        <div className="mt-2 border-t border-separator divide-y divide-separator text-[11px] tabular-nums">
+                          {pacing.campaigns!.map((c) => (
+                            <div key={`${c.platform}|${c.campaignId}`} className="py-2 grid grid-cols-[1fr_auto] md:grid-cols-[minmax(0,1fr)_repeat(4,7rem)] gap-x-4 gap-y-1 items-center">
+                              <div className="min-w-0">
+                                <div className="text-ink truncate" title={c.name}>{c.name}</div>
+                                <div className="text-ink-3">{platformLabel(c.platform)}</div>
+                              </div>
+                              {c.total == null ? (
+                                <div className="md:col-span-4 text-ink-3 italic md:text-right">
+                                  sem orçamento · gasto {brl(c.used)}
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="text-ink-2 md:text-right"><span className="md:hidden text-ink-3">Orçado </span>{brl(c.total)}</div>
+                                  <div className="text-ink-2 md:text-right"><span className="md:hidden text-ink-3">Utilizado </span>{brl(c.used)}</div>
+                                  <div className="text-ink-2 md:text-right"><span className="md:hidden text-ink-3">Sobra </span>{brl(c.left ?? 0)}</div>
+                                  <div className="md:text-right">
+                                    <span className="font-semibold" style={{ color: pacingColor(c.pacing) }}>{c.pacing == null ? dash : pct(c.pacing * 100, 1)}</span>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </section>
               )}

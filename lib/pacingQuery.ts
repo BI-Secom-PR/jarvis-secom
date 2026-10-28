@@ -124,14 +124,37 @@ export async function loadBudgetList(pool: Pool, f: DashboardFilters): Promise<{
     updated_at: b.updated_at == null ? null : (b.updated_at instanceof Date ? b.updated_at.toISOString() : String(b.updated_at)),
   });
 
+  // Conjunto filtrado: a lista é de conjuntos (um por ad_group_id que entregou), cada um com o
+  // orçamento do próprio conjunto ou uma linha vazia de nível ad_group para cadastrar.
+  if (groups) {
+    const wg = buildWhere(fr);
+    const [sets] = await pool.query(
+      `SELECT platform, campaign_id, ad_group_id, MAX(ad_group_name) AS ad_group_name
+         FROM ${T} WHERE ${wg.sql} AND campaign_id IS NOT NULL AND campaign_id <> ''
+          AND ad_group_id IS NOT NULL AND ad_group_id <> ''
+        GROUP BY platform, campaign_id, ad_group_id HAVING SUM(cost) > 0 OR SUM(impressions) > 0
+        ORDER BY platform, ad_group_name LIMIT ${LIST_LIMIT + 1}`,
+      wg.params
+    );
+    const gl = sets as { platform: string; campaign_id: string; ad_group_id: string; ad_group_name: string | null }[];
+    const rowsG = gl.slice(0, LIST_LIMIT).map((g): BudgetListRow => {
+      const have = (byCampaign.get(`${g.platform}|${g.campaign_id}`) ?? [])
+        .find((b) => b.level === 'ad_group' && String(b.ad_group_id) === String(g.ad_group_id));
+      return have ? toRow(have) : {
+        id: null, platform: g.platform, level: 'ad_group', campaign_id: g.campaign_id, ad_group_id: g.ad_group_id,
+        name: g.ad_group_name ?? g.ad_group_id, budget_total: null, budget_type: 'lifetime',
+        start_date: null, end_date: null, source_amount: null, source: null, updated_by: null, updated_at: null,
+      };
+    });
+    return { rows: rowsG, truncated: truncated || gl.length > LIST_LIMIT };
+  }
+
   const rows: BudgetListRow[] = [];
   for (const c of campaigns) {
     const mine = byCampaign.get(`${c.platform}|${c.campaign_id}`) ?? [];
     const camp = mine.find((b) => b.level === 'campaign');
     const sets = mine.filter((b) => b.level === 'ad_group');
-    if (groups) { // conjunto filtrado: só as linhas de ad set escolhidas
-      rows.push(...sets.filter((b) => groups.has(String(b.name))).map(toRow));
-    } else if (camp) {
+    if (camp) {
       rows.push(toRow(camp));
     } else if (sets.length) {
       rows.push(...sets.map(toRow)); // sem linha de campanha, são os conjuntos que valem
@@ -156,4 +179,22 @@ export async function loadDeliveringPlatforms(pool: Pool, f: DashboardFilters): 
     w.params
   );
   return (rows as { platform: string }[]).map((r) => r.platform);
+}
+
+export type DeliveredCampaign = { platform: string; campaignId: string; name: string; cost: number };
+
+/** Campanhas reais que entregaram no recorte (o filtro agrupa várias numa só) e o gasto na janela. */
+export async function loadDeliveredCampaigns(pool: Pool, f: DashboardFilters): Promise<DeliveredCampaign[]> {
+  const T = fromTable('gold_platforms_campaigns', f);
+  const fr = await withBuyingCampaigns(pool, await withCampaignNames(pool, f, T), T);
+  const w = buildWhere(fr);
+  const [rows] = await pool.query(
+    `SELECT platform, campaign_id, MAX(campaign_name) AS campaign_name, SUM(cost) AS cost
+       FROM ${T} WHERE ${w.sql} AND campaign_id IS NOT NULL AND campaign_id <> ''
+      GROUP BY platform, campaign_id HAVING SUM(cost) > 0 OR SUM(impressions) > 0
+      ORDER BY platform, campaign_name LIMIT ${LIST_LIMIT}`,
+    w.params
+  );
+  return (rows as { platform: string; campaign_id: string; campaign_name: string | null; cost: unknown }[])
+    .map((r) => ({ platform: r.platform, campaignId: String(r.campaign_id), name: r.campaign_name ?? String(r.campaign_id), cost: Number(r.cost) }));
 }
