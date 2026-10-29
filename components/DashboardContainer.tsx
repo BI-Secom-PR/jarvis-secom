@@ -113,7 +113,7 @@ type Sort = { key: string; dir: "asc" | "desc" } | null;
 const nextSort = (cur: Sort, key: string): Sort =>
   cur?.key !== key ? { key, dir: "desc" } : cur.dir === "desc" ? { key, dir: "asc" } : null;
 // Verde até 90% do orçado, amarelo de 90% a 100%, vermelho acima (estourou o orçamento).
-const pacingColor = (p: number | null) => (p == null ? "var(--hud-cyan)" : p > 1 ? "#ef4444" : p >= 0.9 ? "#eab308" : "#22c55e");
+const pacingColor = () => "var(--hud-cyan)";
 
 /** Texto compara em pt-BR; não-finito (razão sem denominador, traço na tela) fica no fim nas duas direções. */
 function sortRows<T>(rows: T[], sort: Sort, get: (r: T, key: string) => number | string): T[] {
@@ -832,7 +832,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                   )}
                   <div className="mt-3 h-1.5 rounded-full bg-separator overflow-hidden" role="progressbar"
                        aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.round((pacing.pacing ?? 0) * 100))}>
-                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (pacing.pacing ?? 0) * 100)}%`, background: pacingColor(pacing.pacing) }} />
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (pacing.pacing ?? 0) * 100)}%`, background: pacingColor() }} />
                   </div>
                   {(pacing.byPlatform.length > 1 || (pacing.noBudget?.length ?? 0) > 0) && (
                     <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[11px] tabular-nums text-ink-3">
@@ -853,8 +853,13 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                   {(pacing.campaigns?.length ?? 0) > 1 && (
                     <>
                       <button onClick={() => setPacingOpen((o) => !o)} aria-expanded={pacingOpen}
-                        className="mt-3 text-[11px] text-ink-3 hover:text-ink transition-colors">
-                        {pacingOpen ? "▾ Recolher" : `▸ Detalhar as ${pacing.campaigns!.length} campanhas`}
+                        className="mt-3 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-hud text-[11px] tracking-[0.08em] border bg-accent-soft border-accent-border text-accent-text hover:brightness-125 transition">
+                        {pacingOpen ? "Recolher" : `Detalhar as ${pacing.campaigns!.length} campanhas`}
+                        <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.8"
+                          strokeLinecap="round" strokeLinejoin="round" aria-hidden
+                          className={`transition-transform duration-200 ease-out ${pacingOpen ? "-rotate-90" : ""}`}>
+                          <path d="M2 4l4 4 4-4" />
+                        </svg>
                       </button>
                       {pacingOpen && (
                         <div className="mt-2 border-t border-separator divide-y divide-separator text-[11px] tabular-nums">
@@ -874,7 +879,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                                   <div className="text-ink-2 md:text-right"><span className="md:hidden text-ink-3">Utilizado </span>{brl(c.used)}</div>
                                   <div className="text-ink-2 md:text-right"><span className="md:hidden text-ink-3">Sobra </span>{brl(c.left ?? 0)}</div>
                                   <div className="md:text-right">
-                                    <span className="font-semibold" style={{ color: pacingColor(c.pacing) }}>{c.pacing == null ? dash : pct(c.pacing * 100, 1)}</span>
+                                    <span className="font-semibold" style={{ color: pacingColor() }}>{c.pacing == null ? dash : pct(c.pacing * 100, 1)}</span>
                                   </div>
                                 </>
                               )}
