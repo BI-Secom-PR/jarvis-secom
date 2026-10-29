@@ -7,32 +7,32 @@ import type { ConnectionOptions as TlsConnectionOptions } from 'node:tls';
 // credential capture. Public by design, safe to commit.
 //
 // OCI regenerates this CA on maintenance/restart (~monthly; seen 2026-06-04, 07-02,
-// 07-30, 09-03, 10-01). Symptom: "certificate signature failure" / code HANDSHAKE_SSL_ERROR.
+// 07-30, 09-03, 10-01, 10-29). Symptom: "certificate signature failure" / code HANDSHAKE_SSL_ERROR.
 // Two recovery layers now cover a rotation without a code change:
 //   1. MYSQL_CA env var overrides this committed default (paste new PEM in Vercel, redeploy).
 //   2. healCa() below re-reads the live CA from the endpoint on the first failed query
 //      and hot-swaps it — no deploy, self-heals within one retry.
 // This constant is just the first-boot default. Re-pin (or refresh MYSQL_CA) with:
 //   echo | openssl s_client -starttls mysql -connect $MYSQL_HOST:3306 -showcerts
-// SHA256 fingerprint: 69:D3:38:7F:F3:80:12:12:12:F8:93:FA:F4:16:11:A9:85:B4:0E:20:B1:24:47:8A:1E:C2:94:EF:7E:BE:6F:4C
+// SHA256 fingerprint: 8C:CF:07:5A:04:27:69:C7:CC:A2:02:AE:4E:CD:88:46:24:17:70:6F:D6:32:60:3F:94:8C:44:BC:DA:15:3A:F0
 const OCI_MYSQL_CA = `-----BEGIN CERTIFICATE-----
-MIIDGTCCAgGgAwIBAgIUS9u0eV6rJ5Yu54A0LjhuSeamql0wDQYJKoZIhvcNAQEL
-BQAwHDEaMBgGA1UEAwwRTXlTUUxfRW5kcG9pbnRfQ0EwHhcNMjYxMDAxMDQ1NTM4
-WhcNMjkwOTMwMDQ1NTM4WjAcMRowGAYDVQQDDBFNeVNRTF9FbmRwb2ludF9DQTCC
-ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOlyWMGaEO98X7AVMEITCwDu
-Ojxe7Z5e5pvMKx9LA/ctRjJ8Bw5GpXRpbc/gIMiiL8vbQ4CtYXW6ns8SYPg/xZmQ
-i+9EoxFlokynOTpI5WcS9RnYw48ukhuVTmvDWs/fKXb3CADBYX9++w/Cwv0hNjkI
-N4tX0Djh4VAYlcyw24g6i4QhlxXE6DRKUSn8Co/Eqh8zKV9Y332IEgIL+RFJhLyD
-M7hRAUYToD7YwZksgAyT/Ujn/AH/KBbxlAYx+3JrPy9CXBWIVhr4drpC7Lx23ll5
-jqbwhsTeOj5eMNzKrbUKM1AyDcTP9MpdnNidWLy+HzF2pUjO1AogITkQwdAu4ZcC
-AwEAAaNTMFEwHQYDVR0OBBYEFFyUxP4zIf2a7/xwp8wC+JtCtKGpMB8GA1UdIwQY
-MBaAFFyUxP4zIf2a7/xwp8wC+JtCtKGpMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZI
-hvcNAQELBQADggEBAE0XRiX94S7/vGrBmyrb4ZIdWsNALzYd5XAhh5yROk4h3rrH
-D2PnsqXpV8Uio+NTBv4sJzQ1o63qxzPqsthwRKPzjdwWRYMojn+rHScLeh62lo2x
-YcaI4hMnJ9068swUpbDFQTesGCR9WI0ga3UchwWwR3kbhK5XJ1EPVzE+Jk2JZQIz
-3zfHaHAmHyh0KIWpTKeIhWl95zwSPAafw1EXEwDaTQSp4kwXVBJf+gx9jnt9ylW7
-pPi62iSKQpBQ84oMrmMpOGO2xfJ27eW6F0PUTNOjpkvDWA1eAi2JvReqVUMQgHFs
-1CEo8vcD+jSPTwH9FUqrdNgAegadlNo5/RY/cD0=
+MIIDGTCCAgGgAwIBAgIUSSXWxxzeKTQv+rzXiv3yzgYG4kcwDQYJKoZIhvcNAQEL
+BQAwHDEaMBgGA1UEAwwRTXlTUUxfRW5kcG9pbnRfQ0EwHhcNMjYxMDI5MDQ1NjI4
+WhcNMjkxMDI4MDQ1NjI4WjAcMRowGAYDVQQDDBFNeVNRTF9FbmRwb2ludF9DQTCC
+ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMopTwZba09DAm9wabAeVAbG
+SBmvT14KDvsrDKr3iSqIfglL8Oce1fOve4uMdbJmquSPTXMC0+0SPbVS3teBeoBw
+BuxrSpdWOQltUNSbpBcVivVVCbaWso3yeFLhbXrRlZfHIqQNB7lwOatc9+piqyBc
+GYTga/KPDyTmvawQR7/I9ctnQlybWL0Ua2RQBlmwZ7Z2cJnhtMEKdOqg60GW+RiF
+c+5W6s/1ir3Hec8STjvGVY3fH+waoQZGp7StyJaGQbEp8PaHN/1PLpIdok0LLVib
+E+8uTldz3/2qZJA62Pe/oJzaFNL8uJC4qxGZZZpAOzkvQmB6FMPOf4pFY22LOV0C
+AwEAAaNTMFEwHQYDVR0OBBYEFJ/D48RJhr2TabRxmaQuvn5ywa0kMB8GA1UdIwQY
+MBaAFJ/D48RJhr2TabRxmaQuvn5ywa0kMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZI
+hvcNAQELBQADggEBAEC+PmXq01gifDjLwgC3V7Iwhjdjgqa6g8Bt3bHgehFClR0Q
+imrqDuR8NqlZvUo9vZKAI3GhhKhm+rtCo/TCtqfNx5LrzZp14vtsNQ/TX6ROX1e7
+GsG4twGDVY/rawDnwUahtlrcJ7t4a0UrM72z+kz9AtzSlcFz7SK5c29Ysk/XfSkw
+/RxqbnNeWYxe8NsUdaoNZwuU5ke3klhx6I2fwhGptMP2uvTxFVZu9z+6XBd201Vy
+cjbvDJ8n5eC501X3yyhh5RFr7gq74VovEGI0JeH/DJbbqPYXgYNVQNcofSr2hO6h
+ZgSDM4XoH7lTfLRHu9r+yFXHv/X017VVqw1XTys=
 -----END CERTIFICATE-----`;
 
 let pool: mysql.Pool | null = null;
