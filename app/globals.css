@@ -654,3 +654,14 @@
   text-decoration: none;
 }
 .bubble-content a:hover { text-decoration: underline; }
+
+/* iOS Safari zooms the page on focus of any field under 16px. Unlayered so it
+   beats Tailwind's text-* utilities; touch-only so desktop sizing is unchanged.
+   Kept out of the viewport meta (maximum-scale) so pinch-zoom stays available. */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
