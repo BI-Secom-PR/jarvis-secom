@@ -28,7 +28,7 @@ export async function loadBudgetRows(pool: Pool, f: DashboardFilters): Promise<B
   // também os conjuntos que o filtro tirou.
   const levelCond = f.adGroup?.length ? `AND b.level = 'ad_group'` : '';
   const [rows] = await pool.query(
-    `SELECT b.id, b.platform, b.level, b.campaign_id, b.budget_total, b.budget_type,
+    `SELECT b.id, b.platform, b.level, b.campaign_id, b.ad_group_id, b.budget_total, b.budget_type,
             b.start_date, b.end_date,
             SUM(CASE WHEN (b.start_date IS NULL OR g.date >= b.start_date)
                       AND (b.end_date IS NULL OR g.date <= b.end_date) THEN g.cost ELSE 0 END) AS used,
@@ -49,6 +49,7 @@ export async function loadBudgetRows(pool: Pool, f: DashboardFilters): Promise<B
     platform: String(r.platform),
     level: r.level === 'ad_group' ? 'ad_group' : 'campaign',
     campaignId: String(r.campaign_id),
+    adGroupId: r.ad_group_id == null ? null : String(r.ad_group_id),
     amount: Number(r.budget_total),
     daily: r.budget_type === 'daily',
     start: isoDay(r.start_date),
@@ -197,4 +198,28 @@ export async function loadDeliveredCampaigns(pool: Pool, f: DashboardFilters): P
   );
   return (rows as { platform: string; campaign_id: string; campaign_name: string | null; cost: unknown }[])
     .map((r) => ({ platform: r.platform, campaignId: String(r.campaign_id), name: r.campaign_name ?? String(r.campaign_id), cost: Number(r.cost) }));
+}
+
+export type DeliveredAdGroup = DeliveredCampaign & { adGroupId: string; campaignName: string };
+
+/** Conjuntos que entregaram no recorte e o gasto na janela; `name` é o conjunto, `campaignName` a campanha-mãe. */
+export async function loadDeliveredAdGroups(pool: Pool, f: DashboardFilters): Promise<DeliveredAdGroup[]> {
+  const T = fromTable('gold_platforms_campaigns', f);
+  const fr = await withBuyingCampaigns(pool, await withCampaignNames(pool, f, T), T);
+  const w = buildWhere(fr);
+  const [rows] = await pool.query(
+    `SELECT platform, campaign_id, ad_group_id, MAX(campaign_name) AS campaign_name,
+            MAX(ad_group_name) AS ad_group_name, SUM(cost) AS cost
+       FROM ${T} WHERE ${w.sql} AND campaign_id IS NOT NULL AND campaign_id <> ''
+        AND ad_group_id IS NOT NULL AND ad_group_id <> ''
+      GROUP BY platform, campaign_id, ad_group_id HAVING SUM(cost) > 0 OR SUM(impressions) > 0
+      ORDER BY platform, campaign_name, ad_group_name LIMIT ${LIST_LIMIT}`,
+    w.params
+  );
+  return (rows as { platform: string; campaign_id: string; ad_group_id: string; campaign_name: string | null; ad_group_name: string | null; cost: unknown }[])
+    .map((r) => ({
+      platform: r.platform, campaignId: String(r.campaign_id), adGroupId: String(r.ad_group_id),
+      name: r.ad_group_name ?? String(r.ad_group_id), campaignName: r.campaign_name ?? String(r.campaign_id),
+      cost: Number(r.cost),
+    }));
 }

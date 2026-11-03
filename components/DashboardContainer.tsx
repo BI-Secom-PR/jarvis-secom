@@ -27,7 +27,7 @@ type Row = Totals & { platform: string; network: string; nome: string;
   p25: number; p50: number; p75: number; p95: number; p100: number; completions: number };
 
 type Payload = {
-  totals?: Totals & { campaigns: number; ads: number };
+  totals?: Totals & { campaigns: number; ads: number; adGroups: number };
   previous?: Totals | null;
   previousByPlatform?: (Totals & { platform: string })[];
   redes?: (Totals & { platform: string; network: string })[];
@@ -35,6 +35,7 @@ type Payload = {
   referencia?: Referencia | null;
   daily?: (Totals & { date: string })[];
   campanhas?: Row[];
+  conjuntos?: Row[];
   anuncios?: Row[];
   limit?: number;
   demografia?: (Totals & { faixa: string; gender: string })[];
@@ -64,10 +65,12 @@ type FiltersData = {
   adGroups?: { campaign: string | null; adGroup: string }[];
 };
 
+type PacingItem = { platform: string; campaignId: string; name: string; total: number | null; used: number; left: number | null; pacing: number | null };
 type Pacing = {
   total: number; used: number; left: number; pacing: number | null;
   noBudget?: string[];
-  campaigns?: { platform: string; campaignId: string; name: string; total: number | null; used: number; left: number | null; pacing: number | null }[];
+  campaigns?: PacingItem[];
+  adGroups?: (PacingItem & { campaignName: string; adGroupId: string })[];
   byPlatform: { platform: string; total: number; used: number; left: number; pacing: number | null }[];
 };
 
@@ -241,7 +244,8 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
   const [tab, setTab] = useState<Tab>("campanhas");
   const [metric, setMetric] = useState<MetricKey>("impressoes");
   const [gran, setGran] = useState<Gran>("dia");
-  const [tmode, setTmode] = useState<"campanha" | "anuncio">("campanha");
+  const [tmode, setTmode] = useState<"campanha" | "conjunto" | "anuncio">("campanha");
+  const [pacingBy, setPacingBy] = useState<"campanha" | "conjunto">("campanha");
   const [engMode, setEngMode] = useState<EngMode>("total");
   // Quebra a tabela por sub-rede: Meta vira Facebook/Instagram, Google vira YouTube/Busca.
   const [byNetwork, setByNetwork] = useState(false);
@@ -284,6 +288,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
       if (p.metric) setMetric(p.metric);
       if (p.gran) setGran(p.gran);
       if (p.tmode) setTmode(p.tmode);
+      if (p.pacingBy) setPacingBy(p.pacingBy);
       if (p.engMode) setEngMode(p.engMode);
       if (p.byNetwork !== undefined) setByNetwork(p.byNetwork);
     } catch { /* storage bloqueado (janela privada): abre nos padrões */ }
@@ -295,9 +300,9 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
     // "últimos N dias" salvo como atalho: amanhã continua sendo os últimos N dias.
     const days = PRESET_DAYS.find((d) => from === isoDaysAgo(d) && to === isoDaysAgo(0));
     const prefs: Prefs = { ...(days ? { days } : { from, to }), campaigns, platforms, networks, accounts, ads,
-      objectives, buyingTypes, temas, tab, metric, gran, tmode, engMode, byNetwork };
+      objectives, buyingTypes, temas, tab, metric, gran, tmode, pacingBy, engMode, byNetwork };
     try { localStorage.setItem(prefsKey(userId), JSON.stringify(prefs)); } catch { /* idem */ }
-  }, [ready, userId, from, to, campaigns, platforms, networks, accounts, ads, objectives, buyingTypes, temas, tab, metric, gran, tmode, engMode, byNetwork]);
+  }, [ready, userId, from, to, campaigns, platforms, networks, accounts, ads, objectives, buyingTypes, temas, tab, metric, gran, tmode, pacingBy, engMode, byNetwork]);
 
   // ── Opções dos dropdowns (facetadas) ──
   useEffect(() => {
@@ -650,7 +655,9 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
   const panel = "relative hud-panel rounded-[16px]";
   const panelTitle = "font-hud text-[11px] uppercase tracking-[0.24em] text-ink flex items-center gap-2";
 
-  const rawRows = tmode === "campanha" ? (data?.campanhas ?? []) : (data?.anuncios ?? []);
+  const rawRows = (tmode === "campanha" ? data?.campanhas : tmode === "conjunto" ? data?.conjuntos : data?.anuncios) ?? [];
+  const tLabel = { campanha: ["Campanha", "campanhas"], conjunto: ["Conjunto", "conjuntos"], anuncio: ["Anúncio", "anúncios"] }[tmode];
+  const tCount = tmode === "campanha" ? totals?.campaigns : tmode === "conjunto" ? totals?.adGroups : totals?.ads;
   const tableRows = useMemo(() => sortRows(rawRows, perfSort, perfValue), [rawRows, perfSort]);
   const regiaoSorted = useMemo(() => sortRows(regiaoRows, regSort, (r, k) =>
     k === "uf" ? r.uf : k === "estado" ? r.estado : k === "value" ? r.value
@@ -850,11 +857,15 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                       ))}
                     </div>
                   )}
-                  {(pacing.campaigns?.length ?? 0) > 1 && (
+                  {((pacing.campaigns?.length ?? 0) > 1 || (pacing.adGroups?.length ?? 0) > 1) && (() => {
+                    const items: (PacingItem & { campaignName?: string })[] =
+                      (pacingBy === "conjunto" ? pacing.adGroups : pacing.campaigns) ?? [];
+                    const noun = pacingBy === "conjunto" ? "conjuntos" : "campanhas";
+                    return (
                     <>
                       <button onClick={() => setPacingOpen((o) => !o)} aria-expanded={pacingOpen}
                         className="mt-3 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-hud text-[11px] tracking-[0.08em] border bg-accent-soft border-accent-border text-accent-text hover:brightness-125 transition">
-                        {pacingOpen ? "Recolher" : `Detalhar as ${pacing.campaigns!.length} campanhas`}
+                        {pacingOpen ? "Recolher" : `Detalhar os ${items.length} ${noun}`}
                         <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.8"
                           strokeLinecap="round" strokeLinejoin="round" aria-hidden
                           className={`transition-transform duration-200 ease-out ${pacingOpen ? "-rotate-90" : ""}`}>
@@ -862,12 +873,18 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                         </svg>
                       </button>
                       {pacingOpen && (
+                        <div className="mt-2 flex gap-2">
+                          <button className={pill(pacingBy === "campanha")} onClick={() => setPacingBy("campanha")}>Por campanha</button>
+                          <button className={pill(pacingBy === "conjunto")} onClick={() => setPacingBy("conjunto")}>Por conjunto</button>
+                        </div>
+                      )}
+                      {pacingOpen && (
                         <div className="mt-2 border-t border-separator divide-y divide-separator text-[11px] tabular-nums">
-                          {pacing.campaigns!.map((c) => (
-                            <div key={`${c.platform}|${c.campaignId}`} className="py-2 grid grid-cols-[1fr_auto] md:grid-cols-[minmax(0,1fr)_repeat(4,7rem)] gap-x-4 gap-y-1 items-center">
+                          {items.map((c) => (
+                            <div key={`${c.platform}|${c.campaignId}|${"adGroupId" in c ? c.adGroupId : ""}`} className="py-2 grid grid-cols-[1fr_auto] md:grid-cols-[minmax(0,1fr)_repeat(4,7rem)] gap-x-4 gap-y-1 items-center">
                               <div className="min-w-0">
                                 <div className="text-ink truncate" title={c.name}>{c.name}</div>
-                                <div className="text-ink-3">{platformLabel(c.platform)}</div>
+                                <div className="text-ink-3 truncate">{platformLabel(c.platform)}{c.campaignName ? ` · ${c.campaignName}` : ""}</div>
                               </div>
                               {c.total == null ? (
                                 <div className="md:col-span-4 text-ink-3 italic md:text-right">
@@ -888,7 +905,8 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                         </div>
                       )}
                     </>
-                  )}
+                    );
+                  })()}
                 </section>
               )}
 
@@ -955,12 +973,13 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                     <span style={{ color: "var(--hud-cyan)" }}>◇</span> Performance
                     {totals && (
                       <span className="normal-case tracking-normal tabular-nums text-ink-3" style={{ textShadow: "none" }}>
-                        · {nf(tmode === "campanha" ? totals.campaigns : totals.ads)} {tmode === "campanha" ? "campanhas" : "anúncios"}
+                        · {nf(tCount ?? 0)} {tLabel[1]}
                       </span>
                     )}
                   </div>
                   <div className="flex gap-2">
                     <button className={pill(tmode === "campanha")} onClick={() => setTmode("campanha")}>Por campanha</button>
+                    <button className={pill(tmode === "conjunto")} onClick={() => setTmode("conjunto")}>Por conjunto</button>
                     <button className={pill(tmode === "anuncio")} onClick={() => setTmode("anuncio")}>Por anúncio</button>
                     <button className={pill(byNetwork)} onClick={() => setByNetwork((v) => !v)}
                       title="Quebrar cada linha pela sub-rede: Meta em Facebook/Instagram, Google em YouTube/Busca">
@@ -979,7 +998,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                           return (<>
                             {th("Plataforma", "platform", "px-4 md:px-6 py-2.5")}
                             {byNetwork && th("Rede", "network", "px-3 py-2.5")}
-                            {th(tmode === "campanha" ? "Campanha" : "Anúncio", "nome", "px-3 py-2.5 min-w-[260px]")}
+                            {th(tLabel[0], "nome", "px-3 py-2.5 min-w-[260px]")}
                             {th("Investimento", "cost")}
                             {th("Impressões", "impressions")}
                             {th("CPM", "cpm")}
@@ -1086,8 +1105,8 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
                 </div>
                 <div className="px-4 md:px-6 py-3 text-[11px] text-ink-3 border-t border-separator">
                   {`${byNetwork
-                    ? `${nf(tableRows.length)} linhas (${tmode === "campanha" ? "campanha" : "anúncio"} × rede), as maiores por investimento`
-                    : `Os ${Math.min(tableRows.length, data?.limit ?? 50)} maiores por investimento`}, de ${nf(tmode === "campanha" ? (totals?.campaigns ?? 0) : (totals?.ads ?? 0))} ${tmode === "campanha" ? "campanhas" : "anúncios"}. Engajamento = curtidas + comentários + compartilhamentos + reações + salvos. Quartis e “completa” são contagens: 25–100% vêm de Meta, TikTok, GloboAds, Pinterest e Amazon, 95% só da Meta, e “completa” só de Kwai e LinkedIn — um traço significa que a plataforma não reporta.`}
+                    ? `${nf(tableRows.length)} linhas (${tLabel[0].toLowerCase()} × rede), as maiores por investimento`
+                    : `Os ${Math.min(tableRows.length, data?.limit ?? 50)} maiores por investimento`}, de ${nf(tCount ?? 0)} ${tLabel[1]}. Engajamento = curtidas + comentários + compartilhamentos + reações + salvos. Quartis e “completa” são contagens: 25–100% vêm de Meta, TikTok, GloboAds, Pinterest e Amazon, 95% só da Meta, e “completa” só de Kwai e LinkedIn — um traço significa que a plataforma não reporta.`}
                 </div>
               </section>
             </>

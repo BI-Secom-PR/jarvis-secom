@@ -204,7 +204,8 @@ export async function POST(req: NextRequest) {
     const [totalsRes, prevRes, dailyRes] = await Promise.all([
       pool.query(
         `SELECT ${METRIC_SELECT}, COUNT(DISTINCT CASE WHEN ${HAS_DELIVERY} THEN campaign_name END) AS campaigns,
-                COUNT(DISTINCT CASE WHEN ${HAS_DELIVERY} THEN ad_id END) AS ads
+                COUNT(DISTINCT CASE WHEN ${HAS_DELIVERY} THEN ad_id END) AS ads,
+                COUNT(DISTINCT CASE WHEN ${HAS_DELIVERY} THEN CONCAT(campaign_id, '|', ad_group_id) END) AS ad_groups
            FROM ${T_CAMP} WHERE ${w.sql}`,
         w.params
       ),
@@ -227,8 +228,9 @@ export async function POST(req: NextRequest) {
          FROM ${T_CAMP} WHERE ${w.sql}
         GROUP BY ${net}platform, ${dim} HAVING ${HAS_DELIVERY}
         ORDER BY SUM(cost) DESC LIMIT ${TABLE_LIMIT}`;
-    const [campRes, adRes] = await Promise.all([
+    const [campRes, setRes, adRes] = await Promise.all([
       pool.query(tableSql('campaign_name'), w.params),
+      pool.query(tableSql('ad_group_name'), w.params),
       pool.query(tableSql('ad_name'), w.params),
     ]);
 
@@ -267,7 +269,7 @@ export async function POST(req: NextRequest) {
     const prevRow = (prevRes[0] as Record<string, unknown>[])[0];
 
     return NextResponse.json({
-      totals: { ...totalsOf(totalsRow), campaigns: n(totalsRow?.campaigns), ads: n(totalsRow?.ads) },
+      totals: { ...totalsOf(totalsRow), campaigns: n(totalsRow?.campaigns), ads: n(totalsRow?.ads), adGroups: n(totalsRow?.ad_groups) },
       previous: prevRow ? totalsOf(prevRow) : null,
       previousByPlatform,
       redes: redeRows(redeRes),
@@ -281,6 +283,10 @@ export async function POST(req: NextRequest) {
       campanhas: (campRes[0] as Record<string, unknown>[]).map((r) => ({
         platform: String(r.platform), network: String(r.network ?? ''),
         nome: String(r.campaign_name ?? ''), ...totalsOf(r), ...videoOf(r),
+      })),
+      conjuntos: (setRes[0] as Record<string, unknown>[]).map((r) => ({
+        platform: String(r.platform), network: String(r.network ?? ''),
+        nome: String(r.ad_group_name ?? ''), ...totalsOf(r), ...videoOf(r),
       })),
       anuncios: (adRes[0] as Record<string, unknown>[]).map((r) => ({
         platform: String(r.platform), network: String(r.network ?? ''),

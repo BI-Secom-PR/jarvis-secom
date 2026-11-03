@@ -22,7 +22,8 @@ export type Prefs = {
   tab: 'campanhas' | 'demografia' | 'regiao';
   metric: MetricKey;
   gran: 'dia' | 'semana' | 'mes';
-  tmode: 'campanha' | 'anuncio';
+  tmode: 'campanha' | 'conjunto' | 'anuncio';
+  pacingBy: 'campanha' | 'conjunto';
   engMode: 'total' | 'partes';
   byNetwork: boolean;
 };
@@ -62,7 +63,8 @@ export function parsePrefs(raw: string | null): Partial<Prefs> {
     tab: oneOf(o.tab, ['campanhas', 'demografia', 'regiao']),
     metric: typeof o.metric === 'string' && Object.hasOwn(METRICS, o.metric) ? (o.metric as MetricKey) : undefined,
     gran: oneOf(o.gran, ['dia', 'semana', 'mes']),
-    tmode: oneOf(o.tmode, ['campanha', 'anuncio']),
+    tmode: oneOf(o.tmode, ['campanha', 'conjunto', 'anuncio']),
+    pacingBy: oneOf(o.pacingBy, ['campanha', 'conjunto']),
     engMode: oneOf(o.engMode, ['total', 'partes']),
     byNetwork: typeof o.byNetwork === 'boolean' ? o.byNetwork : undefined,
   };

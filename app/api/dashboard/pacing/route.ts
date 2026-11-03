@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getPool, isTransientDbError, resetPool } from '@/lib/mysql';
 import { ISO_DATE, type DashboardFilters } from '@/lib/dashboard';
-import { aggregatePacing, pacingByCampaign } from '@/lib/pacing';
-import { loadBudgetRows, loadDeliveredCampaigns } from '@/lib/pacingQuery';
+import { aggregatePacing, pacingByAdGroup, pacingByCampaign } from '@/lib/pacing';
+import { loadBudgetRows, loadDeliveredAdGroups, loadDeliveredCampaigns } from '@/lib/pacingQuery';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -41,7 +41,9 @@ export async function POST(req: NextRequest) {
 
   const pool = getPool();
   try {
-    const [rows, delivered] = await Promise.all([loadBudgetRows(pool, f), loadDeliveredCampaigns(pool, f)]);
+    const [rows, delivered, deliveredSets] = await Promise.all([
+      loadBudgetRows(pool, f), loadDeliveredCampaigns(pool, f), loadDeliveredAdGroups(pool, f),
+    ]);
     const pacing = aggregatePacing(rows);
     const per = pacingByCampaign(rows);
     const withBudget = new Set(pacing.byPlatform.map((p) => p.platform));
@@ -53,7 +55,14 @@ export async function POST(req: NextRequest) {
         : { ...c, total: null, used: c.cost, left: null, pacing: null };
     });
     const noBudget = [...new Set(delivered.map((c) => c.platform))].filter((p) => !withBudget.has(p)).sort();
-    return NextResponse.json({ ...pacing, noBudget, campaigns });
+    const perSet = pacingByAdGroup(rows);
+    const adGroups = deliveredSets.map((c) => {
+      const b = perSet.get(`${c.platform}|${c.campaignId}|${c.adGroupId}`);
+      return b
+        ? { ...c, total: b.total, used: b.used, left: b.total - b.used, pacing: b.total > 0 ? b.used / b.total : null }
+        : { ...c, total: null, used: c.cost, left: null, pacing: null };
+    });
+    return NextResponse.json({ ...pacing, noBudget, campaigns, adGroups });
   } catch (e) {
     console.error('[dashboard/pacing]', e);
     if (isTransientDbError(e)) {

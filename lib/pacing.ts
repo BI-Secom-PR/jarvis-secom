@@ -4,6 +4,8 @@ export type BudgetRow = {
   platform: string;
   level: 'campaign' | 'ad_group';
   campaignId: string;
+  /** Só nas linhas de nível `ad_group`. */
+  adGroupId?: string | null;
   amount: number;
   /** `true` = `amount` é por dia e o orçado do flight é amount × dias. */
   daily: boolean;
@@ -43,6 +45,19 @@ export function pacingByCampaign(rows: BudgetRow[]): Map<string, { total: number
   const out = new Map<string, { total: number; used: number }>();
   for (const r of keptRows(rows)) {
     const k = `${r.platform}|${r.campaignId}`;
+    const cur = out.get(k) ?? { total: 0, used: 0 };
+    cur.total += flightTotal(r); cur.used += r.used;
+    out.set(k, cur);
+  }
+  return out;
+}
+
+/** Orçado/utilizado por conjunto (`plataforma|campaign_id|ad_group_id`) — só vale orçamento de nível conjunto. */
+export function pacingByAdGroup(rows: BudgetRow[]): Map<string, { total: number; used: number }> {
+  const out = new Map<string, { total: number; used: number }>();
+  for (const r of rows) {
+    if (r.level !== 'ad_group' || !r.adGroupId) continue;
+    const k = `${r.platform}|${r.campaignId}|${r.adGroupId}`;
     const cur = out.get(k) ?? { total: 0, used: 0 };
     cur.total += flightTotal(r); cur.used += r.used;
     out.set(k, cur);
