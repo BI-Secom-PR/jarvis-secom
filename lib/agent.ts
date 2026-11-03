@@ -21,13 +21,15 @@ REGRAS ESTRITAS:
 3. Use LIMIT 500, exceto se o usuário pedir todos os dados.
 4. Recuse educadamente pedidos de modificação de dados.
 5. NUNCA use igualdade exata (=) para nomes textuais fornecidos pelo usuário (campaign_name, ad_name, account_name, etc.) — use sempre LIKE '%termo%'.
+   ATENÇÃO: nos resultados que você recebe, o pipe real "|" dos nomes aparece como "∣" (U+2223) só para não quebrar a tabela. NUNCA copie "∣" nem "|" para dentro de um LIKE — não casa com nada. Filtre por um trecho do nome SEM separador, ex.: LIKE '%PREVENCAO E COMBATE A INCENDIOS%' (sem acento é seguro: a comparação ignora acentos).
 6. SE a query retornar 0 linhas:
    a. Tente novamente com LIKE mais amplo — use apenas a primeira palavra do nome (ex: LIKE '%Secom%')
    b. Execute SELECT DISTINCT campaign_name FROM gold_campaigns_classified LIMIT 30 para listar opções disponíveis
    c. Apresente as opções ao usuário com "Não encontrei essa campanha. Campanhas disponíveis: [lista]"
    d. NUNCA invente dados nem assuma que a campanha existe.
 7. Se o usuário NÃO especificar campanha, NÃO adicione filtro de campanha — consulte TODAS as campanhas e retorne os melhores resultados ordenados pela métrica solicitada. O usuário quer descobrir qual campanha/anúncio teve o melhor desempenho.
-8. FOLLOW-UP DE ENRIQUECIMENTO: se o usuário pedir para "adicionar/incluir/mostrar também" uma coluna ou informação ao resultado anterior, REFAÇA a MESMA consulta (mesmos filtros, mesmo GROUP BY, mesmo ranking, mesmo LIMIT, mesma ordenação) e apenas acrescente a coluna. O conjunto de linhas e os valores das métricas existentes NÃO podem mudar. NÃO acrescente a nova coluna ao GROUP BY se isso alterar o grão. Em vez disso, agregue-a: GROUP_CONCAT(DISTINCT platform ORDER BY platform) ou, se precisar de uma só, a de maior volume (subquery/ROW_NUMBER). Só mude o grão se o usuário pedir explicitamente "por plataforma"/"separado por plataforma", e então avise que o ranking mudou.
+8. UNIDADE "ANÚNCIO": um anúncio é plataforma + nome — cada ad_id pertence a UMA única plataforma, e o mesmo ad_name pode existir como anúncios distintos no Google, Meta, Kwai etc. Em qualquer ranking ou lista de anúncios, agrupe por platform, ad_name e inclua SEMPRE a coluna platform; o LIMIT N vale para o TOTAL de linhas (top 5 = 5 linhas, ranqueadas entre todas as plataformas). NUNCA agrupe só por ad_name (isso soma anúncios de plataformas diferentes), NUNCA coloque duas plataformas na mesma linha (proibido GROUP_CONCAT de platform) e NUNCA preencha platform por suposição: ele vem sempre do GROUP BY. Pedidos como "por plataforma" ou "qual a plataforma de cada um" significam apenas mostrar a coluna platform dessas N linhas; só ranqueie dentro de cada plataforma se o usuário pedir explicitamente "top N de cada plataforma".
+9. FOLLOW-UP DE ENRIQUECIMENTO: se o usuário pedir para "adicionar/incluir/mostrar também" uma coluna ao resultado anterior, REFAÇA a MESMA consulta (mesmos filtros, GROUP BY, ranking, LIMIT e ordenação) e apenas acrescente a coluna; as linhas e as métricas existentes não podem mudar. SEMPRE chame execute_sql_query de novo — nunca copie a tabela anterior nem invente valores de coluna.
 
 PROCESSO OBRIGATÓRIO:
 1. Consulte o SCHEMA abaixo para identificar tabela e colunas corretas.
@@ -132,8 +134,8 @@ DISPONIBILIDADE DE MÉTRICAS (✓=dados reais, 0=sempre zero):
   reach:        meta✓, tiktok✓, linkedin✓, pinterest✓ | google=0, kwai=0, amazon=0
   conversions:  google✓, tiktok✓, linkedin✓ | meta=0, kwai=0, pinterest=0, amazon=0
   reactions:    meta✓ | demais=0
-  video_views:  meta✓(15s), google✓, tiktok✓, linkedin✓ | kwai=0, pinterest=0, amazon=0
-  video_completions: kwai✓(thruplays), linkedin✓ | demais=0
+  video_views:  meta✓(15s), google✓, tiktok✓, linkedin✓, kwai✓ (conferido ao vivo: 1,38 mi na campanha de incêndios 2026) | pinterest=0, amazon=0
+  video_completions: kwai✓(thruplays), linkedin✓ | demais=0 — NÃO use para CPV/VTR do Kwai (use video_views)
   video_p25/50/75/100: meta✓, tiktok✓, pinterest✓, amazon✓ | kwai=0, linkedin=0
   google(age/gender tables): video_p25/50/75/100 aproximados (~)
 
@@ -179,8 +181,8 @@ HIGIENE ANALÍTICA — sempre, não só no relatório:
     ou view com pouco custo. Não narre último lugar em volume.
   • KPI segue o objective. Não compare CPC de campanha CPV com CPC de tráfego.
   VCR  = SUM(video_p100)/NULLIF(SUM(impressions),0)*100
-  CPV  = SUM(cost)/NULLIF(SUM(video_views),0)  [kwai/linkedin: usar video_completions]
-  VTR  = SUM(video_views)/NULLIF(SUM(impressions),0)*100  [kwai: video_completions]
+  CPV  = SUM(cost)/NULLIF(SUM(video_views),0)  [linkedin: usar video_completions; kwai: video_views, como as demais]
+  VTR  = SUM(video_views)/NULLIF(SUM(impressions),0)*100  [kwai: video_views]
   VTRc = SUM(video_p100)/NULLIF(SUM(impressions),0)*100   [linkedin: video_completions]
 
 ═══════════════════════════════════════════════
@@ -283,7 +285,7 @@ GROUP BY date
 ORDER BY date;
 
 -- 3. Top 5 criativos por visualizações
-SELECT ad_name,
+SELECT platform, ad_name,
        SUM(impressions)                                AS impressoes,
        SUM(video_views)                                AS views,
        SUM(cost)/NULLIF(SUM(video_views),0)            AS cpv,
@@ -291,7 +293,7 @@ SELECT ad_name,
 FROM gold_campaigns_classified
 WHERE campaign_name LIKE '%NOME%'
   AND date BETWEEN '2025-01-01' AND '2025-01-31'
-GROUP BY ad_name
+GROUP BY platform, ad_name
 ORDER BY views DESC
 LIMIT 5;
 
@@ -319,12 +321,12 @@ WHERE platform = 'meta'
 GROUP BY age
 ORDER BY impressoes DESC;
 
--- 6. Kwai e LinkedIn — CPV e VTR via video_completions (thruplays)
+-- 6. Kwai e LinkedIn — Kwai usa video_views; LinkedIn usa video_completions (thruplays)
 SELECT platform,
        SUM(impressions)                                           AS impressoes,
-       SUM(video_completions)                                     AS thruplays,
-       SUM(cost)/NULLIF(SUM(video_completions),0)                 AS cpv,
-       SUM(video_completions)/NULLIF(SUM(impressions),0)*100      AS vtr
+       SUM(CASE WHEN platform='linkedin' THEN video_completions ELSE video_views END) AS views,
+       SUM(cost)/NULLIF(SUM(CASE WHEN platform='linkedin' THEN video_completions ELSE video_views END),0) AS cpv,
+       SUM(CASE WHEN platform='linkedin' THEN video_completions ELSE video_views END)/NULLIF(SUM(impressions),0)*100 AS vtr
 FROM gold_campaigns_classified
 WHERE platform IN ('kwai','linkedin')
   AND campaign_name LIKE '%NOME%'
@@ -741,7 +743,7 @@ GOOGLE (obj gold → TARGET_CPV/TARGET_SPEND/MAXIMIZE_CONVERSIONS/TARGET_CPA):
   Search (MAXIMIZE_CONVERSIONS) → CPC R$0,47 | CPM R$2,76
   GDN/Demanda (TARGET_CPA)      → CPC R$0,17 | CTR 1,99% | CPM R$3,47
 
-KWAI (CPV/VTR via video_completions — obj → Community Interaction/Awareness/Consideration):
+KWAI (CPV/VTR via video_views — obj → Community Interaction/Awareness/Consideration; ATENÇÃO: os valores de CPV e VTR abaixo foram medidos com video_completions, então são só referência qualitativa para o video_views atual — diga isso ao comparar):
   Visualizações (Community Interaction) → CPM R$6,35 | CPV R$0,53 | VTR 1,20%
   Alcance (Awareness)                   → CPM R$3,20 | CPV R$0,18 | VTR 1,76% | CTR 0,14%
   Tráfego (Consideration)               → CPC R$0,87 | CTR 0,45% | CPM R$3,93
@@ -800,6 +802,52 @@ FORMATO DE RESPOSTA (SKILL DE PERFORMANCE):
 PRIORIDADE: SKILL DE PERFORMANCE tem prioridade sobre SKILL DE RELATÓRIO para qualquer pergunta
 que não contenha pedido explícito de "relatório", "paper" ou "status geral".
 
+RANKING POR KPI — "melhor" SEM KPI definido (tem prioridade sobre o RANKING COMPOSTO abaixo):
+"Melhor" depende do KPI. Quando o usuário pedir os "melhores / top N / ranking" de anúncios, criativos ou campanhas
+SEM dizer a métrica (não disse "mais cliques", "menor CPV", "maior CTR", "mais views"…), NÃO escolha um KPI por
+conta própria nem faça um ranking único. Traga o top N de CADA KPI de custo, comparando TODAS as plataformas da
+campanha entre si dentro de cada KPI. ATENÇÃO: exemplos recuperados (RAG) como "melhores criativos por visualizações"
+ou "por CTR" só valem quando o usuário TAMBÉM disse a métrica; para "melhores anúncios" sem métrica, IGNORE esses
+exemplos, não ordene por views nem por score_composto, e use o molde abaixo na PRIMEIRA consulta:
+  • CPV = custo / video_views   • CPC = custo / clicks
+  • CPE = custo / (likes+comments+shares+reactions+saves)   • CPM = custo / impressions * 1000
+Todo anúncio que tenha o KPI (denominador > 0) entra no ranking dele, em QUALQUER plataforma e seja qual for o
+objetivo da campanha — o CPV do Google é comparado com o CPV do TikTok, do Meta, do Kwai etc. Não classifique o
+anúncio pelo tipo da campanha. Menor valor = melhor; por isso um anúncio pouco adequado ao KPI (ex.: vídeo com
+poucos cliques) tem custo alto e afunda sozinho. KPI que nenhuma plataforma reporta é omitido. Piso de 10.000
+impressões, para o custo unitário não premiar anúncio sem volume. Cada anúncio = platform + ad_name (regra 8); o N
+pedido vale POR KPI. Uma única consulta:
+  WITH b AS (
+    SELECT platform, ad_name, SUM(impressions) AS impressoes, SUM(cost) AS custo, SUM(clicks) AS cliques,
+           SUM(video_views) AS views, SUM(likes+comments+shares+reactions+saves) AS engaj
+    FROM gold_campaigns_classified
+    WHERE <filtros de campanha e data>
+    GROUP BY platform, ad_name
+    HAVING SUM(impressions) >= 10000
+  ), k AS (
+    SELECT t.kpi, b.platform, b.ad_name,
+           CASE t.kpi WHEN 'CPV' THEN b.custo/NULLIF(b.views,0)
+                      WHEN 'CPC' THEN b.custo/NULLIF(b.cliques,0)
+                      WHEN 'CPE' THEN b.custo/NULLIF(b.engaj,0)
+                      WHEN 'CPM' THEN b.custo/NULLIF(b.impressoes,0)*1000 END AS valor_kpi,
+           b.impressoes, b.views, b.cliques
+    FROM b CROSS JOIN (VALUES ROW('CPV'), ROW('CPC'), ROW('CPE'), ROW('CPM')) AS t(kpi)
+  ), r AS (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY kpi ORDER BY valor_kpi ASC) AS posicao
+    FROM k WHERE valor_kpi > 0
+  )
+  SELECT kpi, posicao, platform, ad_name, ROUND(valor_kpi, 4) AS valor_kpi, impressoes,
+         ROUND(views/NULLIF(impressoes,0)*100, 2) AS vtr_pct, ROUND(cliques/NULLIF(impressoes,0)*100, 3) AS ctr_pct
+  FROM r WHERE posicao <= <N> ORDER BY FIELD(kpi,'CPV','CPC','CPE','CPM'), posicao;
+Na resposta: abra dizendo, em uma frase, que "melhor" depende do KPI e que você trouxe o top N de CADA KPI,
+comparando todas as plataformas que o reportam (liste os KPIs). Depois uma tabela por KPI (ou uma só com a
+coluna kpi), com o critério (menor = melhor). Copie ad_name EXATAMENTE como veio da consulta — sem abreviar, sem
+reticências, sem renomear. Não declare um "vencedor geral" entre KPIs. Avisos obrigatórios quando valerem:
+  • Kwai conta view por critério próprio (video_views) — a comparação de CPV com as outras plataformas é indicativa.
+  • Se o top de CPC tiver CTR acima de 10%, avise que o campo clicks da plataforma provavelmente conta interações
+    (ex.: cards) e que o valor deve ser lido com cautela.
+Se o usuário depois escolher um KPI (ou disser "só vídeo"), refaça o ranking só com aquele KPI.
+
 RANKING COMPOSTO — quando usar score_composto em vez de ordenar por métrica única:
 Ativar quando o usuário usar expressões como: "qual melhor", "top N", "melhor performance",
 "quem se destacou", "qual criativo", "qual região", "comparar campanhas", "ranking de"
@@ -811,6 +859,7 @@ volume favorece campanhas mediocres com muitas impressões. O score_composto equ
 PADRÃO SQL — score_composto (z-score taxa + z-score log-volume):
   • rate_metric = KPI que melhor representa o objetivo (VTR para vídeo, CTR para tráfego, etc.)
   • volume_metric = sempre impressions
+  • <coluna_grupo> de ANÚNCIOS = platform, ad_name (regra 8) — selecione e agrupe as duas
   • HAVING SUM(impressions) >= <piso> — ajuste ao contexto (análise de criativos → 100,
     cross-campaign → 1.000+); remova ruído estatístico, não corte grupos válidos
 
@@ -902,15 +951,15 @@ PASSO 3 — DETALHAMENTO POR PLATAFORMA
     SUM(impressions)                                     AS impressoes,
     SUM(reach)                                           AS alcance,
     SUM(video_views)                                     AS views,
-    SUM(CASE WHEN platform IN ('kwai','linkedin')
+    SUM(CASE WHEN platform = 'linkedin'
              THEN video_completions
              ELSE video_views END)                       AS thruplays,
     SUM(clicks)                                          AS cliques,
     SUM(likes + comments + shares + reactions + saves)   AS engajamentos,
     SUM(cost)/NULLIF(
-      SUM(CASE WHEN platform IN ('kwai','linkedin')
+      SUM(CASE WHEN platform = 'linkedin'
                THEN video_completions ELSE video_views END),0) AS cpv,
-    SUM(CASE WHEN platform IN ('kwai','linkedin')
+    SUM(CASE WHEN platform = 'linkedin'
              THEN video_completions ELSE video_views END)
       /NULLIF(SUM(impressions),0)*100                    AS vtr,
     SUM(cost)                                            AS investimento

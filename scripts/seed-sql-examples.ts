@@ -399,9 +399,10 @@ GROUP BY age ORDER BY impressoes DESC;`,
   {
     question: 'Qual o CPV e VTR no Kwai e LinkedIn usando video completions?',
     dims: ['video'],
-    sql: `SELECT platform, SUM(impressions) AS impressoes, SUM(video_completions) AS thruplays,
-       SUM(cost)/NULLIF(SUM(video_completions),0) AS cpv,
-       SUM(video_completions)/NULLIF(SUM(impressions),0)*100 AS vtr
+    sql: `SELECT platform, SUM(impressions) AS impressoes,
+       SUM(CASE WHEN platform='linkedin' THEN video_completions ELSE video_views END) AS views,
+       SUM(cost)/NULLIF(SUM(CASE WHEN platform='linkedin' THEN video_completions ELSE video_views END),0) AS cpv,
+       SUM(CASE WHEN platform='linkedin' THEN video_completions ELSE video_views END)/NULLIF(SUM(impressions),0)*100 AS vtr
 FROM gold_campaigns_classified
 WHERE platform IN ('kwai','linkedin')
 GROUP BY platform;`,

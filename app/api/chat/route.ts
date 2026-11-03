@@ -178,6 +178,9 @@ interface Hooks {
 // incrementally.
 const PREAMBLE_GATE = 48;
 
+/** Markdown table separator row (`| --- | :---: |`). */
+const MD_TABLE = /^\s*\|?\s*:?-{3,}:?\s*\|/m;
+
 /** One Ollama round-trip. Streams content deltas through `onDelta` when given. */
 async function ollamaStep(
   modelId: string,
@@ -227,15 +230,35 @@ async function runOllamaChat(
     ...messages.map((m) => ({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) })),
   ];
 
+  let queried = false;
+  let nudged = false;
+
   for (let step = 0; step < 6; step++) {
     hooks.onStatus?.('thinking');
-    const msg = await ollamaStep(modelId, conv, hooks.onDelta);
+    // Step 0 is buffered (no streaming) so a table with no query behind it can be
+    // caught before the client sees it. Later steps stream as usual.
+    const buffered = step === 0;
+    const msg = await ollamaStep(modelId, conv, buffered ? undefined : hooks.onDelta);
     conv.push(msg);
 
-    if (!msg.tool_calls?.length) return msg.content ?? '';
+    if (!msg.tool_calls?.length) {
+      const content = msg.content ?? '';
+      // A markdown table with no execute_sql_query in this turn is copied/invented
+      // data (e.g. "add a column" follow-ups that filled platform=google by guess).
+      if (!queried && !nudged && MD_TABLE.test(content)) {
+        nudged = true;
+        conv.push({
+          role: 'user',
+          content: '[SISTEMA] Você respondeu com uma tabela sem executar execute_sql_query neste turno. Não copie nem invente valores de colunas. Chame execute_sql_query agora com a consulta completa (siga a regra 9 se for um pedido de adicionar coluna) e responda apenas com os dados retornados.',
+        });
+        continue;
+      }
+      if (buffered && content) hooks.onDelta?.(content);
+      return content;
+    }
 
     for (const tc of msg.tool_calls) {
-      if (tc.function.name === 'execute_sql_query') hooks.onStatus?.('sql');
+      if (tc.function.name === 'execute_sql_query') { queried = true; hooks.onStatus?.('sql'); }
       const name = tc.function.name;
       const args = tc.function.arguments as Record<string, unknown>;
       let result: unknown;
