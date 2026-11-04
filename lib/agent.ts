@@ -87,7 +87,8 @@ COLUNAS COMPARTILHADAS (todas as tabelas):
                  ⚠ "total de anúncios" / "quantos anúncios" = COUNT(DISTINCT ad_id) SEMPRE.
                    NUNCA use COUNT(DISTINCT ad_name): nomes repetem entre ids distintos e
                    subcontam. ad_id é o identificador único real do anúncio veiculado.
-  Metadata:      objective (NULL para Google e Amazon)
+  Metadata:      objective (preenchido em Google, Meta, TikTok, Kwai, LinkedIn, Pinterest, Amazon e Globoads;
+                 NULL só em parte do Pinterest — ~90 campanhas —, do TikTok e do LinkedIn; conferido em 04/11/2026)
   Custo:         cost DECIMAL(18,6), cost_currency
   Performance:   impressions BIGINT, clicks BIGINT, reach BIGINT,
                  engagements BIGINT, conversions BIGINT
@@ -141,14 +142,14 @@ DISPONIBILIDADE DE MÉTRICAS (✓=dados reais, 0=sempre zero):
 
 MOEDA (cost):
   meta, google, tiktok: BRL (account native, cost_currency=NULL)
-  kwai: BRL (cost_currency='BRL')
-  linkedin: varia por conta
+  kwai, globoads: BRL (cost_currency='BRL')
+  linkedin: BRL (cost_currency='BRL' em 99,5% das impressões; o resto vem NULL — ignore-o em benchmarks)
   pinterest: aparece como cost_currency='USD', MAS o valor JÁ ESTÁ EM BRL — o fornecedor
              entrega o custo já convertido em reais para o cliente. TRATE pinterest como BRL:
              pode somar com meta/google/tiktok/kwai/linkedin(BRL) sem conversão e exibir R$.
-  amazon_dsp: USD (cost_currency=NULL)
-  ⚠ NÃO some cost entre plataformas sem filtrar por moeda — EXCEÇÃO: pinterest conta como BRL
-    (acima). Atenção real só com amazon_dsp (USD de verdade) e linkedin de conta em moeda estrangeira.
+  amazon_dsp: BRL (cost_currency='BRL' em 99,7% das impressões; 'Unknown Currency' é residual — ignore-o)
+  ⚠ Conferido em 04/11/2026: todas as plataformas estão em BRL (pinterest incluso, ver acima). Só filtre por moeda
+    se aparecer conta em moeda estrangeira ou linha residual de cost_currency desconhecida/NULL em amazon_dsp e linkedin.
 
 KPIs COMUNS:
   CPM  = SUM(cost)/NULLIF(SUM(impressions),0)*1000
@@ -732,7 +733,8 @@ Fonte: gold DB, todo o histórico até 03/11/2026 (recalculado em 04/11/2026). T
 Valor pontual por objetivo, para a SKILL DE PERFORMANCE (as faixas do RELATÓRIO estão em "BENCHMARKS SECOM POR PLATAFORMA").
 Método: razões SUM/SUM (nunca média de taxas). CPV, VTR e VTRc só sobre linhas que reportam vídeo (views>0 / p100>0);
 CPM, CPC e CTR sobre todas as linhas. CPE = custo / (likes+comments+shares+reactions+saves) — nunca a coluna engagements.
-Kwai: video_views. Amazon e LinkedIn: só linhas em BRL.
+Kwai: video_views. LinkedIn: CPV e VTRc por video_completions, VTR(2s) por video_views. Amazon e LinkedIn: só linhas em BRL.
+Para recalcular: npx tsx --env-file=.env.local scripts/benchmarks.ts (imprime médias e faixas; o texto abaixo é atualizado à mão).
 ═══════════════════════════════════════════════
 
 META (obj gold → THRUPLAY/REACH/POST_ENGAGEMENT/LINK_CLICKS/PROFILE_VISIT/IMPRESSIONS/AD_RECALL_LIFT):
@@ -767,9 +769,9 @@ TIKTOK (obj gold → VIDEO_VIEWS/REACH/TRAFFIC/ENGAGEMENT):
   Tráfego (TRAFFIC)             → CPC R$0,08 | CTR 4,26% | CPM R$3,21
   Engajamento (ENGAGEMENT)      → CPE R$1,22 | CPM R$10,33 | CPV R$0,126 | VTR 8,22%
 
-LINKEDIN (CPV e VTR(2s) abaixo calculados com video_views; video_completions dá CPV de R$1,70 a R$3,06 e não serve de benchmark — obj → VIDEO_VIEW/BRAND_AWARENESS/WEBSITE_VISIT):
-  Visualizações (VIDEO_VIEW)    → CPV R$0,151 | VTR(2s) 28,84% | CPM R$43,41 | CTR 0,39%
-  Alcance (BRAND_AWARENESS)     → CPV R$0,087 | VTR(2s) 42,23% | CPM R$28,17 | CTR 0,46%
+LINKEDIN (CPV e VTRc via video_completions; VTR(2s) via video_views — obj → VIDEO_VIEW/BRAND_AWARENESS/WEBSITE_VISIT):
+  Visualizações (VIDEO_VIEW)    → CPV R$3,06 | VTR(2s) 28,84% | VTRc 1,42% | CPM R$43,41 | CTR 0,39%
+  Alcance (BRAND_AWARENESS)     → CPV R$0,89 | VTR(2s) 42,23% | VTRc 4,13% | CPM R$28,17 | CTR 0,46%
   Tráfego (WEBSITE_VISIT)       → CPC R$4,24 | CTR 1,50% | CPM R$63,57
 
 PINTEREST (obj gold → AWARENESS/CONSIDERATION/VIDEO_COMPLETION; 90 campanhas vêm sem objetivo):
@@ -1127,7 +1129,7 @@ BENCHMARKS SECOM POR PLATAFORMA — faixa típica para a SKILL DE RELATÓRIO (P2
   Meta           : CPV R$ 0,051–0,118 | VTR  7–14%     | CPM R$ 3,47–8,15
   TikTok         : CPV R$ 0,045–0,125 | VTR  5–16%     | CPM R$ 3,83–7,91
   Kwai           : CPV R$ 0,058–0,171 | VTR  3–7%      | CPM R$ 3,54–5,58
-  LinkedIn       : CPV R$ 0,079–0,190 | VTR(2s) 27–30% | CPM R$ 23–54
+  LinkedIn       : CPV R$ 1,90–6,22 | VTR(2s) 27–30% | VTRc 0,8–1,9% | CPM R$ 23–54
   Pinterest      : CPM R$ 3,92–8,37 | VTRc(p100) 0,8–4,4%
   Amazon DSP     : CPM R$ 18–66 | VCR(p100) 71–86%
   Globoads       : CPM R$ 11–65 | CPV R$ 0,044–0,077 (VTR ≈ 100% = view igual à impressão; não é retenção)
