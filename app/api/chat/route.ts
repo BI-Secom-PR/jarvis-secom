@@ -10,6 +10,7 @@ import { db } from '@/lib/db';
 import { fileExports } from '@/lib/db/schema';
 import { generateExport, MIME, type ChartSpec, type ExportFormat } from '@/lib/exports/generate';
 import { retrieveSimilarExamples } from '@/lib/rag';
+import { ownedChatSession, recordQuery, lastQueriesBlock } from '@/lib/chatQueries';
 import { sseResponse } from '@/lib/sse';
 
 // Ollama-cloud Gemma with the multi-step SQL tool loop routinely runs past
@@ -168,6 +169,8 @@ type OllamaMessage = { role: string; content: string; tool_calls?: { function: {
 interface Hooks {
   onDelta?: (text: string) => void;
   onStatus?: (phase: 'rag' | 'thinking' | 'sql' | 'answering') => void;
+  /** Called after each successful execute_sql_query — feeds the per-conversation query memory. */
+  onQuery?: (sql: string, rowCount: number) => void;
 }
 
 // A step that calls a tool sometimes emits a short preamble before the
@@ -264,7 +267,10 @@ async function runOllamaChat(
       let result: unknown;
       try {
         if (name === 'execute_sql_query') {
-          result = await executeSql(String(args.sql_query ?? ''));
+          const sqlText = String(args.sql_query ?? '');
+          const rows = await executeSql(sqlText);
+          hooks.onQuery?.(sqlText, rows.length);
+          result = rows;
         } else if (name === 'create_download_file') {
           result = await createDownloadFile(args as unknown as CreateDownloadArgs, ctx);
         } else {
@@ -305,12 +311,19 @@ export async function POST(req: NextRequest) {
     chatSessionId: typeof chatSessionId === 'string' ? chatSessionId : null,
   };
 
-  /** Runs the model and returns the full reply. Streams through `hooks` if given. */
-  const run = async (hooks: Hooks = {}): Promise<string> => {
+  // chatSessionId comes from the client — only trust it if the conversation is the user's.
+  const ownedSessionId = await ownedChatSession(session.id, ctx.chatSessionId);
+
+  /** Runs the model and returns the full reply. Streams through `baseHooks` if given. */
+  const run = async (baseHooks: Hooks = {}): Promise<string> => {
+    const hooks: Hooks = { ...baseHooks, onQuery: (sql, n) => { void recordQuery(ownedSessionId, sql, n); } };
     // RAG: append the most similar (question → SQL) examples; '' on any failure
     hooks.onStatus?.('rag');
-    const ragBlock = await retrieveSimilarExamples(String(chatInput ?? ''));
-    const systemPrompt = getSystemPrompt() + ragBlock;
+    const [ragBlock, queriesBlock] = await Promise.all([
+      retrieveSimilarExamples(String(chatInput ?? '')),
+      lastQueriesBlock(ownedSessionId),
+    ]);
+    const systemPrompt = getSystemPrompt() + ragBlock + queriesBlock;
 
     if (getModelProvider(modelId) === 'ollama') {
       return runOllamaChat(modelId, systemPrompt, messages, ctx, hooks);
@@ -329,7 +342,9 @@ export async function POST(req: NextRequest) {
           }),
           execute: async ({ sql_query }: { sql_query: string }) => {
             hooks.onStatus?.('sql');
-            return executeSql(sql_query);
+            const rows = await executeSql(sql_query);
+            hooks.onQuery?.(sql_query, rows.length);
+            return rows;
           },
         }),
         create_download_file: tool({

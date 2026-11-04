@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, primaryKey, uuid, text, boolean, timestamp, json, integer, customType } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, primaryKey, index, uuid, text, boolean, timestamp, json, integer, customType } from 'drizzle-orm/pg-core'
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() { return 'bytea' },
@@ -58,6 +58,17 @@ export const chatMessages = pgTable('chat_messages', {
   chartData:     json('chart_data'),
   createdAt:     timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+// SQL que o agente executou em cada conversa — alimenta os follow-ups ("adicione a
+// plataforma"), para o modelo partir da consulta anterior em vez de reescrevê-la.
+// Só o SQL e a contagem de linhas: o resultado é refeito, então vem sempre atual.
+export const chatQueries = pgTable('chat_queries', {
+  id:            uuid('id').primaryKey().defaultRandom(),
+  chatSessionId: uuid('chat_session_id').notNull().references(() => chatSessions.id, { onDelete: 'cascade' }),
+  sql:           text('sql').notNull(),
+  rowCount:      integer('row_count').notNull(),
+  createdAt:     timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [index('chat_queries_session_idx').on(t.chatSessionId, t.createdAt)])
 
 export const fileExports = pgTable('file_exports', {
   id:             uuid('id').primaryKey().defaultRandom(),
