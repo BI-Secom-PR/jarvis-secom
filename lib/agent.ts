@@ -728,46 +728,65 @@ ORDER BY score_composto DESC;
 
 ═══════════════════════════════════════════════
 SKILL DE PERFORMANCE — MÉDIAS DA SECOM
-Fonte: gold DB jan/2025–abr/2026 + doc. oficial SECOM Set/2025. Todos os custos em BRL.
+Fonte: gold DB, todo o histórico até 03/11/2026 (recalculado em 04/11/2026). Todos os custos em BRL.
+Valor pontual por objetivo, para a SKILL DE PERFORMANCE (as faixas do RELATÓRIO estão em "BENCHMARKS SECOM POR PLATAFORMA").
+Método: razões SUM/SUM (nunca média de taxas). CPV, VTR e VTRc só sobre linhas que reportam vídeo (views>0 / p100>0);
+CPM, CPC e CTR sobre todas as linhas. CPE = custo / (likes+comments+shares+reactions+saves) — nunca a coluna engagements.
+Kwai: video_views. Amazon e LinkedIn: só linhas em BRL.
 ═══════════════════════════════════════════════
 
-META (obj gold → THRUPLAY/REACH/POST_ENGAGEMENT/LINK_CLICKS):
-  Visualizações (THRUPLAY)      → CPV R$0,06 | VTR 12,19% | VTRc 4,87% | CPM R$7,87
-  Alcance (REACH)               → CPM R$2,21 | CPC R$0,99
-  Engajamento (POST_ENGAGEMENT) → CPE R$0,03 | CPM R$8,04 | CTR 1,32%
-  Tráfego (LINK_CLICKS)         → CPC R$0,35 | CTR 1,57% | CPM R$5,44
+META (obj gold → THRUPLAY/REACH/POST_ENGAGEMENT/LINK_CLICKS/PROFILE_VISIT/IMPRESSIONS/AD_RECALL_LIFT):
+  Visualizações (THRUPLAY)         → CPV R$0,067 | VTR 11,56% | VTRc 4,12% | CPM R$7,71
+  Alcance (REACH)                  → CPM R$2,07 | CPC R$1,00 | CTR 0,21%
+  Engajamento (POST_ENGAGEMENT)    → CPE R$0,31 | CPM R$8,48 | CTR 1,35%
+  Tráfego (LINK_CLICKS)            → CPC R$0,32 | CTR 1,72% | CPM R$5,55
+  Visita ao perfil (PROFILE_VISIT) → CPC R$0,39 | CTR 1,73% | CPM R$6,69
+  Impressões (IMPRESSIONS)         → CPM R$1,78 | CPC R$1,44 | CTR 0,12%
+  Lembrança (AD_RECALL_LIFT)       → CPM R$2,92 | CPC R$1,33 | CTR 0,22%
 
-GOOGLE (obj gold → TARGET_CPV/TARGET_SPEND/MAXIMIZE_CONVERSIONS/TARGET_CPA):
-  YouTube/Viz (TARGET_CPV)      → CPV R$0,02 | VTR 33,54% | CPM R$7,29 | CTR 0,18%
-  Display (TARGET_SPEND)        → CPC R$0,24 | CTR 2,46% | CPM R$6,02
-  Search (MAXIMIZE_CONVERSIONS) → CPC R$0,47 | CPM R$2,76
-  GDN/Demanda (TARGET_CPA)      → CPC R$0,17 | CTR 1,99% | CPM R$3,47
+GOOGLE (obj gold → TARGET_CPV/TARGET_SPEND/MAXIMIZE_CONVERSIONS/TARGET_CPA/MANUAL_CPM/FIXED_CPM/TARGET_CPM/MANUAL_CPV):
+  YouTube/Viz (TARGET_CPV)      → CPV R$0,020 | VTR 36,58% | CPM R$7,53 | CTR 0,15%
+  Display (TARGET_SPEND)        → CPC R$0,26 | CTR 2,59% | CPM R$6,81
+  Search (MAXIMIZE_CONVERSIONS) → CPC R$0,57 | CTR 0,57% | CPM R$3,20
+  GDN/Demanda (TARGET_CPA)      → CPC R$0,21 | CTR 1,72% | CPM R$3,57
+  CPM manual (MANUAL_CPM)       → CPM R$1,29 | CPC R$0,57 | CTR 0,23%
+  CPM fixo (FIXED_CPM)          → CPM R$9,57 | CPV R$0,064 | VTR 14,06%
+  CPM alvo (TARGET_CPM)         → CPM R$4,79 | CPV R$0,023 | VTR 15,24%
+  CPV manual (MANUAL_CPV)       → CPV R$0,104 | VTR 3,04% | CPM R$3,16
 
-KWAI (CPV/VTR via video_views — obj → Community Interaction/Awareness/Consideration; ATENÇÃO: os valores de CPV e VTR abaixo foram medidos com video_completions, então são só referência qualitativa para o video_views atual — diga isso ao comparar):
-  Visualizações (Community Interaction) → CPM R$6,35 | CPV R$0,53 | VTR 1,20%
-  Alcance (Awareness)                   → CPM R$3,20 | CPV R$0,18 | VTR 1,76% | CTR 0,14%
-  Tráfego (Consideration)               → CPC R$0,87 | CTR 0,45% | CPM R$3,93
+KWAI (CPV/VTR via video_views — obj no gold: thruplay Video Play / 5s Video Play / Impression / Increase Fans / Click):
+  Visualizações (thruplay Video Play) → CPM R$4,47 | CPV R$0,052 | VTR 8,54% | CTR 0,38%  (maior volume do Kwai)
+  Visualizações (5s Video Play)       → CPM R$3,24 | CPV R$0,134 | VTR 2,41%
+  Alcance (Impression)                → CPM R$3,05 | CPV R$0,141 | VTR 2,16% | CTR 0,13%
+  Seguidores (Increase Fans)          → CPM R$7,11 | CPV R$0,210 | VTR 3,39%
+  Tráfego (Click)                     → CPC R$0,41 | CTR 0,79% | CPM R$3,28
 
 TIKTOK (obj gold → VIDEO_VIEWS/REACH/TRAFFIC/ENGAGEMENT):
-  Visualizações (VIDEO_VIEWS)   → CPV R$0,04 | VTR 13,59% | VTRc 1,60% | CPM R$5,38
-  Alcance (REACH)               → CPV R$0,16 | VTR 1,84% | CPM R$2,99 | CTR 0,17%
-  Tráfego (TRAFFIC)             → CPC R$0,15 | CTR 3,08% | CPM R$4,52
+  Visualizações (VIDEO_VIEWS)   → CPV R$0,044 | VTR 13,89% | VTRc 1,54% | CPM R$6,16
+  Alcance (REACH)               → CPV R$0,142 | VTR 1,58% | CPM R$2,24 | CTR 0,17%
+  Tráfego (TRAFFIC)             → CPC R$0,08 | CTR 4,26% | CPM R$3,21
+  Engajamento (ENGAGEMENT)      → CPE R$1,22 | CPM R$10,33 | CPV R$0,126 | VTR 8,22%
 
-LINKEDIN (CPV/VTR via video_completions — obj → VIDEO_VIEW/BRAND_AWARENESS/WEBSITE_VISIT):
-  Visualizações (VIDEO_VIEW)    → CPV R$0,14 | VTR(2s) 27,04% | CPM R$37,51 | CTR 0,46%
-  Alcance (BRAND_AWARENESS)     → VTR(2s) 13,15% | CPM R$27,38 | CTR 0,47%
-  Tráfego (WEBSITE_VISIT)       → CPC R$4,00 | CTR 1,55% | CPM R$62,21
+LINKEDIN (CPV e VTR(2s) abaixo calculados com video_views; video_completions dá CPV de R$1,70 a R$3,06 e não serve de benchmark — obj → VIDEO_VIEW/BRAND_AWARENESS/WEBSITE_VISIT):
+  Visualizações (VIDEO_VIEW)    → CPV R$0,151 | VTR(2s) 28,84% | CPM R$43,41 | CTR 0,39%
+  Alcance (BRAND_AWARENESS)     → CPV R$0,087 | VTR(2s) 42,23% | CPM R$28,17 | CTR 0,46%
+  Tráfego (WEBSITE_VISIT)       → CPC R$4,24 | CTR 1,50% | CPM R$63,57
 
-PINTEREST (obj gold → AWARENESS/CONSIDERATION/VIDEO_COMPLETION):
-  Alcance (AWARENESS)           → CPM R$4,54 | CTR 0,17%
+PINTEREST (obj gold → AWARENESS/CONSIDERATION/VIDEO_COMPLETION; 90 campanhas vêm sem objetivo):
+  Alcance (AWARENESS)           → CPM R$4,48 | CPC R$2,74 | CTR 0,16% | VTRc(p100) 1,03%
   Tráfego (CONSIDERATION)       → CPC R$1,45 | CTR 0,44% | CPM R$6,33
   Visualizações (VIDEO_COMPLETION) → VTRc(p100) 6,79% | CPM R$15,12 | CTR 0,26%
+  Sem objetivo (NULL)           → CPM R$9,14 | CPC R$2,60 | CTR 0,35% | VTRc(p100) 2,20%
 
 AMAZON DSP (obj gold → Online Video/Standard Display/Streaming TV Video/Audio):
-  Online Video      → CPM R$23,76 | VCR(p100) 69,69% | CTR 0,29%
+  Online Video      → CPM R$21,42 | VCR(p100) 70,47% | CTR 0,24%
   Standard Display  → CPM R$6,26 | CTR 0,16%
-  Streaming TV      → CPM R$65,91 | VCR(p100) 58,26%
-  Audio             → CPM R$14,00
+  Streaming TV      → CPM R$71,72 | VCR(p100) 78,87%
+  Audio             → CPM R$14,13
+
+GLOBOADS (obj gold → DIGITAL):
+  Digital (DIGITAL) → CPM R$24,43 | CPV R$0,079 | CTR 0,10%
+  ATENÇÃO: a Globo reporta "view" igual à impressão (VTR ≈ 100%) — NÃO use VTR da Globoads como retenção nem compare com outras plataformas.
 
 ACIONAMENTO — SKILL DE PERFORMANCE:
 Ativar quando o usuário usar qualquer destas expressões (ou sinônimos):
@@ -1103,30 +1122,32 @@ REGRAS DE NARRATIVA (valem para AMBOS os modos):
 
 6. Tom: profissional, objetivo, em português. Sem jargão desnecessário.
 
-BENCHMARKS SECOM POR PLATAFORMA — use estes valores ao comparar:
-  Google/YouTube : CPV R$ 0,02–0,04 | VTR 25–65%
-  Meta           : CPV R$ 0,04–0,11 | VTR  7–15%
-  TikTok         :                     VTR 13–41%
-  Kwai           : CPV R$ 0,06–0,20 | VTR  5–56%
-  LinkedIn       : CPM R$ 8–15
-  Referência geral (demais): CPV R$ 0,05 | CTR 0,5–1,5% | CPM R$ 5–12
+BENCHMARKS SECOM POR PLATAFORMA — faixa típica para a SKILL DE RELATÓRIO (P25–P75 das campanhas com 1 Mi+ de impressões; gold DB, histórico até 03/11/2026). Use estes valores ao comparar:
+  Google/YouTube : CPV R$ 0,016–0,055 | VTR 10–45%     | CPM R$ 4,56–10,10
+  Meta           : CPV R$ 0,051–0,118 | VTR  7–14%     | CPM R$ 3,47–8,15
+  TikTok         : CPV R$ 0,045–0,125 | VTR  5–16%     | CPM R$ 3,83–7,91
+  Kwai           : CPV R$ 0,058–0,171 | VTR  3–7%      | CPM R$ 3,54–5,58
+  LinkedIn       : CPV R$ 0,079–0,190 | VTR(2s) 27–30% | CPM R$ 23–54
+  Pinterest      : CPM R$ 3,92–8,37 | VTRc(p100) 0,8–4,4%
+  Amazon DSP     : CPM R$ 18–66 | VCR(p100) 71–86%
+  Globoads       : CPM R$ 11–65 | CPV R$ 0,044–0,077 (VTR ≈ 100% = view igual à impressão; não é retenção)
 
 EXEMPLO DE RESUMO GERAL — imite este tom e estrutura:
 ---
 Com 30 dias de veiculação, a campanha segue ativa nas plataformas Meta, Google, TikTok e Kwai.
 
-No **Google**, foram entregues **31,4 Mi de impressões** com **CPV de R$ 0,02** — bem abaixo do
-benchmark da plataforma (R$ 0,02–0,04) —, demonstrando **excelente eficiência de custo**. A taxa
-de visualização de **31,85%** está dentro da média esperada para YouTube (25–65%), indicando
+No **Google**, foram entregues **31,4 Mi de impressões** com **CPV de R$ 0,02** — na faixa inferior
+do benchmark da plataforma (R$ 0,016–0,055) —, demonstrando **excelente eficiência de custo**. A taxa
+de visualização de **31,85%** está dentro da média esperada para YouTube (10–45%), indicando
 **bom nível de consumo do conteúdo**.
 
 No **Meta**, **42 Mi de impressões** com **VTR de 11,28%** — dentro do esperado para a plataforma
-(7–15%) — e **CPM de R$ 4,80**, indicando **boa eficiência de alcance**. O público feminino
+(7–14%) — e **CPM de R$ 4,80**, indicando **boa eficiência de alcance**. O público feminino
 concentrou **60% das entregas** com CPV **15% mais eficiente** do que o masculino.
 
-No **Kwai**, **23 Mi de impressões** com **VTR de 5,7%** — dentro do range da plataforma (5–56%) —
-e **CPV de R$ 0,06**, ligeiramente acima da meta SECOM (R$ 0,05), sinalizando oportunidade de
-**ajuste no criativo para melhorar retenção**.
+No **Kwai**, **23 Mi de impressões** com **VTR de 5,7%** — dentro do range da plataforma (3–7%) —
+e **CPV de R$ 0,06**, no limite inferior da faixa do Kwai (R$ 0,058–0,171), sinalizando
+**boa eficiência de custo**.
 ---
 
 FORMATAÇÃO DOS NÚMEROS:
@@ -1197,9 +1218,9 @@ A tool recebe: { format, sql_query, title?, filename?, chart?, report_text? }
 
   ## Resumo Geral
 
-  * No **YouTube**, foram entregues **31,4 Mi de impressões** com **CPV de R$ 0,02**, bem abaixo do benchmark SECOM (R$ 0,05), e taxa de retenção de **31,85%**, acima da média de mercado.
-  * No **Meta**, **42 Mi de impressões** com **VTR de 11,28%** — abaixo do benchmark de 15-20% — e **CPM de R$ 4,80**, indicando boa eficiência no custo de alcance.
-  * O **Kwai** registrou **23 Mi de impressões** com **VTR de 5,7%** (abaixo do benchmark de 15%) e **CPV de R$ 0,06**, ligeiramente acima da meta SECOM.
+  * No **YouTube**, foram entregues **31,4 Mi de impressões** com **CPV de R$ 0,02**, na faixa inferior (mais eficiente) do benchmark SECOM (R$ 0,016–0,055), e taxa de retenção de **31,85%**, dentro da faixa do YouTube (10–45%).
+  * No **Meta**, **42 Mi de impressões** com **VTR de 11,28%** — dentro da faixa do benchmark (7–14%) — e **CPM de R$ 4,80**, indicando boa eficiência no custo de alcance.
+  * O **Kwai** registrou **23 Mi de impressões** com **VTR de 5,7%** (dentro da faixa do benchmark, 3–7%) e **CPV de R$ 0,06**, no limite inferior da faixa (R$ 0,058–0,171).
 
   ## Seção Adicional (se houver análise extra)
 
@@ -1210,8 +1231,8 @@ A tool recebe: { format, sql_query, title?, filename?, chart?, report_text? }
   - [PLATFORMS]: lista de plataformas exatamente como veiculadas.
   - Use **negrito** em TODOS os números, nomes de plataformas e métricas. Sem exceção.
   - PROIBIDO escrever bullets com apenas 1 frase genérica. Mínimo 2–3 frases substantivas por plataforma.
-  - Compare sempre com BENCHMARKS POR PLATAFORMA da SKILL DE RELATÓRIO (Google CPV R$0,02–0,04;
-    Meta VTR 7–15%; Kwai CPV R$0,06–0,20; etc.) — NÃO use benchmark genérico R$0,05 para Google.
+  - Compare sempre com BENCHMARKS POR PLATAFORMA da SKILL DE RELATÓRIO (Google CPV R$0,016–0,055;
+    Meta VTR 7–14%; Kwai CPV R$0,058–0,171; etc.) — NÃO use benchmark genérico R$0,05 para Google.
   - STATUS DIÁRIO (relatório curto): [METRICS] + [PLATFORMS] + ## Resumo Geral (4–6 bullets) + ## Criativo Destaque.
   - RELATÓRIO COMPLETO (relatório elaborado): igual ao status diário mais ## Análise Demográfica
     (gênero e faixa etária dos PASSOS 5–6) e ## Evolução da Campanha (tendência semanal do PASSO 7).
