@@ -54,7 +54,7 @@ async function chatWithRetry(content: string, maxOutputTokens: number, deadline:
         const r = await Promise.race([
           // think:false — o Gemma 4 raciocina por padrão e gasta o num_predict com resposta vazia.
           ollama.chat({ model: URL_CHECK_MODEL, think: false, keep_alive: '30m', options: { num_predict: maxOutputTokens, temperature: 0 }, messages: [{ role: 'user', content }] }),
-          new Promise<never>((_, rej) => setTimeout(() => rej(new Error('ollama chat timeout')), URL_CHECK_CALL_TIMEOUT_MS)),
+          new Promise<never>((_, rej) => setTimeout(() => rej(new Error('ollama chat timeout')), Math.max(5_000, Math.min(URL_CHECK_CALL_TIMEOUT_MS, deadline + 70_000 - Date.now())))),
         ]);
         return r.message.content.trim();
       }
