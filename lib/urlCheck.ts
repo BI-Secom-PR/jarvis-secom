@@ -1,4 +1,5 @@
-import { Ollama } from 'ollama';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { APICallError, generateText } from 'ai';
 import { isHomeRoot } from '@/lib/verification';
 
 // Auditoria de brand safety das URLs amostradas — extraída de
@@ -11,18 +12,16 @@ export type UrlSampleItem  = { url: string; categoria: string; veiculo: string; 
 export type UrlAnomalyItem = { url: string; categoria: string; categoria_sugerida: string | null; veiculo: string; reason: string; impressoes: number; pct: number };
 export type UrlCheckedRow  = UrlAnomalyItem & { status: 'CORRETA' | 'INCORRETA' };
 
-const ollamaClient = new Ollama({
-  host: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434',
-  headers: process.env.OLLAMA_API_KEY
-    ? { Authorization: `Bearer ${process.env.OLLAMA_API_KEY}` }
-    : undefined,
-});
+// Mesma chave do chat/RAG (Vercel: GOOGLE_GENERATIVE_AI_API_KEY; Keychain local: JARVIS_API_GAIS).
+const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
+// Medido ao vivo (10 URLs rotuladas, 2026-11-18): 3.5-flash-lite e 3.1-flash-lite 10/10;
+// 3.5/3.7/3.8-flash devolveram 503 "high demand" de forma persistente e o Pro estoura
+// a cota (chave free-tier). URL_CHECK_MODEL permite trocar para flash sem deploy.
+const URL_CHECK_MODEL = process.env.URL_CHECK_MODEL ?? 'gemini-3.5-flash-lite';
 
-// Ollama cloud rejects more than a handful of concurrent chats ("too many
-// concurrent requests"), and the ~1.2k-token persona prompt was being resent
-// once per URL. Both are fixed by grouping URLs into one call and capping
-// in-flight calls; measured ceiling is ~4 concurrent before requests start
-// failing or queueing.
+// The ~1.2k-token persona prompt used to be resent once per URL; grouping URLs
+// into one call fixes that, and capping in-flight calls keeps us under the
+// provider's rate limit.
 const URLS_PER_CALL = 10;
 const URL_CHECK_CONCURRENCY = 4;
 // ponytail: wall-clock cap instead of a URL-count cap. maxDuration is 300s and a
@@ -31,30 +30,22 @@ const URL_CHECK_CONCURRENCY = 4;
 // absoluto desde a entrada do POST, então o tempo que o engine já gastou desconta
 // sozinho; sobra folga para escrever a col 30 e devolver o xlsx.
 export const URL_CHECK_BUDGET_MS = 200_000;
-// Um lote de 10 URLs mede 8–33s; 75s é lento demais para ser real.
-const OLLAMA_CALL_TIMEOUT_MS = 75_000;
+const URL_CHECK_CALL_TIMEOUT_MS = 75_000;
 type UrlCheckOutcome = { rows: UrlCheckedRow[]; failed: number };
 
-async function chatWithRetry(content: string, numPredict: number, deadline: number, tries = 3): Promise<string> {
+async function chatWithRetry(content: string, maxOutputTokens: number, deadline: number, tries = 3): Promise<string> {
   for (let attempt = 0; ; attempt++) {
     try {
-      // ponytail: o cliente ollama não expõe signal por chamada, então o
-      // teto é um race. A chamada perdida vaza até resolver sozinha, mas o
-      // lote segue em frente — sem isso, um request pendurado consome os
-      // 300s inteiros e o usuário não recebe nada.
-      const response = await Promise.race([
-        ollamaClient.chat({
-          model: 'gemma4:31b-cloud',
-          options: { num_predict: numPredict },
-          messages: [{ role: 'user', content }],
-        }),
-        new Promise<never>((_, rej) =>
-          setTimeout(() => rej(new Error('ollama chat timeout')), OLLAMA_CALL_TIMEOUT_MS),
-        ),
-      ]);
-      return response.message.content.trim();
+      const { text } = await generateText({
+        model: google(URL_CHECK_MODEL),
+        prompt: content,
+        maxOutputTokens,
+        maxRetries: 0,
+        abortSignal: AbortSignal.timeout(URL_CHECK_CALL_TIMEOUT_MS),
+      });
+      return text.trim();
     } catch (err) {
-      const busy = String(err).includes('too many concurrent requests');
+      const busy = APICallError.isInstance(err) && [429, 500, 502, 503, 504].includes(err.statusCode ?? 0);
       if (!busy || attempt >= tries - 1 || Date.now() > deadline) throw err;
       await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
     }
@@ -200,7 +191,7 @@ export async function checkUrls(
       toCheck.push(item);
     }
   }
-  if (toCheck.length === 0 || !process.env.OLLAMA_BASE_URL) {
+  if (toCheck.length === 0 || !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     return { rows, checked: items.length, failed: 0 };
   }
 
