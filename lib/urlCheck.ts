@@ -1,5 +1,6 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { APICallError, generateText } from 'ai';
+import { Ollama } from 'ollama';
 import { isHomeRoot } from '@/lib/verification';
 
 // Auditoria de brand safety das URLs amostradas — extraída de
@@ -12,30 +13,51 @@ export type UrlSampleItem  = { url: string; categoria: string; veiculo: string; 
 export type UrlAnomalyItem = { url: string; categoria: string; categoria_sugerida: string | null; veiculo: string; reason: string; impressoes: number; pct: number };
 export type UrlCheckedRow  = UrlAnomalyItem & { status: 'CORRETA' | 'INCORRETA' };
 
-// Mesma chave do chat/RAG (Vercel: GOOGLE_GENERATIVE_AI_API_KEY; Keychain local: JARVIS_API_GAIS).
+// Dois provedores. URL_CHECK_OLLAMA_URL definido → Ollama próprio (servidor Secom,
+// GPU de 2 GB: lento, por isso lotes pequenos e prazo longo); senão Google AI Studio,
+// com a mesma chave do chat/RAG (Vercel: GOOGLE_GENERATIVE_AI_API_KEY; Keychain: JARVIS_API_GAIS).
+const OLLAMA_URL = process.env.URL_CHECK_OLLAMA_URL;
 const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
-// Medido ao vivo (10 URLs rotuladas, 2026-11-18): 3.5-flash-lite e 3.1-flash-lite 10/10;
-// 3.5/3.7/3.8-flash devolveram 503 "high demand" de forma persistente e o Pro estoura
-// a cota (chave free-tier). URL_CHECK_MODEL permite trocar para flash sem deploy.
-const URL_CHECK_MODEL = process.env.URL_CHECK_MODEL ?? 'gemini-3.5-flash-lite';
+const ollama = OLLAMA_URL
+  ? new Ollama({
+      host: OLLAMA_URL,
+      // ngrok-free põe uma página de aviso na frente de tráfego não-browser sem este header.
+      headers: {
+        'ngrok-skip-browser-warning': '1',
+        ...(process.env.URL_CHECK_OLLAMA_AUTH ? { Authorization: process.env.URL_CHECK_OLLAMA_AUTH } : {}),
+      },
+    })
+  : null;
+// Medido ao vivo (10 URLs rotuladas, 2026-11-18): Google 3.5-flash-lite e 3.1-flash-lite 10/10;
+// 3.5/3.7/3.8-flash devolveram 503 "high demand" e o Pro estoura a cota (chave free-tier).
+// URL_CHECK_MODEL troca o modelo sem deploy (no modo Ollama é o tag, ex.: gemma4:e4b).
+const URL_CHECK_MODEL = process.env.URL_CHECK_MODEL ?? (ollama ? 'gemma4:e4b' : 'gemini-3.5-flash-lite');
 
 // The ~1.2k-token persona prompt used to be resent once per URL; grouping URLs
 // into one call fixes that, and capping in-flight calls keeps us under the
 // provider's rate limit.
-const URLS_PER_CALL = 10;
-const URL_CHECK_CONCURRENCY = 4;
+const URLS_PER_CALL = Number(process.env.URL_CHECK_PER_CALL) || (ollama ? 3 : 10);
+const URL_CHECK_CONCURRENCY = ollama ? 1 : 4;
 // ponytail: wall-clock cap instead of a URL-count cap. maxDuration is 300s and a
 // batch de 10 URLs mede ~33s, então uma amostra grande (SENSE junho: 794 URLs =
 // ~20 rodadas = ~660s) estourava a função e o usuário não recebia nada. O prazo é
 // absoluto desde a entrada do POST, então o tempo que o engine já gastou desconta
 // sozinho; sobra folga para escrever a col 30 e devolver o xlsx.
 export const URL_CHECK_BUDGET_MS = 200_000;
-const URL_CHECK_CALL_TIMEOUT_MS = 75_000;
+const URL_CHECK_CALL_TIMEOUT_MS = ollama ? 240_000 : 75_000;
 type UrlCheckOutcome = { rows: UrlCheckedRow[]; failed: number };
 
 async function chatWithRetry(content: string, maxOutputTokens: number, deadline: number, tries = 3): Promise<string> {
   for (let attempt = 0; ; attempt++) {
     try {
+      if (ollama) {
+        const r = await Promise.race([
+          // think:false — o Gemma 4 raciocina por padrão e gasta o num_predict com resposta vazia.
+          ollama.chat({ model: URL_CHECK_MODEL, think: false, keep_alive: '30m', options: { num_predict: maxOutputTokens, temperature: 0 }, messages: [{ role: 'user', content }] }),
+          new Promise<never>((_, rej) => setTimeout(() => rej(new Error('ollama chat timeout')), URL_CHECK_CALL_TIMEOUT_MS)),
+        ]);
+        return r.message.content.trim();
+      }
       const { text } = await generateText({
         model: google(URL_CHECK_MODEL),
         prompt: content,
@@ -52,17 +74,9 @@ async function chatWithRetry(content: string, maxOutputTokens: number, deadline:
   }
 }
 
-/**
- * Audits a chunk of URLs in a single model call.
- *
- * Anything that stops a URL from actually being judged — transport error, an
- * unparseable reply, a missing entry in the array — is counted in `failed`
- * rather than dropped. A silently swallowed failure reads as "URL is fine",
- * which is the one answer this check must never invent.
- */
-async function checkUrlChunk(items: UrlSampleItem[], categoriasDisponiveis: string[], deadline: number): Promise<UrlCheckOutcome> {
+export function buildFullPrompt(items: UrlSampleItem[], categoriasDisponiveis: string[]): string {
   const list = items.map((it, i) => `${i + 1}. URL: ${it.url}\n   Categoria atribuída: ${it.categoria}`).join('\n');
-  const content = `Você é um classificador especialista em Brand Safety e auditoria de mídia programática para a SECOM (Secretaria de Comunicação Social do Governo Federal do Brasil). 
+  return `Você é um classificador especialista em Brand Safety e auditoria de mídia programática para a SECOM (Secretaria de Comunicação Social do Governo Federal do Brasil). 
 
 Sua missão é auditar a classificação de conteúdo feita por um adserver. Dado uma URL, o título/conteúdo da página e a categoria atribuída pelo adserver, avalie se a classificação está CORRETA ou INCORRETA.
 
@@ -134,6 +148,40 @@ Responda APENAS com um array JSON, um objeto por URL, na mesma ordem, com "i" ig
 [{"i":1,"status":"CORRETA","categoria_sugerida":"...","justificativa_brand_safety":"..."}]
 
 ${list}`;
+}
+
+// Versão enxuta para o modelo local (CPU/GPU de 2 GB: cada token de prompt e de saída custa segundo).
+// Um só formato de saída, sem few-shot, regras condensadas, justificativa de uma frase.
+export function buildCompactPrompt(items: UrlSampleItem[], categoriasDisponiveis: string[]): string {
+  const list = items.map((it, i) => `${i + 1}. ${it.url} | categoria atribuída: ${it.categoria}`).join('\n');
+  return `Você audita a categoria que um adserver atribuiu a URLs (Brand Safety, SECOM / Governo Federal do Brasil). Julgue pela URL. Para cada uma, diga se a categoria atribuída está CORRETA ou INCORRETA.
+
+Regra principal: você audita se a CLASSIFICAÇÃO está certa, não se o conteúdo é bom. Se a categoria atribuída descreve fielmente o que a URL é, ela é CORRETA, mesmo sendo uma categoria indevida (ex.: um site de pornografia classificado como "Conteúdo adulto" está CORRETO). INCORRETA é quando a categoria não descreve a URL.
+
+Regras:
+- "safeframe", "aplicativo móvel" e "teste de tag" são falhas técnicas de rastreamento. Se a URL é de notícia, blog ou portal com conteúdo editorial, é INCORRETA (sugira a categoria real). Só é CORRETA se for um frame técnico sem conteúdo.
+- "Home" = página raiz sem caminho (ex.: https://g1.globo.com/) → CORRETA. "Home" em URL com caminho interno → INCORRETA.
+- Não marque Violência/Crimes por palavra-chave: notícia, política, geopolítica, polícia e jornalismo comum NÃO são violência nem crime, salvo conteúdo gráfico, apologia ou sensacionalismo extremo.
+- Categorias indevidas: Língua estrangeira (conteúdo fora do português), Conteúdo adulto, Violência, Crimes, Pirataria (download/streaming ilegal), Terrorismo, Discurso de ódio, Conteúdo gerado pelo usuário sem moderação (fóruns/chats), Drogas.${categoriasDisponiveis.length > 0 ? `
+- Categorias deste arquivo (prefira sugerir uma destas): ${categoriasDisponiveis.join(', ')}.` : ''}
+
+Responda SOMENTE com um array JSON, um objeto por URL, na ordem, sem texto fora do array.
+INCORRETA: [{"i":1,"status":"INCORRETA","categoria_sugerida":"categoria real","justificativa_brand_safety":"uma frase curta"}]
+CORRETA (deixe os dois campos vazios, não explique): [{"i":2,"status":"CORRETA","categoria_sugerida":"","justificativa_brand_safety":""}]
+
+${list}`;
+}
+
+/**
+ * Audits a chunk of URLs in a single model call.
+ *
+ * Anything that stops a URL from actually being judged — transport error, an
+ * unparseable reply, a missing entry in the array — is counted in `failed`
+ * rather than dropped. A silently swallowed failure reads as "URL is fine",
+ * which is the one answer this check must never invent.
+ */
+async function checkUrlChunk(items: UrlSampleItem[], categoriasDisponiveis: string[], deadline: number): Promise<UrlCheckOutcome> {
+  const content = (ollama && process.env.URL_CHECK_PROMPT !== 'full' ? buildCompactPrompt : buildFullPrompt)(items, categoriasDisponiveis);
 
   let parsed: { i?: number; status?: string; categoria_sugerida?: string; justificativa_brand_safety?: string }[];
   try {
@@ -191,7 +239,7 @@ export async function checkUrls(
       toCheck.push(item);
     }
   }
-  if (toCheck.length === 0 || !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+  if (toCheck.length === 0 || (!ollama && !process.env.GOOGLE_GENERATIVE_AI_API_KEY)) {
     return { rows, checked: items.length, failed: 0 };
   }
 
