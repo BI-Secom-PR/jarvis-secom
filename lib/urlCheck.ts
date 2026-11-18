@@ -30,8 +30,9 @@ const ollama = OLLAMA_URL
   : null;
 // Medido ao vivo (10 URLs rotuladas, 2026-11-18): Google 3.5-flash-lite e 3.1-flash-lite 10/10;
 // 3.5/3.7/3.8-flash devolveram 503 "high demand" e o Pro estoura a cota (chave free-tier).
-// URL_CHECK_MODEL troca o modelo sem deploy (no modo Ollama é o tag, ex.: gemma4:e4b).
-const URL_CHECK_MODEL = process.env.URL_CHECK_MODEL ?? (ollama ? 'gemma4:e4b' : 'gemini-3.5-flash-lite');
+// URL_CHECK_MODEL troca o modelo do provedor principal sem deploy (no modo Ollama é o tag, ex.: gemma4:e4b).
+const OLLAMA_MODEL = process.env.URL_CHECK_MODEL ?? 'gemma4:e4b';
+const GOOGLE_MODEL = (!ollama && process.env.URL_CHECK_MODEL) || 'gemini-3.5-flash-lite';
 
 // The ~1.2k-token persona prompt used to be resent once per URL; grouping URLs
 // into one call fixes that, and capping in-flight calls keeps us under the
@@ -44,26 +45,37 @@ const URL_CHECK_CONCURRENCY = ollama ? 1 : 4;
 // absoluto desde a entrada do POST, então o tempo que o engine já gastou desconta
 // sozinho; sobra folga para escrever a col 30 e devolver o xlsx.
 export const URL_CHECK_BUDGET_MS = 200_000;
-const URL_CHECK_CALL_TIMEOUT_MS = ollama ? 240_000 : 75_000;
+const OLLAMA_CALL_TIMEOUT_MS = 240_000;
+const GOOGLE_CALL_TIMEOUT_MS = 75_000;
 type UrlCheckOutcome = { rows: UrlCheckedRow[]; failed: number };
 
-async function chatWithRetry(content: string, maxOutputTokens: number, deadline: number, tries = 3): Promise<string> {
+async function askOllama(content: string, maxOutputTokens: number, deadline: number): Promise<string> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const r = await Promise.race([
+      // think:false — o Gemma 4 raciocina por padrão e gasta o num_predict com resposta vazia.
+      ollama!.chat({ model: OLLAMA_MODEL, think: false, keep_alive: '30m', options: { num_predict: maxOutputTokens, temperature: 0 }, messages: [{ role: 'user', content }] }),
+      // Teto: nunca passar de deadline+70s (~270s), senão estoura o maxDuration de 300s da função.
+      new Promise<never>((_, rej) => {
+        const ms = Math.max(5_000, Math.min(OLLAMA_CALL_TIMEOUT_MS, deadline + 70_000 - Date.now()));
+        timer = setTimeout(() => rej(new Error('ollama chat timeout')), ms);
+      }),
+    ]);
+    return r.message.content.trim();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function askGoogle(content: string, maxOutputTokens: number, deadline: number, tries = 3): Promise<string> {
   for (let attempt = 0; ; attempt++) {
     try {
-      if (ollama) {
-        const r = await Promise.race([
-          // think:false — o Gemma 4 raciocina por padrão e gasta o num_predict com resposta vazia.
-          ollama.chat({ model: URL_CHECK_MODEL, think: false, keep_alive: '30m', options: { num_predict: maxOutputTokens, temperature: 0 }, messages: [{ role: 'user', content }] }),
-          new Promise<never>((_, rej) => setTimeout(() => rej(new Error('ollama chat timeout')), Math.max(5_000, Math.min(URL_CHECK_CALL_TIMEOUT_MS, deadline + 70_000 - Date.now())))),
-        ]);
-        return r.message.content.trim();
-      }
       const { text } = await generateText({
-        model: google(URL_CHECK_MODEL),
+        model: google(GOOGLE_MODEL),
         prompt: content,
         maxOutputTokens,
         maxRetries: 0,
-        abortSignal: AbortSignal.timeout(URL_CHECK_CALL_TIMEOUT_MS),
+        abortSignal: AbortSignal.timeout(GOOGLE_CALL_TIMEOUT_MS),
       });
       return text.trim();
     } catch (err) {
@@ -72,6 +84,28 @@ async function chatWithRetry(content: string, maxOutputTokens: number, deadline:
       await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
     }
   }
+}
+
+// Fallback automático: se o servidor local falhar (laptop dormindo, ngrok offline, porteiro
+// 401/502, Ollama parado, timeout), o lote segue no Google em vez de virar "não puderam ser
+// verificadas". Depois da 1ª falha o Ollama é pulado por 60 s, para não pagar o erro (ou os
+// 240 s do timeout) a cada lote. Sem chave do Google não há para onde cair: o erro sobe como antes.
+const OLLAMA_SKIP_MS = 60_000;
+let ollamaSkipUntil = 0;
+const hasGoogleKey = !!process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+
+async function chatWithRetry(build: (via: 'ollama' | 'google') => string, maxOutputTokens: number, deadline: number): Promise<string> {
+  if (ollama && Date.now() >= ollamaSkipUntil) {
+    try {
+      return await askOllama(build('ollama'), maxOutputTokens, deadline);
+    } catch (err) {
+      if (!hasGoogleKey) throw err;
+      ollamaSkipUntil = Date.now() + OLLAMA_SKIP_MS;
+      console.error(`[url-check] Ollama local falhou (${String(err).slice(0, 160)}); usando Google por ${OLLAMA_SKIP_MS / 1000}s`);
+    }
+  }
+  // O prompt compacto foi ajustado para o Gemma; no Gemini ele errou um caso que o completo acerta (10/10).
+  return askGoogle(build('google'), maxOutputTokens, deadline);
 }
 
 export function buildFullPrompt(items: UrlSampleItem[], categoriasDisponiveis: string[]): string {
@@ -181,11 +215,12 @@ ${list}`;
  * which is the one answer this check must never invent.
  */
 async function checkUrlChunk(items: UrlSampleItem[], categoriasDisponiveis: string[], deadline: number): Promise<UrlCheckOutcome> {
-  const content = (ollama && process.env.URL_CHECK_PROMPT !== 'full' ? buildCompactPrompt : buildFullPrompt)(items, categoriasDisponiveis);
+  const build = (via: 'ollama' | 'google') =>
+    (via === 'ollama' && process.env.URL_CHECK_PROMPT !== 'full' ? buildCompactPrompt : buildFullPrompt)(items, categoriasDisponiveis);
 
   let parsed: { i?: number; status?: string; categoria_sugerida?: string; justificativa_brand_safety?: string }[];
   try {
-    const raw = (await chatWithRetry(content, 220 * items.length, deadline))
+    const raw = (await chatWithRetry(build, 220 * items.length, deadline))
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```\s*$/, '');
     const arr: unknown = JSON.parse(raw.slice(raw.indexOf('['), raw.lastIndexOf(']') + 1));
