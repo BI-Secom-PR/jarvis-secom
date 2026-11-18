@@ -179,6 +179,22 @@ CATEGORY_MAP: dict[str, str] = {
     "fora da praca":                    "fora_da_praca",
 }
 
+# ── 00PX / 00PX25 ─────────────────────────────────────────────────────────────
+# O consolidado 00PX 2026 tem UMA coluna "Acidentes, Violência, Crime" e outra
+# "Policial" (= "Seguranca Publica" no verification); sexo/pornografia/conteúdo
+# sensível também é uma coluna só. Só os HEADERS novos entram aqui — o layout 2025
+# (colunas separadas) continua resolvendo pelo CATEGORY_MAP global. A soma de
+# "Violencia e Criminalidade" + "Acidentes Violentos" na coluna combinada é feita
+# pelo engine (_FOLD_SE_SEM_COLUNA), só quando o consolidado não tem coluna própria.
+_00PX_OVERRIDES: dict[str, str] = {
+    "acidentes, violência, crime":  "violencia",
+    "acidentes, violencia, crime":  "violencia",
+    "policial":                     "seguranca_publica",
+    "sexo, sexualidade, pornografia e conteúdo sensivel": "conteudo_sensivel",
+    "sexo, sexualidade, pornografia e conteudo sensivel": "conteudo_sensivel",
+}
+ADSERVER_MAPS["00px"] = ADSERVER_MAPS["00px25"] = {**CATEGORY_MAP, **_00PX_OVERRIDES}
+
 # Todas as chaves internas zeradas — base para inicializar indevidas
 INDEVIDAS_ZERO: dict[str, int] = {
     "conteudo_sensivel":  0,

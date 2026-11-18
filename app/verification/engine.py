@@ -213,6 +213,14 @@ _REMOVE_PUNCT = re.compile(r"[^\w\s]")
 _EXTRA_SPACES = re.compile(r"\s+")
 
 
+# chave sem coluna própria no consolidado → coluna combinada que a engloba
+_FOLD_SE_SEM_COLUNA = {
+    "acidente":   "violencia",
+    "crime":      "violencia",
+    "pornografia": "conteudo_sensivel",
+}
+
+
 def _slug_categoria(text: str) -> str:
     """Slug determinístico do texto cru da categoria, sem passar pelo CATEGORY_MAP —
     usado só quando o consolidado separa em colunas distintas um bucket que o
@@ -509,6 +517,10 @@ def _compare(
             # usa ela em vez de cair na fusão semântica do CATEGORY_MAP.
             lit_key = _slug_categoria(raw_cat)
             cat_key = lit_key if lit_key in consol_indev else normaliza_categoria(raw_cat, adserver=adserver)
+            # Consolidado com coluna combinada (ex.: 00PX 2026 "Acidentes, Violência,
+            # Crime"): categoria sem coluna própria soma na que a engloba.
+            if cat_key and cat_key not in consol_indev and _FOLD_SE_SEM_COLUNA.get(cat_key) in consol_indev:
+                cat_key = _FOLD_SE_SEM_COLUNA[cat_key]
             if cat_key:
                 verif_indev[cat_key] = verif_indev.get(cat_key, 0) + count
             else:
