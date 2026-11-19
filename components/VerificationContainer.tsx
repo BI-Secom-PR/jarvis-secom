@@ -263,7 +263,6 @@ const ESTADOS_BRASIL = [
 
 const ADSERVERS: { id: string; label: string; disabled?: boolean }[] = [
   { id: "00px", label: "00px" },
-  { id: "00px25", label: "00PX25" },
   { id: "adforce", label: "ADFORCE" },
   { id: "admotion", label: "ADMOTION" },
   { id: "ahead", label: "AHEAD" },
