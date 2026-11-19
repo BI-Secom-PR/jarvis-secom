@@ -17,13 +17,13 @@
     "test:rag": "bun --env-file=.env.local scripts/test-rag.ts"
   },
   "dependencies": {
-    "@ai-sdk/google": "^3.0.43",
+    "@ai-sdk/google": "^3.0.147",
     "@google/genai": "^1.45.0",
     "@simplewebauthn/browser": "^14.0.0",
     "@simplewebauthn/server": "^14.0.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/dompurify": "^3.0.5",
-    "ai": "^6.0.116",
+    "ai": "^6.0.333",
     "bcryptjs": "^3.0.3",
     "d3-geo": "^3.1.1",
     "dompurify": "^3.4.17",
@@ -32,7 +32,7 @@
     "html-to-image": "^1.11.13",
     "jose": "^6.2.3",
     "mysql2": "^3.24.3",
-    "next": "16.4.1",
+    "next": "16.4.5",
     "ollama": "^0.6.3",
     "postgres": "^3.4.8",
     "react": "19.2.3",
@@ -63,7 +63,6 @@
     "uuid": "^11.1.1"
   },
   "devDependencies": {
-    "@anthropic-ai/claude-code": "^2.1.84",
     "@tailwindcss/postcss": "^4",
     "@types/d3-geo": "^3.1.0",
     "@types/dom-speech-recognition": "^0.0.7",
