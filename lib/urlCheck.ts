@@ -11,7 +11,7 @@ import { isHomeRoot } from '@/lib/verification';
 
 export type UrlSampleItem  = { url: string; categoria: string; veiculo: string; impressoes: number };
 export type UrlAnomalyItem = { url: string; categoria: string; categoria_sugerida: string | null; veiculo: string; reason: string; impressoes: number; pct: number };
-export type UrlCheckedRow  = UrlAnomalyItem & { status: 'CORRETA' | 'INCORRETA' };
+export type UrlCheckedRow  = UrlAnomalyItem & { status: 'CORRETA' | 'INCORRETA'; source?: string };
 
 // Dois provedores. URL_CHECK_OLLAMA_URL definido → Ollama próprio (servidor Secom,
 // GPU de 2 GB: lento, por isso lotes pequenos e prazo longo); senão Google AI Studio,
@@ -94,10 +94,10 @@ const OLLAMA_SKIP_MS = 60_000;
 let ollamaSkipUntil = 0;
 const hasGoogleKey = !!process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
-async function chatWithRetry(build: (via: 'ollama' | 'google') => string, maxOutputTokens: number, deadline: number): Promise<string> {
+async function chatWithRetry(build: (via: 'ollama' | 'google') => string, maxOutputTokens: number, deadline: number): Promise<{ text: string; source: string }> {
   if (ollama && Date.now() >= ollamaSkipUntil) {
     try {
-      return await askOllama(build('ollama'), maxOutputTokens, deadline);
+      return { text: await askOllama(build('ollama'), maxOutputTokens, deadline), source: `ollama:${OLLAMA_MODEL}` };
     } catch (err) {
       if (!hasGoogleKey) throw err;
       ollamaSkipUntil = Date.now() + OLLAMA_SKIP_MS;
@@ -105,7 +105,7 @@ async function chatWithRetry(build: (via: 'ollama' | 'google') => string, maxOut
     }
   }
   // O prompt compacto foi ajustado para o Gemma; no Gemini ele errou um caso que o completo acerta (10/10).
-  return askGoogle(build('google'), maxOutputTokens, deadline);
+  return { text: await askGoogle(build('google'), maxOutputTokens, deadline), source: `google:${GOOGLE_MODEL}` };
 }
 
 export function buildFullPrompt(items: UrlSampleItem[], categoriasDisponiveis: string[]): string {
@@ -126,15 +126,25 @@ Sua missão é auditar a classificação de conteúdo feita por um adserver. Dad
    - Home NÃO é Notícias/Editorial. Nunca sugira uma categoria de conteúdo (Notícias, Política, Esportes…) para uma URL raiz classificada como "Home" — isso é CORRETA.
    - Se a URL aponta para uma página interna (matéria, seção, com caminho após o domínio) mas foi classificada como "Home", isso é INCORRETA — sugira a categoria real do conteúdo.
 
-2. CONTEXTO DOMINANTE VS. PALAVRAS-CHAVE: Não classifique uma página como "indevida" apenas pela presença de palavras-chave isoladas. Analise o CONTEXTO DOMINANTE. 
-   - Matérias jornalísticas, artigos de opinião política, análises históricas, avanços tecnológicos, geopolítica ou notícias de segurança pública NÃO devem ser classificados automaticamente como "Violência" ou "Crimes", a menos que haja exposição gráfica, apologia ou sensacionalismo extremo.
+2. FOCO NAS CATEGORIAS INDEVIDAS: o que importa nesta auditoria é conteúdo indevido escapando sob uma categoria comum. Divergência entre duas categorias comuns (ex.: Saúde classificada como Entretenimento, Notícias como Esportes) é CORRETA — não seja preciosista. É INCORRETA apenas quando:
+   a) a página tem conteúdo indevido (violência/crime, conteúdo adulto, língua estrangeira…) mas foi classificada com categoria comum (ex.: Notícias, Cotidiano, Cultura);
+   b) a categoria é técnica (regra 1) ou "Home" com caminho interno (regra 1b);
+   c) a categoria é indevida mas a página não tem relação com ela, e a regra 3 não se aplica;
+   d) a categoria é "Língua estrangeira/Idioma estrangeiro" mas a página está em português (do Brasil ou de Portugal, inclusive endereços com /pt) — português não é língua estrangeira.
+
+3. RÓTULO RESTRITIVO É TOLERADO: se a categoria atribuída for Violência, Crimes, Segurança Pública, Policial, Acidentes ou Conteúdo Sensível e a página trata de crime, justiça, sistema prisional, fiscalização, acidente ou segurança, é CORRETA mesmo sem violência gráfica. Só é INCORRETA se a página não tem nenhuma relação com o tema (ex.: gastronomia ou tecnologia com rótulo de Violência).
+
+4. CRIME VIOLENTO É INDEVIDO MESMO SEM IMAGEM GRÁFICA: notícia de homicídio, feminicídio, agressão, tiroteio, sequestro, estupro ou morte violenta é conteúdo indevido (Violência/Crime). Se estiver sob categoria comum (Notícias, Cotidiano, Cidades…), é INCORRETA — sugira "Violência e Criminalidade". Não são indevidos: política, geopolítica, tecnologia de defesa, opinião, análise histórica e atividade policial ou administrativa de rotina sem vítima.
+
+5. NUDEZ E CONTEÚDO SEXUAL: nudez, ensaio sensual explícito (inclusive de celebridades) e conteúdo sexual são "Conteúdo adulto". Sob categoria comum, é INCORRETA.
+
+6. PIRATARIA não é critério desta auditoria: não marque INCORRETA por esse motivo.
 
 ### CATEGORIAS INDEVIDAS DA SECOM (Definições Estritas)
 - Língua estrangeira: Conteúdo principal fora do português brasileiro.
 - Conteúdo adulto: Sexo explícito, pornografia, erotismo e afins.
-- Violência: Imagens ou descrições explícitas de acidentes violentos, armas, mortes brutais, apologia à guerra. (Geopolítica, história militar, tecnologia de defesa ou notícias cotidianas de portais de grande mídia NÃO são violência).
-- Crimes: Apologia ao crime, violação grave de direitos. (Atividade policial padrão ou notícias jurídicas/jornalísticas NÃO são crimes).
-- Pirataria: Links e métodos para distribuição ilegal de conteúdo protegido.
+- Violência: Imagens ou descrições de acidentes violentos, armas, mortes violentas, apologia à guerra. (Geopolítica, história militar e tecnologia de defesa NÃO são violência.)
+- Crimes: Crimes violentos noticiados (homicídio, feminicídio, agressão, estupro, sequestro), apologia ao crime, violação grave de direitos. (Atividade policial de rotina e notícias jurídicas sem vítima NÃO são crimes.)
 - Terrorismo: Propaganda, recrutamento ou apologia a grupos extremistas/ataques.
 - Discurso de ódio: Conteúdo explicitamente discriminatório (raça, gênero, religião, orientação sexual, etc.).
 - Conteúdo gerado pelo usuário sem moderação: Fóruns abertos, chats anonimizados (alto risco de pedofilia/crimes).
@@ -163,15 +173,37 @@ Exemplo 1 (Falso Positivo de safeframe):
   "categoria_sugerida": "Política / Economia"
 }
 
-Exemplo 2 (Falso Positivo de Violência):
-- URL: https://revistaforum.com.br/revista-forum/nem-portos-nem-barreiras-maior-marinha-do-mundo-cria-sistema-para-desembarcar-em-qualquer-costa/
-- Categoria do Adserver: Violência
+Exemplo 2 (Rótulo de violência sem relação com a página):
+- URL: https://exemplo.com.br/receitas/bolo-de-cenoura-com-cobertura-de-chocolate
+- Categoria do Adserver: Violência e Criminalidade
 - Resposta esperada:
 {
-  "analise_contexto": "O artigo aborda um avanço tecnológico e logístico da marinha, focado em estratégia e engenharia.",
-  "justificativa_brand_safety": "INCORRETA. Falso positivo. A presença de termos militares acionou o gatilho de 'Violência' do adserver, mas o texto não contém violência gráfica ou conflito armado. Trata-se de inovação/geopolítica.",
+  "analise_contexto": "Receita culinária, sem qualquer relação com crime ou violência.",
+  "justificativa_brand_safety": "INCORRETA. O rótulo de Violência não descreve a página.",
   "status": "INCORRETA",
-  "categoria_sugerida": "Tecnologia / Geopolítica"
+  "categoria_sugerida": "Gastronomia"
+}
+
+Exemplo 3 (Crime violento sob categoria comum):
+- URL: https://exemplo.com.br/noticias/homem-e-preso-apos-matar-a-companheira-a-facadas-em-casa
+- Categoria do Adserver: Notícias
+- Resposta esperada:
+{
+  "analise_contexto": "Notícia de feminicídio, sem imagens gráficas.",
+  "justificativa_brand_safety": "INCORRETA. Crime violento é conteúdo indevido mesmo sem descrição gráfica e está sob categoria comum.",
+  "status": "INCORRETA",
+  "categoria_sugerida": "Violência e Criminalidade"
+}
+
+Exemplo 4 (Rótulo restritivo tolerado):
+- URL: https://exemplo.com.br/seguranca/governo-discute-reforma-do-sistema-prisional
+- Categoria do Adserver: Segurança Pública
+- Resposta esperada:
+{
+  "analise_contexto": "Matéria sobre política prisional, tema de segurança pública, sem violência gráfica.",
+  "justificativa_brand_safety": "CORRETA. O rótulo restritivo é compatível com o tema da página.",
+  "status": "CORRETA",
+  "categoria_sugerida": ""
 }
 ${categoriasDisponiveis.length > 0 ? `
 Categorias usadas neste arquivo de verificação (prefira sugerir uma destas, ou uma categoria indevida do SECOM acima):
@@ -195,8 +227,13 @@ Regra principal: você audita se a CLASSIFICAÇÃO está certa, não se o conte�
 Regras:
 - "safeframe", "aplicativo móvel" e "teste de tag" são falhas técnicas de rastreamento. Se a URL é de notícia, blog ou portal com conteúdo editorial, é INCORRETA (sugira a categoria real). Só é CORRETA se for um frame técnico sem conteúdo.
 - "Home" = página raiz sem caminho (ex.: https://g1.globo.com/) → CORRETA. "Home" em URL com caminho interno → INCORRETA.
-- Não marque Violência/Crimes por palavra-chave: notícia, política, geopolítica, polícia e jornalismo comum NÃO são violência nem crime, salvo conteúdo gráfico, apologia ou sensacionalismo extremo.
-- Categorias indevidas: Língua estrangeira (conteúdo fora do português), Conteúdo adulto, Violência, Crimes, Pirataria (download/streaming ilegal), Terrorismo, Discurso de ódio, Conteúdo gerado pelo usuário sem moderação (fóruns/chats), Drogas.${categoriasDisponiveis.length > 0 ? `
+- Foco nas categorias indevidas. Divergência entre duas categorias comuns (Saúde vs Entretenimento, Notícias vs Esportes) é CORRETA. INCORRETA só quando há conteúdo indevido sob categoria comum, categoria técnica/Home errada, ou rótulo indevido sem relação com a página.
+- Crime violento é indevido mesmo sem imagem gráfica: notícia de homicídio, feminicídio, agressão, tiroteio, sequestro, estupro ou morte violenta sob categoria comum (Notícias, Cotidiano…) é INCORRETA (sugira "Violência e Criminalidade"). Política, geopolítica, tecnologia de defesa, opinião e polícia/fiscalização de rotina sem vítima NÃO são violência.
+- Rótulo restritivo é tolerado: Violência, Crimes, Segurança Pública, Policial, Acidentes ou Conteúdo Sensível em página sobre crime, justiça, sistema prisional, fiscalização, acidente ou segurança é CORRETA, mesmo sem violência gráfica. Só é INCORRETA se a página não tem relação com o tema.
+- Nudez e conteúdo sexual (inclusive de celebridades) = Conteúdo adulto; sob categoria comum é INCORRETA.
+- Rótulo "Língua estrangeira/Idioma estrangeiro" em página em português (Brasil ou Portugal, inclusive /pt) é INCORRETA.
+- Pirataria não é critério desta auditoria: não marque INCORRETA por isso.
+- Categorias indevidas: Língua estrangeira (conteúdo fora do português), Conteúdo adulto, Violência, Crimes, Terrorismo, Discurso de ódio, Conteúdo gerado pelo usuário sem moderação (fóruns/chats), Drogas.${categoriasDisponiveis.length > 0 ? `
 - Categorias deste arquivo (prefira sugerir uma destas): ${categoriasDisponiveis.join(', ')}.` : ''}
 
 Responda SOMENTE com um array JSON, um objeto por URL, na ordem, sem texto fora do array.
@@ -218,9 +255,12 @@ async function checkUrlChunk(items: UrlSampleItem[], categoriasDisponiveis: stri
   const build = (via: 'ollama' | 'google') =>
     (via === 'ollama' && process.env.URL_CHECK_PROMPT !== 'full' ? buildCompactPrompt : buildFullPrompt)(items, categoriasDisponiveis);
 
+  let source = '';
   let parsed: { i?: number; status?: string; categoria_sugerida?: string; justificativa_brand_safety?: string }[];
   try {
-    const raw = (await chatWithRetry(build, 220 * items.length, deadline))
+    const reply = await chatWithRetry(build, 220 * items.length, deadline);
+    source = reply.source;
+    const raw = reply.text
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```\s*$/, '');
     const arr: unknown = JSON.parse(raw.slice(raw.indexOf('['), raw.lastIndexOf(']') + 1));
@@ -246,6 +286,7 @@ async function checkUrlChunk(items: UrlSampleItem[], categoriasDisponiveis: stri
       impressoes: item.impressoes,
       pct: 0,
       status,
+      source,
     });
   });
   return { rows, failed };

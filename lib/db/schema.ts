@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, primaryKey, index, uuid, text, boolean, timestamp, json, integer, customType } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, primaryKey, index, uniqueIndex, uuid, text, boolean, timestamp, json, integer, customType } from 'drizzle-orm/pg-core'
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() { return 'bytea' },
@@ -115,6 +115,26 @@ export const appSettings = pgTable('app_settings', {
   value:     text('value').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+// Veredictos da auditoria de URLs (lib/urlCheck.ts), gravados por /api/verification/url-check.
+// Existem para virar conjunto de rótulos de um classificador leve: `reviewed` guarda a
+// correção humana (null = ainda não revisado) e é o que vale como verdade quando preenchido.
+// Uma linha por (url, categoria, source): reauditar a mesma URL com o mesmo modelo atualiza.
+export const urlVerdicts = pgTable('url_verdicts', {
+  id:               uuid('id').primaryKey().defaultRandom(),
+  url:              text('url').notNull(),
+  categoria:        text('categoria').notNull(),           // atribuída pelo adserver
+  status:           text('status').notNull(),              // CORRETA | INCORRETA
+  categoriaSugerida: text('categoria_sugerida'),
+  reason:           text('reason'),
+  source:           text('source').notNull(),              // ex.: ollama:gemma4:e4b, google:gemini-3.5-flash-lite
+  veiculo:          text('veiculo'),
+  impressoes:       integer('impressoes'),
+  reviewed:         text('reviewed'),                      // CORRETA | INCORRETA, definido por revisão humana
+  createdAt:        timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('url_verdicts_url_cat_source').on(t.url, t.categoria, t.source),
+])
 
 export type User               = typeof users.$inferSelect
 export type Session            = typeof sessions.$inferSelect
