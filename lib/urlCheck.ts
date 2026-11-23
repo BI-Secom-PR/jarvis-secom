@@ -157,99 +157,40 @@ export function deriveStatus(rotulo?: string, pagina?: string): 'CORRETA' | 'INC
 }
 const SUGERIDA: Record<string, string> = { violencia: 'Violência e Criminalidade', seguranca: 'Segurança Pública', adulto: 'Conteúdo adulto', estrangeiro: 'Língua estrangeira', drogas: 'Drogas / Conteúdo sensível', comum: 'Notícias' };
 
-export function buildFullPrompt(items: UrlSampleItem[], categoriasDisponiveis: string[]): string {
-  const list = items.map((it, i) => `${i + 1}. URL: ${it.url}\n   Categoria atribuída: ${it.categoria}`).join('\n');
-  return `Você é um classificador especialista em Brand Safety e auditoria de mídia programática para a SECOM (Secretaria de Comunicação Social do Governo Federal do Brasil). 
+// Regras de negócio comuns aos dois prompts (única fonte): o completo só acrescenta persona e exemplos.
+function regrasComuns(categoriasDisponiveis: string[]): string {
+  return `Regra principal: você audita se a CLASSIFICAÇÃO está certa, não se o conteúdo é bom. Se a categoria atribuída descreve fielmente o que a URL é, ela é CORRETA, mesmo sendo uma categoria indevida (ex.: um site de pornografia classificado como "Conteúdo adulto" está CORRETO). INCORRETA é quando a categoria não descreve a URL.
 
-Sua missão é auditar a classificação de conteúdo feita por um adserver. Dado uma URL, o título/conteúdo da página e a categoria atribuída pelo adserver, avalie se a classificação está CORRETA ou INCORRETA.
-
-### DIRETRIZES DE AVALIAÇÃO (Regras de Negócio)
-
-1. TRATAMENTO DE CATEGORIAS TÉCNICAS (Safeframe, Aplicativo Móvel, Teste de Tag):
-   - O adserver frequentemente classifica URLs reais incorretamente como "safeframe", "aplicativo móvel" ou "teste de tag" devido a falhas de rastreamento.
-   - Você DEVE analisar o conteúdo real da URL. Se a URL apontar para uma notícia, blog ou portal de conteúdo, e o adserver a classificou como "safeframe" (ou similar), isso é uma classificação INCORRETA (Erro de categorização técnica). Indique a categoria real do conteúdo.
-   - Só considere CORRETA se a URL for genuinamente apenas um frame técnico isolado, sem conteúdo editorial visível.
-
-1b. CATEGORIA "HOME" (página inicial):
-   - "Home" é uma categoria VÁLIDA e DISTINTA: é a página raiz do site (sem caminho interno), ex.: https://www.uol.com.br/, https://g1.globo.com/.
-   - Home NÃO é Notícias/Editorial. Nunca sugira uma categoria de conteúdo (Notícias, Política, Esportes…) para uma URL raiz classificada como "Home" — isso é CORRETA.
-   - Se a URL aponta para uma página interna (matéria, seção, com caminho após o domínio) mas foi classificada como "Home", isso é INCORRETA — sugira a categoria real do conteúdo.
-
-2. PROCEDIMENTO EM DUAS ETAPAS (substitui qualquer julgamento direto):
+Regras:
+- "safeframe", "aplicativo móvel" e "teste de tag" são falhas técnicas de rastreamento. Se a URL é de notícia, blog ou portal com conteúdo editorial, é INCORRETA (sugira a categoria real). Só é CORRETA se for um frame técnico sem conteúdo.
+- "Home" = página raiz sem caminho (ex.: https://g1.globo.com/) → CORRETA. "Home" em URL com caminho interno → INCORRETA.
 ${FAMILIAS}
-
-### CATEGORIAS INDEVIDAS DA SECOM (Definições Estritas)
-- Língua estrangeira: Conteúdo principal fora do português brasileiro.
-- Conteúdo adulto: Sexo explícito, pornografia, erotismo e afins.
-- Violência: Imagens ou descrições de acidentes violentos, armas, mortes violentas, apologia à guerra. (Geopolítica, história militar e tecnologia de defesa NÃO são violência.)
-- Crimes: Crimes violentos noticiados (homicídio, feminicídio, agressão, estupro, sequestro), apologia ao crime, violação grave de direitos. (Atividade policial de rotina e notícias jurídicas sem vítima NÃO são crimes.)
-- Terrorismo: Propaganda, recrutamento ou apologia a grupos extremistas/ataques.
-- Discurso de ódio: Conteúdo explicitamente discriminatório (raça, gênero, religião, orientação sexual, etc.).
-- Conteúdo gerado pelo usuário sem moderação: Fóruns abertos, chats anonimizados (alto risco de pedofilia/crimes).
-- Drogas: Apologia, comércio ou tutorial de uso de substâncias ilícitas.
-
-### INSTRUÇÕES DE SAÍDA (Formato de Resposta)
-Você deve seguir estritamente o formato JSON abaixo para sua resposta. Pense passo a passo antes de definir o status.
-
-{
-  "analise_contexto": "Explique brevemente o foco principal da URL e o que de fato há na página.",
-  "justificativa_brand_safety": "Avalie se o adserver errou a classificação (seja por falso positivo de Brand Safety ou por erro de categoria técnica como safeframe).",
-  "status": "CORRETA" ou "INCORRETA",
-  "categoria_sugerida": "Manter a atual se o status for CORRETA, ou indicar a categoria real (ex: 'Notícias', 'Tecnologia', 'Política') se for INCORRETA."
+- Categorias indevidas: Língua estrangeira (conteúdo fora do português), Conteúdo adulto, Violência, Crimes, Terrorismo, Discurso de ódio, Conteúdo gerado pelo usuário sem moderação (fóruns/chats), Drogas.${categoriasDisponiveis.length > 0 ? `
+- Categorias deste arquivo (prefira sugerir uma destas): ${categoriasDisponiveis.join(', ')}.` : ''}`;
 }
 
-### EXEMPLOS PARA APRENDIZADO (Few-Shot)
+export function buildFullPrompt(items: UrlSampleItem[], categoriasDisponiveis: string[]): string {
+  const list = items.map((it, i) => `${i + 1}. ${it.url} | categoria atribuída: ${it.categoria}`).join('\n');
+  return `Você é um classificador especialista em Brand Safety e auditoria de mídia programática para a SECOM (Secretaria de Comunicação Social do Governo Federal do Brasil).
 
-Exemplo 1 (Falso Positivo de safeframe):
-- URL: https://g1.globo.com/politica/noticia/2026/06/governo-anuncia-novas-medidas-economicas.html
-- Categoria do Adserver: safeframe
-- Resposta esperada:
-{
-  "analise_contexto": "A URL aponta para uma notícia jornalística real do portal G1 sobre política e economia governamental.",
-  "justificativa_brand_safety": "INCORRETA. O adserver classificou erroneamente como 'safeframe' devido a uma limitação técnica de rastreamento no momento do leilão, mas a URL contém conteúdo editorial legítimo que deveria ser mapeado.",
-  "status": "INCORRETA",
-  "categoria_sugerida": "Política / Economia"
-}
+Sua missão é auditar a classificação de conteúdo feita por um adserver. Dada uma URL e a categoria atribuída pelo adserver, avalie se a classificação está CORRETA ou INCORRETA. Julgue pela URL.
 
-Exemplo 2 (Rótulo de violência sem relação com a página):
-- URL: https://exemplo.com.br/receitas/bolo-de-cenoura-com-cobertura-de-chocolate
-- Categoria do Adserver: Violência e Criminalidade
-- Resposta esperada:
-{
-  "analise_contexto": "Receita culinária, sem qualquer relação com crime ou violência.",
-  "justificativa_brand_safety": "INCORRETA. O rótulo de Violência não descreve a página.",
-  "status": "INCORRETA",
-  "categoria_sugerida": "Gastronomia"
-}
+${regrasComuns(categoriasDisponiveis)}
 
-Exemplo 3 (Crime violento sob categoria comum):
-- URL: https://exemplo.com.br/noticias/homem-e-preso-apos-matar-a-companheira-a-facadas-em-casa
-- Categoria do Adserver: Notícias
-- Resposta esperada:
-{
-  "analise_contexto": "Notícia de feminicídio, sem imagens gráficas.",
-  "justificativa_brand_safety": "INCORRETA. Crime violento é conteúdo indevido mesmo sem descrição gráfica e está sob categoria comum.",
-  "status": "INCORRETA",
-  "categoria_sugerida": "Violência e Criminalidade"
-}
+### EXEMPLOS (entrada e resposta esperada)
+1. https://g1.globo.com/politica/noticia/2026/06/governo-anuncia-novas-medidas-economicas.html | categoria atribuída: safeframe
+2. https://exemplo.com.br/receitas/bolo-de-cenoura-com-cobertura-de-chocolate | categoria atribuída: Violência e Criminalidade
+3. https://exemplo.com.br/noticias/homem-e-preso-apos-matar-a-companheira-a-facadas-em-casa | categoria atribuída: Notícias
+4. https://exemplo.com.br/seguranca/governo-discute-reforma-do-sistema-prisional | categoria atribuída: Segurança Pública
+5. https://exemplo.com.br/economia/imposto-de-renda-2026-erros-comuns | categoria atribuída: Esportes
+[{"i":1,"pagina":"comum","status":"INCORRETA","categoria_sugerida":"Política / Economia","justificativa_brand_safety":"Notícia real classificada como categoria técnica."},
+{"i":2,"pagina":"comum","status":"INCORRETA","categoria_sugerida":"Gastronomia","justificativa_brand_safety":"O rótulo de violência não descreve a página."},
+{"i":3,"pagina":"violencia","status":"INCORRETA","categoria_sugerida":"Violência e Criminalidade","justificativa_brand_safety":"Feminicídio é conteúdo indevido mesmo sem imagem gráfica."},
+{"i":4,"pagina":"seguranca","status":"CORRETA","categoria_sugerida":"","justificativa_brand_safety":""},
+{"i":5,"pagina":"comum","status":"CORRETA","categoria_sugerida":"","justificativa_brand_safety":""}]
 
-Exemplo 4 (Rótulo restritivo tolerado):
-- URL: https://exemplo.com.br/seguranca/governo-discute-reforma-do-sistema-prisional
-- Categoria do Adserver: Segurança Pública
-- Resposta esperada:
-{
-  "analise_contexto": "Matéria sobre política prisional, tema de segurança pública, sem violência gráfica.",
-  "justificativa_brand_safety": "CORRETA. O rótulo restritivo é compatível com o tema da página.",
-  "status": "CORRETA",
-  "categoria_sugerida": ""
-}
-${categoriasDisponiveis.length > 0 ? `
-Categorias usadas neste arquivo de verificação (prefira sugerir uma destas, ou uma categoria indevida do SECOM acima):
-${categoriasDisponiveis.map((c) => `- ${c}`).join('\n')}
-` : ''}
 ### AVALIE TODAS AS URLS ABAIXO
-Responda APENAS com um array JSON, um objeto por URL, na mesma ordem, com "i" igual ao número da URL. Sem texto fora do array.
-[{"i":1,"pagina":"violencia","status":"INCORRETA","categoria_sugerida":"...","justificativa_brand_safety":"..."}]
+Responda APENAS com um array JSON, um objeto por URL, na mesma ordem, com "i" igual ao número da URL e os campos "pagina", "status", "categoria_sugerida" e "justificativa_brand_safety" como nos exemplos. Sem texto fora do array.
 
 ${list}`;
 }
@@ -260,14 +201,7 @@ export function buildCompactPrompt(items: UrlSampleItem[], categoriasDisponiveis
   const list = items.map((it, i) => `${i + 1}. ${it.url} | categoria atribuída: ${it.categoria}`).join('\n');
   return `Você audita a categoria que um adserver atribuiu a URLs (Brand Safety, SECOM / Governo Federal do Brasil). Julgue pela URL. Para cada uma, diga se a categoria atribuída está CORRETA ou INCORRETA.
 
-Regra principal: você audita se a CLASSIFICAÇÃO está certa, não se o conteúdo é bom. Se a categoria atribuída descreve fielmente o que a URL é, ela é CORRETA, mesmo sendo uma categoria indevida (ex.: um site de pornografia classificado como "Conteúdo adulto" está CORRETO). INCORRETA é quando a categoria não descreve a URL.
-
-Regras:
-- "safeframe", "aplicativo móvel" e "teste de tag" são falhas técnicas de rastreamento. Se a URL é de notícia, blog ou portal com conteúdo editorial, é INCORRETA (sugira a categoria real). Só é CORRETA se for um frame técnico sem conteúdo.
-- "Home" = página raiz sem caminho (ex.: https://g1.globo.com/) → CORRETA. "Home" em URL com caminho interno → INCORRETA.
-${FAMILIAS}
-- Categorias indevidas: Língua estrangeira (conteúdo fora do português), Conteúdo adulto, Violência, Crimes, Terrorismo, Discurso de ódio, Conteúdo gerado pelo usuário sem moderação (fóruns/chats), Drogas.${categoriasDisponiveis.length > 0 ? `
-- Categorias deste arquivo (prefira sugerir uma destas): ${categoriasDisponiveis.join(', ')}.` : ''}
+${regrasComuns(categoriasDisponiveis)}
 
 Responda SOMENTE com um array JSON, um objeto por URL, na ordem, sem texto fora do array.
 INCORRETA: [{"i":1,"pagina":"violencia","status":"INCORRETA","categoria_sugerida":"categoria real","justificativa_brand_safety":"uma frase curta"}]
