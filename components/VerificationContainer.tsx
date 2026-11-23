@@ -30,7 +30,7 @@ type UrlAnomaly = {
   pct?: number;
 };
 
-type UrlCheckedRow = UrlAnomaly & { status: "CORRETA" | "INCORRETA" };
+type UrlCheckedRow = UrlAnomaly & { status: "CORRETA" | "INCORRETA"; atencao?: boolean };
 
 type VerificationResult = {
   veiculos: VehicleResult[];
@@ -42,6 +42,7 @@ type VerificationResult = {
   file_base64: string | null;
   file_name: string;
   url_check_anomalies: UrlAnomaly[];
+  url_check_atencao?: UrlAnomaly[];   // só tela: história/ditadura ambíguos, não vão para o Excel
   url_check_rows?: UrlCheckedRow[];
   url_check_failed?: number;
   url_sample?: UrlSampleItem[];
@@ -310,6 +311,7 @@ export default function VerificationContainer() {
   const [viewRules, setViewRules] = useState<ViewRule[]>([]);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [anomaliesOpen, setAnomaliesOpen] = useState(false);
+  const [atencaoOpen, setAtencaoOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [progressPct, setProgressPct] = useState(0);
   const [progressLabel, setProgressLabel] = useState('');
@@ -569,7 +571,7 @@ export default function VerificationContainer() {
       }),
     });
     setProgressPct(100);
-    if (!wrote.ok) return { ...base, url_check_rows: rows, url_check_failed: failed };
+    if (!wrote.ok) return { ...base, url_check_rows: rows, url_check_failed: failed, url_check_atencao: rows.filter((r) => r.atencao) };
 
     const out = await wrote.json() as Partial<VerificationResult>;
     return {
@@ -577,6 +579,7 @@ export default function VerificationContainer() {
       file_base64:         out.file_base64 ?? base.file_base64,
       url_check_rows:      out.url_check_rows ?? rows,
       url_check_anomalies: out.url_check_anomalies ?? [],
+      url_check_atencao:   out.url_check_atencao ?? rows.filter((r) => r.atencao),
       url_check_failed:    failed,
     };
   }
@@ -1279,6 +1282,58 @@ export default function VerificationContainer() {
                                 </tr>
                               ))}
                             </Fragment>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Pontos de atenção (só na tela, não vão para o Excel) */}
+              {(result.url_check_atencao?.length ?? 0) > 0 && (
+                <div className="rounded-xl border border-warning/30 bg-warning/5">
+                  <button
+                    onClick={() => setAtencaoOpen((o) => !o)}
+                    className="w-full flex items-center justify-between px-4 py-3 text-left"
+                  >
+                    <span className="text-xs text-warning font-semibold">
+                      Pontos de atenção — revisar manualmente
+                      <span className="ml-2 px-1.5 py-0.5 rounded bg-warning/20 text-warning">
+                        {result.url_check_atencao!.length}
+                      </span>
+                    </span>
+                    <span className="text-ink-3 text-xs">{atencaoOpen ? "▲" : "▼"}</span>
+                  </button>
+                  {atencaoOpen && (
+                    <div className="px-4 pb-4 overflow-x-auto">
+                      <p className="text-xs text-ink-3 mb-2">
+                        Temas históricos (ditadura, massacres) em que a IA não conseguiu decidir se a página descreve a violência.
+                        Foram contados como corretos e não aparecem no Excel.
+                      </p>
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-separator">
+                            <th className="text-left py-2 pr-4 text-ink-2 font-medium">URL</th>
+                            <th className="text-left py-2 pr-4 text-ink-2 font-medium whitespace-nowrap">Veículo</th>
+                            <th className="text-left py-2 pr-4 text-ink-2 font-medium whitespace-nowrap">Categoria</th>
+                            <th className="text-left py-2 pr-4 text-ink-2 font-medium whitespace-nowrap">Impressões URL</th>
+                            <th className="text-left py-2 text-ink-2 font-medium">Motivo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {result.url_check_atencao!.map((a, i) => (
+                            <tr key={i} className="border-b border-separator last:border-0">
+                              <td className="py-2 pr-4 text-ink-2 max-w-[260px] truncate">
+                                <a href={a.url} target="_blank" rel="noopener noreferrer" className="hover:text-warning transition-colors" title={a.url}>
+                                  {a.url}
+                                </a>
+                              </td>
+                              <td className="py-2 pr-4 text-ink-2 whitespace-nowrap">{a.veiculo || "—"}</td>
+                              <td className="py-2 pr-4 text-ink-2 whitespace-nowrap">{a.categoria}</td>
+                              <td className="py-2 pr-4 text-ink-2 whitespace-nowrap">{formatInt(a.impressoes)}</td>
+                              <td className="py-2 text-ink-2">{a.reason}</td>
+                            </tr>
                           ))}
                         </tbody>
                       </table>

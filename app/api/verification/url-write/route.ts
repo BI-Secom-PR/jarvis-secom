@@ -62,6 +62,8 @@ export async function POST(req: NextRequest) {
   });
 
   const anomalies: UrlAnomalyItem[] = urlCheckRows.filter((r) => r.status === 'INCORRETA');
+  // Pontos de atenção: só vão na resposta (tela). Nunca entram em `anomalies`, então a col 30 do Excel não os vê.
+  const atencao: UrlAnomalyItem[] = urlCheckRows.filter((r) => r.atencao && r.status === 'CORRETA');
 
   if (anomalies.length > 0) {
     const matchToConsol = new Map<string, string>();
@@ -125,5 +127,6 @@ export async function POST(req: NextRequest) {
     file_name:           fileName,
     url_check_rows:      urlCheckRows,
     url_check_anomalies: anomalies,
+    url_check_atencao:   atencao,
   });
 }

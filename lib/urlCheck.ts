@@ -11,12 +11,17 @@ import { isHomeRoot } from '@/lib/verification';
 
 export type UrlSampleItem  = { url: string; categoria: string; veiculo: string; impressoes: number };
 export type UrlAnomalyItem = { url: string; categoria: string; categoria_sugerida: string | null; veiculo: string; reason: string; impressoes: number; pct: number };
-export type UrlCheckedRow  = UrlAnomalyItem & { status: 'CORRETA' | 'INCORRETA'; source?: string };
+// atencao: ponto de atenção só na tela (história/ditadura/massacre ambíguos). Nunca vira anomalia nem vai para o Excel.
+export type UrlCheckedRow  = UrlAnomalyItem & { status: 'CORRETA' | 'INCORRETA'; source?: string; atencao?: boolean };
 
-// Dois provedores. URL_CHECK_OLLAMA_URL definido → Ollama próprio (servidor Secom,
-// GPU de 2 GB: lento, por isso lotes pequenos e prazo longo); senão Google AI Studio,
-// com a mesma chave do chat/RAG (Vercel: GOOGLE_GENERATIVE_AI_API_KEY; Keychain: JARVIS_API_GAIS).
+// Provedores, em ordem de preferência:
+//  1) URL_CHECK_OLLAMA_URL definido → Ollama próprio (servidor Secom, GPU de 2 GB: lento, por isso lotes
+//     pequenos e prazo longo). Em standby: deixe a variável vazia para não usá-lo.
+//  2) OLLAMA_API_KEY definido → Ollama Cloud (gemma4:31b-cloud, o mesmo do chat): rápido, lotes de 10.
+//  3) Google AI Studio (GOOGLE_GENERATIVE_AI_API_KEY). Também é a reserva automática se o provedor 1/2 falhar
+//     (ex.: créditos do Ollama Cloud acabaram) — ver chatWithRetry.
 const OLLAMA_URL = process.env.URL_CHECK_OLLAMA_URL;
+const OLLAMA_CLOUD = !OLLAMA_URL && !!process.env.OLLAMA_API_KEY;
 const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
 const ollama = OLLAMA_URL
   ? new Ollama({
@@ -27,18 +32,22 @@ const ollama = OLLAMA_URL
         ...(process.env.URL_CHECK_OLLAMA_AUTH ? { Authorization: process.env.URL_CHECK_OLLAMA_AUTH } : {}),
       },
     })
-  : null;
+  : OLLAMA_CLOUD
+    ? new Ollama({ host: process.env.OLLAMA_BASE_URL ?? 'https://ollama.com', headers: { Authorization: `Bearer ${process.env.OLLAMA_API_KEY}` } })
+    : null;
+// Local (GPU fraca) é lento; a nuvem aguenta lotes grandes e chamadas em paralelo.
+const OLLAMA_SLOW = !!OLLAMA_URL;
 // Medido ao vivo (10 URLs rotuladas, 2026-11-18): Google 3.5-flash-lite e 3.1-flash-lite 10/10;
 // 3.5/3.7/3.8-flash devolveram 503 "high demand" e o Pro estoura a cota (chave free-tier).
 // URL_CHECK_MODEL troca o modelo do provedor principal sem deploy (no modo Ollama é o tag, ex.: gemma4:e4b).
-const OLLAMA_MODEL = process.env.URL_CHECK_MODEL ?? 'gemma4:e4b';
+const OLLAMA_MODEL = process.env.URL_CHECK_MODEL ?? (OLLAMA_CLOUD ? 'gemma4:31b-cloud' : 'gemma4:e4b');
 const GOOGLE_MODEL = (!ollama && process.env.URL_CHECK_MODEL) || 'gemini-3.5-flash-lite';
 
 // The ~1.2k-token persona prompt used to be resent once per URL; grouping URLs
 // into one call fixes that, and capping in-flight calls keeps us under the
 // provider's rate limit.
-const URLS_PER_CALL = Number(process.env.URL_CHECK_PER_CALL) || (ollama ? 3 : 10);
-const URL_CHECK_CONCURRENCY = ollama ? 1 : 4;
+const URLS_PER_CALL = Number(process.env.URL_CHECK_PER_CALL) || (OLLAMA_SLOW ? 3 : 10);
+const URL_CHECK_CONCURRENCY = OLLAMA_SLOW ? 1 : 4;
 // ponytail: wall-clock cap instead of a URL-count cap. maxDuration is 300s and a
 // batch de 10 URLs mede ~33s, então uma amostra grande (SENSE junho: 794 URLs =
 // ~20 rodadas = ~660s) estourava a função e o usuário não recebia nada. O prazo é
@@ -113,20 +122,21 @@ async function chatWithRetry(build: (via: 'ollama' | 'google') => string, maxOut
 // que a equipe manda ignorar) e tolerar "Violência" em pauta sem relação com crime. Medido em 193 URLs
 // revisadas pela equipe — ver scripts/eval-url-prompt.ts.
 const FAMILIAS = `Informe "pagina": o que a URL realmente é (olhe o ASSUNTO PRINCIPAL, não a categoria atribuída). O sistema compara com a categoria e calcula o veredito.
-- violencia: crime violento noticiado (homicídio, feminicídio, agressão, estupro, sequestro, tiroteio, tortura), morte violenta, acidente com morte ou vítima grave, pessoa desaparecida encontrada morta, violência explícita — mesmo sem imagem gráfica. NÃO é violencia: morte natural, desaparecido encontrado vivo, acidente sem morte nem vítima grave, política, geopolítica/guerra como análise, tecnologia de defesa, celebridade, e história/ditadura/massacre tratados como memória ou análise (só é violencia se a página DESCREVE a violência).
+- violencia: crime violento noticiado (homicídio, feminicídio, agressão, estupro, sequestro, tiroteio, tortura), morte violenta, acidente com morte ou vítima grave, pessoa desaparecida encontrada morta, violência explícita — mesmo sem imagem gráfica. NÃO é violencia: morte natural, desaparecido encontrado vivo, acidente sem morte nem vítima grave, política, geopolítica/guerra como análise, tecnologia de defesa, celebridade, e história/ditadura/massacre tratados como memória ou análise (só é violencia se a página DESCREVE a violência; se não der para saber, use atencao).
 - seguranca: notícia de crime sem violência explícita, polícia (prisões, operações, furtos), justiça criminal, sistema prisional, fiscalização, política de segurança pública.
 - adulto: nudez, sexo, erotismo, ensaio sensual (inclusive de celebridades), conteúdo sexual.
 - estrangeiro: conteúdo principal em outra língua que não o português. Página em português (do Brasil ou de Portugal, inclusive /pt) NÃO é estrangeiro.
 - drogas: uso, tráfico, overdose, apologia. Cannabis medicinal, regulação e debate legal são comum.
 - tecnica: frame, tag ou chamada de anúncio sem conteúdo editorial.
+- atencao: SÓ para história, ditadura, massacre ou crime do passado quando a URL não deixa claro se a página DESCREVE a violência (ex.: análise histórica x relato de tortura). É um aviso para revisão humana; use com parcimônia e nunca para notícia de crime atual.
 - comum: todo o resto. Pirataria também é comum (fora do escopo).
 A categoria atribuída só importa em dois casos: ser restritiva/indevida (Violência, Segurança, Adulto, Idioma estrangeiro…) ou técnica (Safeframe…). Divergência entre duas categorias comuns (Saúde x Entretenimento, Ciência x Esportes) NÃO importa: não comente.
 Preencha também "status" com o seu melhor julgamento.`;
 
 export type RotuloFam = 'comum' | 'restritivo' | 'adulto' | 'estrangeiro' | 'tecnica' | 'home';
-export type PaginaFam = 'comum' | 'seguranca' | 'violencia' | 'adulto' | 'estrangeiro' | 'drogas' | 'tecnica';
+export type PaginaFam = 'comum' | 'seguranca' | 'violencia' | 'adulto' | 'estrangeiro' | 'drogas' | 'tecnica' | 'atencao';
 const ROTULOS = ['comum', 'restritivo', 'adulto', 'estrangeiro', 'tecnica', 'home'];
-const PAGINAS = ['comum', 'seguranca', 'violencia', 'adulto', 'estrangeiro', 'drogas', 'tecnica'];
+const PAGINAS = ['comum', 'seguranca', 'violencia', 'adulto', 'estrangeiro', 'drogas', 'tecnica', 'atencao'];
 const norm = (v?: string) => (v ?? '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 /** Família da categoria atribuída, pelo nome (determinístico — pedir ao LLM confundia rótulo com página). */
@@ -148,7 +158,7 @@ export function deriveStatus(rotulo?: string, pagina?: string): 'CORRETA' | 'INC
     // seguranca (crime/polícia noticiados) sob categoria comum também é INCORRETA: a equipe marcou 5 de 5 na rodada 2
     // e o category_map já trata Policial/Segurança Pública como violência.
     case 'comum': return ['violencia', 'seguranca', 'adulto', 'estrangeiro', 'drogas'].includes(p) ? 'INCORRETA' : 'CORRETA';
-    case 'restritivo': return ['violencia', 'seguranca', 'drogas'].includes(p) ? 'CORRETA' : 'INCORRETA';
+    case 'restritivo': return ['violencia', 'seguranca', 'drogas', 'atencao'].includes(p) ? 'CORRETA' : 'INCORRETA';
     case 'adulto': return p === 'adulto' ? 'CORRETA' : 'INCORRETA';
     case 'estrangeiro': return p === 'estrangeiro' ? 'CORRETA' : 'INCORRETA';
     case 'tecnica': return p === 'tecnica' ? 'CORRETA' : 'INCORRETA';
@@ -250,13 +260,14 @@ async function checkUrlChunk(items: UrlSampleItem[], categoriasDisponiveis: stri
       // O modelo às vezes devolve o próprio token da família ("violencia") como sugestão; troca pelo nome legível.
       categoria_sugerida: status === 'INCORRETA'
         ? (SUGERIDA[norm(entry.categoria_sugerida)] ?? (entry.categoria_sugerida?.trim() || SUGERIDA[norm(entry.pagina)] || null))
-        : (entry.categoria_sugerida?.trim() || null),
+        : (norm(entry.categoria_sugerida) in SUGERIDA || norm(entry.categoria_sugerida) === 'atencao' ? null : entry.categoria_sugerida?.trim() || null),
       veiculo: item.veiculo,
-      reason: entry.justificativa_brand_safety?.trim() || (status === 'CORRETA' ? '' : 'Classificação suspeita'),
+      reason: entry.justificativa_brand_safety?.trim() || (norm(entry.pagina) === 'atencao' ? 'Tema histórico: revisar se a página descreve a violência' : status === 'CORRETA' ? '' : 'Classificação suspeita'),
       impressoes: item.impressoes,
       pct: 0,
       status,
       source,
+      ...(norm(entry.pagina) === 'atencao' ? { atencao: true } : {}),
     });
   });
   return { rows, failed };
