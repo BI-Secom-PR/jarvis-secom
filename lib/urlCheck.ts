@@ -108,6 +108,55 @@ async function chatWithRetry(build: (via: 'ollama' | 'google') => string, maxOut
   return { text: await askGoogle(build('google'), maxOutputTokens, deadline), source: `google:${GOOGLE_MODEL}` };
 }
 
+// Duas etapas: o modelo só descreve (família do rótulo × família da página) e o código compara.
+// Pedir o veredito direto fazia o LLM acusar "Ciência" em notícia de futebol (divergência comum×comum,
+// que a equipe manda ignorar) e tolerar "Violência" em pauta sem relação com crime. Medido em 193 URLs
+// revisadas pela equipe — ver scripts/eval-url-prompt.ts.
+const FAMILIAS = `Informe "pagina": o que a URL realmente é (olhe o ASSUNTO PRINCIPAL, não a categoria atribuída). O sistema compara com a categoria e calcula o veredito.
+- violencia: crime violento noticiado (homicídio, feminicídio, agressão, estupro, sequestro, tiroteio, tortura), morte violenta, acidente com morte ou vítima grave, pessoa desaparecida encontrada morta, violência explícita — mesmo sem imagem gráfica. NÃO é violencia: morte natural, desaparecido encontrado vivo, acidente sem morte nem vítima grave, política, geopolítica/guerra como análise, tecnologia de defesa, celebridade, e história/ditadura/massacre tratados como memória ou análise (só é violencia se a página DESCREVE a violência).
+- seguranca: notícia de crime sem violência explícita, polícia (prisões, operações, furtos), justiça criminal, sistema prisional, fiscalização, política de segurança pública.
+- adulto: nudez, sexo, erotismo, ensaio sensual (inclusive de celebridades), conteúdo sexual.
+- estrangeiro: conteúdo principal em outra língua que não o português. Página em português (do Brasil ou de Portugal, inclusive /pt) NÃO é estrangeiro.
+- drogas: uso, tráfico, overdose, apologia. Cannabis medicinal, regulação e debate legal são comum.
+- tecnica: frame, tag ou chamada de anúncio sem conteúdo editorial.
+- comum: todo o resto. Pirataria também é comum (fora do escopo).
+A categoria atribuída só importa em dois casos: ser restritiva/indevida (Violência, Segurança, Adulto, Idioma estrangeiro…) ou técnica (Safeframe…). Divergência entre duas categorias comuns (Saúde x Entretenimento, Ciência x Esportes) NÃO importa: não comente.
+Preencha também "status" com o seu melhor julgamento.`;
+
+export type RotuloFam = 'comum' | 'restritivo' | 'adulto' | 'estrangeiro' | 'tecnica' | 'home';
+export type PaginaFam = 'comum' | 'seguranca' | 'violencia' | 'adulto' | 'estrangeiro' | 'drogas' | 'tecnica';
+const ROTULOS = ['comum', 'restritivo', 'adulto', 'estrangeiro', 'tecnica', 'home'];
+const PAGINAS = ['comum', 'seguranca', 'violencia', 'adulto', 'estrangeiro', 'drogas', 'tecnica'];
+const norm = (v?: string) => (v ?? '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+/** Família da categoria atribuída, pelo nome (determinístico — pedir ao LLM confundia rótulo com página). */
+export function rotuloFamily(categoria: string): RotuloFam {
+  const c = norm(categoria);
+  if (/^(safeframe|aplicativo movel|teste de tag|teste banner|entrega em wifi)$/.test(c)) return 'tecnica';
+  if (c === 'home') return 'home';
+  if (/sex|pornograf|adulto|erot/.test(c)) return 'adulto';
+  if (/estrangeir|idioma/.test(c)) return 'estrangeiro';
+  if (/violen|crime|acidente|policial|seguranca|sensive|armas|droga/.test(c)) return 'restritivo';
+  return 'comum';
+}
+
+/** Veredito determinístico a partir das duas famílias; null se o modelo não preencheu a página direito. */
+export function deriveStatus(rotulo?: string, pagina?: string): 'CORRETA' | 'INCORRETA' | null {
+  const r = norm(rotulo), p = norm(pagina);
+  if (!ROTULOS.includes(r) || !PAGINAS.includes(p)) return null;
+  switch (r) {
+    // seguranca (crime/polícia noticiados) sob categoria comum também é INCORRETA: a equipe marcou 5 de 5 na rodada 2
+    // e o category_map já trata Policial/Segurança Pública como violência.
+    case 'comum': return ['violencia', 'seguranca', 'adulto', 'estrangeiro', 'drogas'].includes(p) ? 'INCORRETA' : 'CORRETA';
+    case 'restritivo': return ['violencia', 'seguranca', 'drogas'].includes(p) ? 'CORRETA' : 'INCORRETA';
+    case 'adulto': return p === 'adulto' ? 'CORRETA' : 'INCORRETA';
+    case 'estrangeiro': return p === 'estrangeiro' ? 'CORRETA' : 'INCORRETA';
+    case 'tecnica': return p === 'tecnica' ? 'CORRETA' : 'INCORRETA';
+    default: return 'INCORRETA'; // "home" em URL com caminho (a raiz é resolvida antes, sem IA)
+  }
+}
+const SUGERIDA: Record<string, string> = { violencia: 'Violência e Criminalidade', seguranca: 'Segurança Pública', adulto: 'Conteúdo adulto', estrangeiro: 'Língua estrangeira', drogas: 'Drogas / Conteúdo sensível', comum: 'Notícias' };
+
 export function buildFullPrompt(items: UrlSampleItem[], categoriasDisponiveis: string[]): string {
   const list = items.map((it, i) => `${i + 1}. URL: ${it.url}\n   Categoria atribuída: ${it.categoria}`).join('\n');
   return `Você é um classificador especialista em Brand Safety e auditoria de mídia programática para a SECOM (Secretaria de Comunicação Social do Governo Federal do Brasil). 
@@ -126,19 +175,8 @@ Sua missão é auditar a classificação de conteúdo feita por um adserver. Dad
    - Home NÃO é Notícias/Editorial. Nunca sugira uma categoria de conteúdo (Notícias, Política, Esportes…) para uma URL raiz classificada como "Home" — isso é CORRETA.
    - Se a URL aponta para uma página interna (matéria, seção, com caminho após o domínio) mas foi classificada como "Home", isso é INCORRETA — sugira a categoria real do conteúdo.
 
-2. FOCO NAS CATEGORIAS INDEVIDAS: o que importa nesta auditoria é conteúdo indevido escapando sob uma categoria comum. Divergência entre duas categorias comuns (ex.: Saúde classificada como Entretenimento, Notícias como Esportes) é CORRETA — não seja preciosista. É INCORRETA apenas quando:
-   a) a página tem conteúdo indevido (violência/crime, conteúdo adulto, língua estrangeira…) mas foi classificada com categoria comum (ex.: Notícias, Cotidiano, Cultura);
-   b) a categoria é técnica (regra 1) ou "Home" com caminho interno (regra 1b);
-   c) a categoria é indevida mas a página não tem relação com ela, e a regra 3 não se aplica;
-   d) a categoria é "Língua estrangeira/Idioma estrangeiro" mas a página está em português (do Brasil ou de Portugal, inclusive endereços com /pt) — português não é língua estrangeira.
-
-3. RÓTULO RESTRITIVO É TOLERADO: se a categoria atribuída for Violência, Crimes, Segurança Pública, Policial, Acidentes ou Conteúdo Sensível e a página trata de crime, justiça, sistema prisional, fiscalização, acidente ou segurança, é CORRETA mesmo sem violência gráfica. Só é INCORRETA se a página não tem nenhuma relação com o tema (ex.: gastronomia ou tecnologia com rótulo de Violência).
-
-4. CRIME VIOLENTO É INDEVIDO MESMO SEM IMAGEM GRÁFICA: notícia de homicídio, feminicídio, agressão, tiroteio, sequestro, estupro ou morte violenta é conteúdo indevido (Violência/Crime). Se estiver sob categoria comum (Notícias, Cotidiano, Cidades…), é INCORRETA — sugira "Violência e Criminalidade". Não são indevidos: política, geopolítica, tecnologia de defesa, opinião, análise histórica e atividade policial ou administrativa de rotina sem vítima.
-
-5. NUDEZ E CONTEÚDO SEXUAL: nudez, ensaio sensual explícito (inclusive de celebridades) e conteúdo sexual são "Conteúdo adulto". Sob categoria comum, é INCORRETA.
-
-6. PIRATARIA não é critério desta auditoria: não marque INCORRETA por esse motivo.
+2. PROCEDIMENTO EM DUAS ETAPAS (substitui qualquer julgamento direto):
+${FAMILIAS}
 
 ### CATEGORIAS INDEVIDAS DA SECOM (Definições Estritas)
 - Língua estrangeira: Conteúdo principal fora do português brasileiro.
@@ -211,7 +249,7 @@ ${categoriasDisponiveis.map((c) => `- ${c}`).join('\n')}
 ` : ''}
 ### AVALIE TODAS AS URLS ABAIXO
 Responda APENAS com um array JSON, um objeto por URL, na mesma ordem, com "i" igual ao número da URL. Sem texto fora do array.
-[{"i":1,"status":"CORRETA","categoria_sugerida":"...","justificativa_brand_safety":"..."}]
+[{"i":1,"pagina":"violencia","status":"INCORRETA","categoria_sugerida":"...","justificativa_brand_safety":"..."}]
 
 ${list}`;
 }
@@ -227,18 +265,13 @@ Regra principal: você audita se a CLASSIFICAÇÃO está certa, não se o conte�
 Regras:
 - "safeframe", "aplicativo móvel" e "teste de tag" são falhas técnicas de rastreamento. Se a URL é de notícia, blog ou portal com conteúdo editorial, é INCORRETA (sugira a categoria real). Só é CORRETA se for um frame técnico sem conteúdo.
 - "Home" = página raiz sem caminho (ex.: https://g1.globo.com/) → CORRETA. "Home" em URL com caminho interno → INCORRETA.
-- Foco nas categorias indevidas. Divergência entre duas categorias comuns (Saúde vs Entretenimento, Notícias vs Esportes) é CORRETA. INCORRETA só quando há conteúdo indevido sob categoria comum, categoria técnica/Home errada, ou rótulo indevido sem relação com a página.
-- Crime violento é indevido mesmo sem imagem gráfica: notícia de homicídio, feminicídio, agressão, tiroteio, sequestro, estupro ou morte violenta sob categoria comum (Notícias, Cotidiano…) é INCORRETA (sugira "Violência e Criminalidade"). Política, geopolítica, tecnologia de defesa, opinião e polícia/fiscalização de rotina sem vítima NÃO são violência.
-- Rótulo restritivo é tolerado: Violência, Crimes, Segurança Pública, Policial, Acidentes ou Conteúdo Sensível em página sobre crime, justiça, sistema prisional, fiscalização, acidente ou segurança é CORRETA, mesmo sem violência gráfica. Só é INCORRETA se a página não tem relação com o tema.
-- Nudez e conteúdo sexual (inclusive de celebridades) = Conteúdo adulto; sob categoria comum é INCORRETA.
-- Rótulo "Língua estrangeira/Idioma estrangeiro" em página em português (Brasil ou Portugal, inclusive /pt) é INCORRETA.
-- Pirataria não é critério desta auditoria: não marque INCORRETA por isso.
+${FAMILIAS}
 - Categorias indevidas: Língua estrangeira (conteúdo fora do português), Conteúdo adulto, Violência, Crimes, Terrorismo, Discurso de ódio, Conteúdo gerado pelo usuário sem moderação (fóruns/chats), Drogas.${categoriasDisponiveis.length > 0 ? `
 - Categorias deste arquivo (prefira sugerir uma destas): ${categoriasDisponiveis.join(', ')}.` : ''}
 
 Responda SOMENTE com um array JSON, um objeto por URL, na ordem, sem texto fora do array.
-INCORRETA: [{"i":1,"status":"INCORRETA","categoria_sugerida":"categoria real","justificativa_brand_safety":"uma frase curta"}]
-CORRETA (deixe os dois campos vazios, não explique): [{"i":2,"status":"CORRETA","categoria_sugerida":"","justificativa_brand_safety":""}]
+INCORRETA: [{"i":1,"pagina":"violencia","status":"INCORRETA","categoria_sugerida":"categoria real","justificativa_brand_safety":"uma frase curta"}]
+CORRETA (deixe os dois campos de texto vazios, não explique): [{"i":2,"pagina":"comum","status":"CORRETA","categoria_sugerida":"","justificativa_brand_safety":""}]
 
 ${list}`;
 }
@@ -256,7 +289,7 @@ async function checkUrlChunk(items: UrlSampleItem[], categoriasDisponiveis: stri
     (via === 'ollama' && process.env.URL_CHECK_PROMPT !== 'full' ? buildCompactPrompt : buildFullPrompt)(items, categoriasDisponiveis);
 
   let source = '';
-  let parsed: { i?: number; status?: string; categoria_sugerida?: string; justificativa_brand_safety?: string }[];
+  let parsed: { i?: number; pagina?: string; status?: string; categoria_sugerida?: string; justificativa_brand_safety?: string }[];
   try {
     const reply = await chatWithRetry(build, 220 * items.length, deadline);
     source = reply.source;
@@ -275,12 +308,15 @@ async function checkUrlChunk(items: UrlSampleItem[], categoriasDisponiveis: stri
   let failed = 0;
   items.forEach((item, idx) => {
     const entry = parsed.find((e) => e.i === idx + 1) ?? parsed[idx];
-    const status = (entry?.status ?? '').trim().toUpperCase();
+    const status = deriveStatus(rotuloFamily(item.categoria), entry?.pagina) ?? (entry?.status ?? '').trim().toUpperCase();
     if (!entry || (status !== 'CORRETA' && status !== 'INCORRETA')) { failed++; return; }
     rows.push({
       url: item.url,
       categoria: item.categoria,
-      categoria_sugerida: entry.categoria_sugerida?.trim() || null,
+      // O modelo às vezes devolve o próprio token da família ("violencia") como sugestão; troca pelo nome legível.
+      categoria_sugerida: status === 'INCORRETA'
+        ? (SUGERIDA[norm(entry.categoria_sugerida)] ?? (entry.categoria_sugerida?.trim() || SUGERIDA[norm(entry.pagina)] || null))
+        : (entry.categoria_sugerida?.trim() || null),
       veiculo: item.veiculo,
       reason: entry.justificativa_brand_safety?.trim() || (status === 'CORRETA' ? '' : 'Classificação suspeita'),
       impressoes: item.impressoes,
