@@ -25,7 +25,7 @@ export default async function AdminPage() {
     .orderBy(asc(users.createdAt))
 
   return (
-    <main className="hud-void-bg min-h-screen w-screen overflow-auto relative">
+    <main className="hud-void-bg h-dvh w-screen overflow-y-auto relative">
       <HudBackground variant="subtle" />
       <div className="relative z-10 max-w-4xl mx-auto px-6 py-10">
         <div className="flex items-start justify-between gap-3">
