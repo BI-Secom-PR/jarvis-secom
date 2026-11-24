@@ -1318,6 +1318,7 @@ export default function VerificationContainer() {
                             <th className="text-left py-2 pr-4 text-ink-2 font-medium whitespace-nowrap">Veículo</th>
                             <th className="text-left py-2 pr-4 text-ink-2 font-medium whitespace-nowrap">Categoria</th>
                             <th className="text-left py-2 pr-4 text-ink-2 font-medium whitespace-nowrap">Impressões URL</th>
+                            <th className="text-left py-2 pr-4 text-ink-2 font-medium whitespace-nowrap">% do total</th>
                             <th className="text-left py-2 text-ink-2 font-medium">Motivo</th>
                           </tr>
                         </thead>
@@ -1332,6 +1333,7 @@ export default function VerificationContainer() {
                               <td className="py-2 pr-4 text-ink-2 whitespace-nowrap">{a.veiculo || "—"}</td>
                               <td className="py-2 pr-4 text-ink-2 whitespace-nowrap">{a.categoria}</td>
                               <td className="py-2 pr-4 text-ink-2 whitespace-nowrap">{formatInt(a.impressoes)}</td>
+                              <td className="py-2 pr-4 text-ink-2 whitespace-nowrap">{formatPct(a.pct)}</td>
                               <td className="py-2 text-ink-2">{a.reason}</td>
                             </tr>
                           ))}
