@@ -672,6 +672,18 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
     for (const k of SUMMABLE) a[k] += r[k];
     return a;
   }, zeroRow());
+  // Plataformas que não reportam a métrica escolhida (ex.: Kwai não tem alcance): sem o
+  // aviso o gráfico fica zerado e parece erro de filtro. Só nas abas dimensionais, onde
+  // a quebra por plataforma já vem no payload.
+  const semMetrica = useMemo(() => {
+    const rows = tab === "demografia" ? data?.demografiaPlat : tab === "regiao" ? data?.regioesPlat : undefined;
+    if (!rows?.length) return [];
+    const by = new Map<string, Totals[]>();
+    for (const r of rows) by.set(r.platform, [...(by.get(r.platform) ?? []), r]);
+    return [...by].filter(([, rs]) => { const v = aggMetric(rs, metric); return !Number.isFinite(v) || v === 0; })
+      .map(([pl]) => platformLabel(pl));
+  }, [tab, metric, data?.demografiaPlat, data?.regioesPlat]);
+
   const regiaoParts = engMode === "partes" && metric === "engajamento" ? activeParts(regiaoRows) : [];
 
   return (
@@ -812,6 +824,11 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
               {/* fora da métrica de engajamento o interruptor não teria o que discriminar */}
               {metric === "engajamento" && <span className="ml-2">{engSwitch}</span>}
             </div>
+          )}
+          {tab !== "campanhas" && semMetrica.length > 0 && (
+            <p className="text-[11px] text-ink-3">
+              {semMetrica.join(", ")} não {semMetrica.length > 1 ? "reportam" : "reporta"} {METRICS[metric].label} nesta aba — {semMetrica.length > 1 ? "ficam" : "fica"} zerado{semMetrica.length > 1 ? "s" : ""} no gráfico.
+            </p>
           )}
 
           {/* ══ CAMPANHAS ══ */}
