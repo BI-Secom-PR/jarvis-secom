@@ -30,11 +30,21 @@ export async function GET(req: NextRequest) {
     buyingType: q.getAll('buyingType'),
     tema: q.getAll('tema'),
   };
+  // Cada aba lê uma tabela diferente e a cobertura difere (idade/gênero não tem GloboAds
+  // nem Amazon DSP): as listas precisam vir da tabela da aba, senão o dropdown oferece
+  // valores que devolvem dashboard vazio.
+  const tab = q.get('tab');
+  const BASE = tab === 'demografia' ? 'gold_platforms_age_gender'
+    : tab === 'regiao' ? 'gold_platforms_regions' : 'gold_platforms_campaigns';
+  const dimTab = BASE !== 'gold_platforms_campaigns';
+  // Região/idade-gênero só trazem `network` para o Google (ver data/route): o filtro de
+  // rede não vale nessas abas, então não estreita as listas.
+  if (dimTab) f.network = [];
   try {
     // As regras entram na chave: sem isso um PUT no editor demoraria os 10 min do
     // cache para aparecer no dropdown de quem já tinha carregado a tela.
     const { text: rulesText, rules } = await loadCampaignRules();
-    const key = `${rulesHash(rulesText)}|${JSON.stringify(f)}`;
+    const key = `${rulesHash(rulesText)}|${BASE}|${JSON.stringify(f)}`;
     const hit = cache.get(key);
     if (hit && Date.now() - hit.loadedAt < CACHE_TTL_MS) return NextResponse.json(hit.data);
 
@@ -44,8 +54,11 @@ export async function GET(req: NextRequest) {
     // Os WHEREs abaixo herdam `tema`, e `eixo` só existe na view — sem trocar a tabela
     // junto, cada um deles vira "Unknown column 'eixo'" e o painel de filtros inteiro
     // esvazia. Trocando, o tema também estreita as listas, como todo o resto.
-    const T = fromTable('gold_platforms_campaigns', f);
-    const fr = await withBuyingCampaigns(pool, await withCampaignNames(pool, f, T), T);
+    const T = fromTable(BASE, f);
+    // Rótulo de grupo / tipo de compra resolvem sempre pela tabela de campanhas (como em
+    // data/route); a lista de nomes crus resultante é aplicada na tabela da aba.
+    const TC = fromTable('gold_platforms_campaigns', f);
+    const fr = await withBuyingCampaigns(pool, await withCampaignNames(pool, f, TC), TC);
     // Faceted: each list is constrained by every filter EXCEPT its own dimension,
     // so picking a platform narrows the campaign list but not the platform list.
     const wCamp = buildWhere({ ...fr, campaigns: undefined, campaignNames: undefined, ad: undefined });

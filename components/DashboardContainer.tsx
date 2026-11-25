@@ -309,7 +309,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
     if (!ready) return;
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
-      const qs = new URLSearchParams({ from, to });
+      const qs = new URLSearchParams({ from, to, tab });
       // Repetido por valor (`platform=meta&platform=tiktok`) — a rota lê com getAll.
       for (const v of campaigns) qs.append("campaign", v);
       for (const v of platforms) qs.append("platform", v);
@@ -328,7 +328,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
       }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [ready, from, to, campaigns, platforms, networks, accounts, adGroups, objectives, buyingTypes, temas, rulesVersion]);
+  }, [ready, from, to, campaigns, platforms, networks, accounts, adGroups, objectives, buyingTypes, temas, tab, rulesVersion]);
 
   // ── Dados da aba ativa ──
   useEffect(() => {
