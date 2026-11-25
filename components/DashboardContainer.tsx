@@ -826,7 +826,7 @@ export default function DashboardContainer({ isAdmin = false, userId }: { isAdmi
             </div>
           )}
           {tab !== "campanhas" && semMetrica.length > 0 && (
-            <p className="text-[11px] text-ink-3">
+            <p className="text-xs font-medium text-danger">
               {semMetrica.join(", ")} não {semMetrica.length > 1 ? "reportam" : "reporta"} {METRICS[metric].label} nesta aba — {semMetrica.length > 1 ? "ficam" : "fica"} zerado{semMetrica.length > 1 ? "s" : ""} no gráfico.
             </p>
           )}
