@@ -206,6 +206,8 @@ export default function SentimentosContainer({
   trendGranularityRef.current = trendGranularity;
   const [trendLoading, setTrendLoading] = useState(false);
   // The lightbox holds the whole carousel, so ampliação can walk the cards too.
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [preview, setPreview] = useState<{ urls: string[]; i: number } | null>(null);
   const [previewFrame, setPreviewFrame] = useState<{ w: number; h: number } | null>(null);
   const previewUrl = preview ? preview.urls[preview.i] : null;
@@ -391,6 +393,37 @@ export default function SentimentosContainer({
     } catch (e) {
       setData(prev); // revert
       setError(e instanceof Error ? e.message : "Erro ao corrigir");
+    }
+  }
+
+  // Seleção vale só para a página/filtros atuais.
+  useEffect(() => {
+    setSelected(new Set());
+  }, [page, campaign, ad, platform, sentiment, from, to, aiFilter]);
+
+  async function correctBulk(newSentiment: string) {
+    if (!data || !selected.size || bulkBusy) return;
+    const ids = data.comments.filter((c) => selected.has(c.id)).map((c) => c.id);
+    if (!ids.length) return;
+    const prev = data;
+    const idSet = new Set(ids);
+    setBulkBusy(true);
+    setData({
+      ...data,
+      comments: data.comments.map((c) =>
+        idSet.has(c.id) ? { ...c, sentiment: newSentiment, sentiment_source: "human", audited_by: userEmail } : c
+      ),
+    });
+    try {
+      const res = await postJson("/api/sentimentos/correct", { ids, sentiment: newSentiment });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      setSelected(new Set());
+    } catch (e) {
+      setData(prev);
+      setError(e instanceof Error ? e.message : "Erro ao corrigir em lote");
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -741,11 +774,41 @@ export default function SentimentosContainer({
                 </button>
               </div>
             </div>
+            {selected.size > 0 && (
+              <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 px-4 md:px-6 py-2 border-b border-separator bg-fill text-[12px]">
+                <span className="tabular-nums text-ink">{selected.size} selecionado(s)</span>
+                <span className="text-ink-3">· marcar como:</span>
+                {SENTIMENTS.map((s) => (
+                  <button
+                    key={s}
+                    disabled={bulkBusy}
+                    onClick={() => correctBulk(s)}
+                    className="px-2.5 py-1 rounded border font-medium disabled:opacity-40"
+                    style={{ color: SENT_COLORS[sentLabel(s)], borderColor: SENT_COLORS[sentLabel(s)] + "66" }}
+                  >
+                    {s}
+                  </button>
+                ))}
+                <button onClick={() => setSelected(new Set())} className="ml-auto text-ink-3 hover:text-ink">
+                  Limpar seleção
+                </button>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
                 <thead>
                   <tr className="text-left text-[10px] font-hud uppercase tracking-[0.16em] text-ink-3 border-b border-separator">
-                    <th className="px-4 md:px-6 py-2.5 w-16">Imagem</th>
+                    <th className="pl-4 md:pl-6 pr-1 py-2.5 w-8">
+                      <input
+                        type="checkbox"
+                        aria-label="Selecionar todos da página"
+                        checked={!!data?.comments.length && data.comments.every((c) => selected.has(c.id))}
+                        onChange={(e) =>
+                          setSelected(e.target.checked ? new Set((data?.comments ?? []).map((c) => c.id)) : new Set())
+                        }
+                      />
+                    </th>
+                    <th className="px-3 py-2.5 w-16">Imagem</th>
                     <th className="px-3 py-2.5 min-w-[220px]">Mensagem do anúncio</th>
                     <th className="px-3 py-2.5 min-w-[260px]">Comentário</th>
                     <th className="px-3 py-2.5 pr-4 md:pr-6 w-56 text-center">Classificação</th>
@@ -753,8 +816,22 @@ export default function SentimentosContainer({
                 </thead>
                 <tbody>
                   {(data?.comments ?? []).map((row) => (
-                    <tr key={row.id} className="border-b border-separator/60 align-top hover:bg-fill/40">
-                      <td className="px-4 md:px-6 py-3"><Thumb urls={row.image_urls} onOpen={openPreview} /></td>
+                    <tr key={row.id} className={"border-b border-separator/60 align-top hover:bg-fill/40" + (selected.has(row.id) ? " bg-fill/60" : "")}>
+                      <td className="pl-4 md:pl-6 pr-1 py-3">
+                        <input
+                          type="checkbox"
+                          aria-label="Selecionar comentário"
+                          checked={selected.has(row.id)}
+                          onChange={(e) =>
+                            setSelected((prev) => {
+                              const n = new Set(prev);
+                              if (e.target.checked) n.add(row.id); else n.delete(row.id);
+                              return n;
+                            })
+                          }
+                        />
+                      </td>
+                      <td className="px-3 py-3"><Thumb urls={row.image_urls} onOpen={openPreview} /></td>
                       <td className="px-3 py-3">
                         <p className="text-ink-2" title={row.post_message ?? undefined}>
                           {truncate(row.post_message, 140)}
@@ -796,14 +873,14 @@ export default function SentimentosContainer({
                   ))}
                   {!loading && !data?.comments.length && (
                     <tr>
-                      <td colSpan={4} className="px-6 py-10 text-center text-ink-3">
+                      <td colSpan={5} className="px-6 py-10 text-center text-ink-3">
                         Nenhum comentário para os filtros atuais.
                       </td>
                     </tr>
                   )}
                   {loading && (
                     <tr>
-                      <td colSpan={4} className="px-6 py-10 text-center text-ink-3 animate-pulse">
+                      <td colSpan={5} className="px-6 py-10 text-center text-ink-3 animate-pulse">
                         Carregando…
                       </td>
                     </tr>
